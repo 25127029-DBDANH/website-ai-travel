@@ -4,7 +4,7 @@
 - Không còn hỗ trợ chế độ Khách thao tác trên các tiện ích tạo chuyến.
 - Mọi request tạo chuyến, chat, xem bản đồ, đồng bộ lịch bắt buộc phải có header:
   `Authorization: Bearer <JWT>`
-- Token JWT chứa `sub: user_id` và được middleware `identity.js` xác thực tính toàn vẹn.
+- Token JWT chứa `sub: user_id` và được dependency `get_current_user` của FastAPI xác thực tính toàn vẹn.
 
 ## 3.2. Bảng Danh sách API Bổ sung theo 7 Yêu cầu mới
 

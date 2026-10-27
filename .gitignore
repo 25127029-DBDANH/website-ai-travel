@@ -40,3 +40,14 @@ Thumbs.db
 # CodeGraph & Temp
 .codegraph/
 *.tmp
+
+# Python
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
