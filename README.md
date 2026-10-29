@@ -200,50 +200,52 @@ website-ai-travel/
 
 > [!IMPORTANT]
 > **Quy tắc phân công nhân sự đồ án (Mô hình Vertical Slicing / Full-Stack Feature Teams):**
-> - **Mỗi thành viên làm chủ trọn vẹn 01 Module chuyên biệt (End-to-End Ownership):** Tự đảm nhiệm từ Cơ sở dữ liệu ➔ Logic API Backend ➔ Giao diện Frontend tương ứng cho tính năng của mình.
-> - **Thành viên 1 (Phạm Gia Hưng):** Đóng vai trò **UI/UX & Frontend Lead**, chịu trách nhiệm thiết lập Design System, khung Layout dùng chung (Navbar, Footer), các component cơ bản (`Button`, `Input`, `Modal`, `Toast`) và trang `LandingPage.jsx`. Sau đó, 6 thành viên còn lại sẽ sử dụng các component này để dựng giao diện cho module của mình, đảm bảo toàn bộ website đồng nhất 100% về thẩm mỹ.
+> - **Mỗi thành viên làm chủ trọn vẹn 01 Module chuyên biệt (End-to-End Ownership):** Tự đảm nhiệm từ Cơ sở dữ liệu ➔ Logic API Backend ➔ Giao diện Frontend tương ứng cho tính năng của mình. Đảm bảo cả 7 thành viên đều có sản phẩm Full-Stack độc lập, rõ ràng để báo cáo và bảo vệ trước hội đồng giảng viên.
+> - **Thành viên 1 (Phạm Gia Hưng):** Đảm nhiệm Module **Cổng Khám Phá, Lịch Trình Mẫu & Chia Sẻ Công Khai**, đồng thời giữ vai trò **UI/UX & Frontend Lead** chịu trách nhiệm thiết lập Design System, khung Layout dùng chung (Navbar, Footer) và các component cơ bản (`Button`, `Input`, `Modal`, `Toast`) để 6 thành viên còn lại sử dụng, đảm bảo toàn bộ website đồng nhất 100% về thẩm mỹ.
 > - **Phân chia rạch ròi theo từng file Page & Component:** Mỗi thành viên chỉ code trên các file Page/Component thuộc module của mình, loại bỏ hoàn toàn nguy cơ xung đột mã nguồn (Merge Conflicts) khi làm việc nhóm qua Git.
 
 ### 📊 Bảng Ma Trận Phân Công Tổng Hợp (Full-Stack WBS Matrix)
 
-| STT | Họ và tên | Module phụ trách chính | Công việc Backend đảm nhiệm | Giao diện Frontend tương ứng | Chuẩn đầu ra (Deliverables) |
+| STT | Họ và tên | Module Full-Stack phụ trách | Công việc Backend đảm nhiệm | Giao diện Frontend tự xây dựng | Chuẩn đầu ra (Deliverables) |
 | :---: | :---: | :---|:---|:---|---|
-| **1** | **Phạm Gia Hưng** | **Design System, Shared Layout & Landing Page**<br>*(Frontend Lead)* | • Thiết lập cấu trúc dự án Frontend Vite, Router, Tailwind CSS.<br>• Hỗ trợ các thành viên ráp nối giao diện vào khung chung. | • `components/layout/` (Navbar, Footer, UserMenu).<br>• `components/common/` (Button, Input, Modal, Toast...).<br>• `pages/LandingPage.jsx` (Hero, tính năng, CTA đăng nhập). | • Bộ thư viện component dùng chung chuẩn Responsive 100%.<br>• Khung Layout cố định sắc nét trên Mobile/Desktop.<br>• Trang Landing Page ấn tượng, kêu gọi đăng nhập (Yêu cầu 1). |
+| **1** | **Phạm Gia Hưng** | **Cổng Khám Phá, Lịch Trình Mẫu & Chia Sẻ Hub**<br>*(UI/UX & Frontend Lead)* | • API Lịch trình mẫu TP.HCM: `GET /api/v1/trips/featured`.<br>• API Đọc lịch trình chia sẻ: `GET /api/v1/trips/public/{token}`.<br>• API Sao chép chuyến đi: `POST /api/v1/trips/public/{token}/clone`. | • `components/layout/` (Navbar, Footer, UserMenu).<br>• `components/common/` (Button, Input, Modal, Toast...).<br>• `pages/LandingPage.jsx` (Hero, Tour mẫu TP.HCM, CTA đăng nhập).<br>• `pages/SharedTripPage.jsx` (Trang chỉ xem + nút Clone & In PDF). | • Khung Layout & Thư viện component dùng chung chuẩn 100%.<br>• Trang Landing kích thích khách đăng nhập bằng tour mẫu (YC 1).<br>• Trang Shared Trip chỉ đọc bảo mật, hỗ trợ clone và in PDF (YC 5). |
 | **2** | **Đỗ Nguyễn An Khang** | **Xác thực, Bảo mật & Hồ sơ Người dùng**<br>*(Auth, Security & User Profile)* | • Cấu hình hệ thống BaseSettings, CORS, Exception Handlers.<br>• Băm mật khẩu bcrypt, cấp phát & xác minh JWT Token.<br>• Dependency `get_current_user` bắt buộc đăng nhập (Yêu cầu 1).<br>• API lưu sở thích du lịch người dùng cũ (Yêu cầu 7). | • `pages/LoginPage.jsx` & `RegisterPage.jsx`.<br>• `pages/SettingsPage.jsx` (Xem/sửa thông tin & sở thích).<br>• `context/AuthContext.jsx` (Quản lý phiên đăng nhập/đăng xuất).<br>• `services/authService.js` (Gọi API Auth kèm JWT header). | • Luồng Đăng ký, Đăng nhập, Đăng xuất hoạt động trơn tru.<br>• Chặn 100% khách chưa đăng nhập truy cập trang bảo vệ.<br>• Mật khẩu băm an toàn, bảo mật tuyệt đối tài khoản. |
 | **3** | **Ngô Tấn Đạt** | **Địa Điểm TP.HCM & Bản Đồ Tương Tác**<br>*(Places Database & Interactive Map)* | • Lược đồ CSDL 6 bảng quan hệ (`schema.sql`) & Session pool.<br>• Số hóa 100+ địa điểm TP.HCM (GPS, giờ mở cửa, indoor/outdoor).<br>• Places API tìm kiếm, lọc theo quận/thể loại & fallback cache. | • `components/map/MapView.jsx` (Bản đồ Mapbox GL / Google Maps).<br>• `components/map/PlaceMarker.jsx` (Marker ghim đánh số 1, 2, 3...).<br>• `components/map/RouteLayer.jsx` (Vẽ đường Polyline lộ trình).<br>• `components/map/MiniMapCard.jsx` (Card mini trong chat - YC 3). | • CSDL quan hệ chuẩn hóa 3NF, tọa độ GPS thực tế 100%.<br>• Bản đồ tương tác mượt mà, ghim đúng tọa độ và vẽ lộ trình.<br>• Thẻ Mini-map card hiển thị chuẩn xác trong khung chat. |
 | **4** | **Lê Hữu Lam** | **AI Core & Khung Chat Lên Kế Hoạch**<br>*(Gemini LLM & Planner Studio)* | • Tích hợp Google Gemini API (`gemini-1.5-flash`/`pro`).<br>• System Prompt am hiểu văn hóa TP.HCM, loại bỏ persona thừa.<br>• Luồng 4 bước sinh Structured JSON chi tiết từng giờ (YC 2).<br>• API Chatbot tư vấn, trả về dữ liệu cho thẻ Mini-map (YC 3). | • `pages/PlannerPage.jsx` (Form 8 tiêu chí + Lời chào người cũ).<br>• `components/chat/MessageList.jsx` & `ChatInput.jsx`.<br>• `components/chat/QuickSuggestions.jsx` (Gợi ý nhanh).<br>• `context/TripContext.jsx` (Quản lý trạng thái đàm thoại AI). | • 100% lịch trình chi tiết trả về đúng chuẩn JSON Schema.<br>• Form 8 tiêu chí hoạt động mượt mà, tự điền trước khi quay lại.<br>• Khung chat tương tác thời gian thực, không bị ảo giác địa lý. |
 | **5** | **Diệp Bảo Danh** | **Lịch Trình Chi Tiết, Đổi Điểm & Kịch Bản Dự Phòng**<br>*(Itinerary, Swap Place & Contingency)* | • Thuật toán Haversine tính khoảng cách & thời gian di chuyển.<br>• Thuật toán tìm 2-3 điểm thay thế tương đương (Swap Place - YC 2).<br>• Xử lý rủi ro dự phòng: Trời mưa, Né kẹt xe 17h-19h (YC 4).<br>• Endpoint swap địa điểm và cập nhật lại mốc thời gian. | • `components/trip/DayTimeline.jsx` (Trục thời gian từng ngày).<br>• `components/trip/ActivityCard.jsx` (Thẻ hoạt động chi tiết).<br>• `components/trip/SwapModal.jsx` (Modal chọn 2-3 điểm đổi).<br>• Bộ nút bấm kích hoạt kịch bản dự phòng (Mưa / Kẹt xe 17h-19h). | • Thuật toán Haversine sai số < 10% so với Google Maps.<br>• Đổi địa điểm (Swap Place) gợi ý chính xác trong < 300ms.<br>• Timeline hiển thị giờ giấc khoa học, đồng bộ với bản đồ.<br>• Kịch bản thời tiết mưa và giờ cao điểm tự điều chỉnh hợp lý. |
-| **6** | **Đàng Minh Hạo** | **Quản Lý Chuyến Đi, Chia Sẻ & Đồng Bộ Calendar**<br>*(Trips, Public Share & Google Calendar)* | • API My Trips (CRUD danh sách và chi tiết các chuyến đi).<br>• Sinh token chia sẻ công khai an toàn `/s/:shareToken` (YC 5).<br>• Endpoint lưu đánh giá 1-5 sao kèm nhận xét của du khách.<br>• Tích hợp Google Calendar OAuth2 API kèm báo thức 30p (YC 6). | • `pages/MyTripsPage.jsx` (Danh sách chuyến đi dạng Grid Card).<br>• `pages/TripDetailPage.jsx` (Xem chi tiết chuyến đi).<br>• `pages/SharedTripPage.jsx` (Trang xem chỉ đọc cho người ngoài).<br>• Modal Đồng bộ Calendar & Modal Đánh giá sao (RatingModal). | • Quản lý My Trips hoàn chỉnh, tìm kiếm và xóa chuyến đi dễ dàng.<br>• Link chia sẻ chỉ đọc an toàn, chặn hoàn toàn quyền sửa xóa.<br>• Đẩy thành công lịch trình lên Google Calendar kèm báo thức 30p.<br>• Đánh giá sao lưu trữ thành công vào bảng `trip_ratings`. |
+| **6** | **Đàng Minh Hạo** | **Quản Lý Chuyến Đi, Đánh Giá AI & Google Calendar**<br>*(Trips Portfolio, Rating & Calendar Sync)* | • API My Trips (CRUD danh sách và chi tiết các chuyến đi).<br>• Sinh token chia sẻ an toàn `POST /api/v1/trips/{id}/share`.<br>• Endpoint lưu đánh giá 1-5 sao kèm nhận xét (Yêu cầu 5).<br>• Tích hợp Google Calendar OAuth2 API kèm báo thức 30p (YC 6). | • `pages/MyTripsPage.jsx` (Danh sách chuyến đi dạng Grid Card).<br>• `pages/TripDetailPage.jsx` (Xem lại chi tiết chuyến đi).<br>• Modal Đồng bộ Calendar (hướng dẫn & mở Google Calendar).<br>• Modal Đánh giá sao (RatingModal 1-5 sao + gửi nhận xét). | • Quản lý My Trips hoàn chỉnh, tìm kiếm và xóa chuyến đi dễ dàng.<br>• Nút tạo link chia sẻ hoạt động chính xác, tự copy vào clipboard.<br>• Đẩy thành công lịch trình lên Google Calendar kèm báo thức 30p.<br>• Đánh giá sao lưu trữ thành công vào bảng `trip_ratings`. |
 | **7** | **Đoàn Hải Đăng** | **DevOps, Docker, Kiểm Thử Tự Động & Tích Hợp**<br>*(DevOps, Automated Testing & QA)* | • Đóng gói Docker Compose (FastAPI + PostgreSQL).<br>• Viết các script khởi chạy 1-click trên Windows (`run_all.bat`).<br>• Bộ test suite tự động toàn diện bằng `pytest` (> 80% coverage).<br>• Mocking Gemini API và Google OAuth để test độc lập, nhanh chóng. | • Kiểm thử End-to-End toàn bộ giao diện 8 màn hình.<br>• Rà soát và tối ưu Responsive Mobile, hiệu năng tải trang.<br>• Chuẩn hóa tài liệu kỹ thuật OpenAPI 3.0 (`docs/openapi.yaml`).<br>• Xây dựng Kịch bản Live Demo 5 phút để nhóm báo cáo đồ án. | • Hệ thống khởi động trọn vẹn chỉ với 1 câu lệnh (`run_all.bat`).<br>• Toàn bộ test suite `pytest` đều PASS (xanh lá 100%).<br>• Giao diện web chạy trơn tru, không có lỗi console.<br>• Kịch bản demo và tài liệu phản biện sẵn sàng 100% cho buổi bảo vệ. |
 
 ---
 
 ### 📝 Bản Đặc Tả Nhiệm Vụ Chi Tiết Từng Thành Viên (Detailed Full-Stack WBS & DoD)
 
-#### 👤 Thành viên 1: Phạm Gia Hưng — UI/UX Lead, Design System, Shared Layout & Landing Page
+#### 👤 Thành viên 1: Phạm Gia Hưng — Full-Stack: Cổng Khám Phá, Lịch Trình Mẫu & Chia Sẻ Công Khai (Public Portal, Featured Trips & Shared Hub)
 - **Họ và tên người phụ trách:** **Phạm Gia Hưng**
 - **Mã số sinh viên (MSSV):** `....................................................`
-- **Vai trò chuyên môn:** UI/UX Lead & Frontend Core Architect
+- **Vai trò chuyên môn:** UI/UX Lead & Full-Stack Portal Architect
 - **Thư mục & File phụ trách:**
+  - *Backend Services & API:* `server/app/api/v1/endpoints/trips.py` (các endpoint `featured`, `public/{token}`, `clone`), `server/app/schemas/trip.py`
   - *Cấu hình & Style chung:* `client/index.html`, `client/vite.config.js`, `client/tailwind.config.js`, `client/postcss.config.js`, `client/src/index.css`
   - *Bộ UI Component dùng chung (`client/src/components/common/`):* `Button.jsx`, `Input.jsx`, `Modal.jsx`, `Toast.jsx`, `LoadingSpinner.jsx`
   - *Khung giao diện cố định (`client/src/components/layout/`):* `Navbar.jsx`, `Sidebar.jsx`, `Footer.jsx`, `UserMenu.jsx`
   - *Routing & Điểm khởi chạy:* `client/src/main.jsx`, `client/src/App.jsx`
-  - *Màn hình chính:* `client/src/pages/LandingPage.jsx`
+  - *Giao diện màn hình chính:* `client/src/pages/LandingPage.jsx`, `client/src/pages/SharedTripPage.jsx`
   - *Tài nguyên tĩnh:* `client/src/assets/` (Logo, icons, hình ảnh TP.HCM)
 - **Nhiệm vụ cần làm chi tiết:**
-  1. Khởi tạo và chuẩn hóa cấu trúc dự án Frontend (React 18 + Vite + Tailwind CSS).
-  2. Thiết lập Design System đồng bộ theo `docs/10a-ui-design-system.md`: Bảng màu chủ đạo (Emerald/Cyan/Teal đại diện du lịch hiện đại), typography, bóng đổ, breakpoint responsive.
-  3. Xây dựng bộ thư viện UI Component dùng chung chất lượng cao trong `components/common/`: Button (các biến thể Primary, Secondary, Outline, Danger, Loading), Input (kèm icon, label, thông báo lỗi), Modal popup tái sử dụng, Toast thông báo, Loading Skeleton/Spinner.
-  4. Xây dựng khung giao diện chuẩn (Global Layout) trong `components/layout/`: Navbar cố định (Sticky Header) với logo, menu điều hướng, thông tin tài khoản; Footer hoàn chỉnh; User Menu dropdown (hỗ trợ chuyển theme, xem profile, nút đăng xuất).
-  5. Thiết lập hệ thống định tuyến (React Router) trong `App.jsx`, tạo khung cắm các trang (Routes) để các thành viên khác gắn trang của mình vào.
-  6. Xây dựng hoàn chỉnh trang chủ `LandingPage.jsx` chuyên nghiệp dành cho khách vãng lai: Hero Section giới thiệu hệ thống, khối trình diễn 7 tính năng đột phá, lời chứng thực/đánh giá, khối CTA kêu gọi đăng nhập để sử dụng.
-  7. Đóng vai trò UI Lead: Hướng dẫn, rà soát và hỗ trợ 6 thành viên còn lại ghép nối component giao diện vào khung chung, đảm bảo thẩm mỹ toàn website luôn đồng bộ 100%.
+  1. *Backend - API Lịch trình mẫu TP.HCM:* Xây dựng endpoint `GET /api/v1/trips/featured` trả về danh mục các lịch trình mẫu TP.HCM xuất sắc nhất (1 ngày khám phá ẩm thực Chợ Lớn Quận 5, 2 ngày di sản văn hóa Sài Gòn xưa, 3 ngày check-in hiện đại Thủ Đức - Quận 1) với đầy đủ ảnh bìa, điểm nhấn và dự toán chi phí.
+  2. *Backend - API Đọc lịch trình chia sẻ công khai (Yêu cầu 5):* Xây dựng endpoint `GET /api/v1/trips/public/{share_token}` cho phép người xem bên ngoài đọc dữ liệu chuyến đi ở chế độ chỉ xem (Read-only), lọc bỏ các thông tin nhạy cảm của chủ sở hữu.
+  3. *Backend - API Nhân bản chuyến đi (Clone Trip):* Xây dựng endpoint `POST /api/v1/trips/public/{share_token}/clone` cho phép người dùng sau khi đăng nhập có thể 1-click nhân bản toàn bộ lịch trình mẫu/được chia sẻ vào danh mục chuyến đi của mình để tùy chỉnh tiếp.
+  4. *Frontend - Thiết lập Design System & Component chung:* Chuẩn hóa bảng màu Tailwind, typography; xây dựng bộ UI Component dùng chung trong `components/common/` (`Button`, `Input`, `Modal`, `Toast`, `LoadingSpinner`) để toàn bộ 6 thành viên còn lại sử dụng.
+  5. *Frontend - Khung giao diện Global Layout:* Xây dựng `Navbar.jsx` cố định có menu điều hướng và trạng thái tài khoản; `Footer.jsx` chuyên nghiệp; `UserMenu.jsx` dropdown.
+  6. *Frontend - Màn hình `LandingPage.jsx` (Thực thi Yêu cầu 1):* Dựng Hero Section ấn tượng giới thiệu hệ thống, khối Carousel các lịch trình mẫu TP.HCM tương tác (cho phép khách xem trước lịch trình mẫu để kích thích đăng nhập), khối trình diễn 7 tính năng đột phá, nút CTA kêu gọi đăng nhập.
+  7. *Frontend - Màn hình `SharedTripPage.jsx` (Thực thi Yêu cầu 5):* Dựng giao diện xem lịch trình chỉ đọc khi truy cập link `/s/:shareToken`, hiển thị timeline, nút "Sao chép vào chuyến đi của tôi" và nút "In lịch trình / Xuất file PDF".
 - **Tiêu chuẩn nghiệm thu (Definition of Done - DoD):**
+  - [x] Backend API `/api/v1/trips/featured` và `/api/v1/trips/public/{share_token}` chạy ổn định, phản hồi < 100ms.
   - [x] Gói thư viện component chung (`Button`, `Input`, `Modal`, `Toast`) chạy mượt mà, đầy đủ props và biến thể.
-  - [x] Khung Layout (Navbar, Footer) hiển thị sắc nét, responsive 100% trên cả Desktop, Tablet và Mobile.
-  - [x] Trang `LandingPage.jsx` ấn tượng, tải nhanh, nút CTA kêu gọi chuyển hướng đúng sang trang Đăng nhập.
-  - [x] Lệnh `npm run build` không phát sinh bất kỳ lỗi cú pháp hay xung đột CSS nào.
+  - [x] Trang `LandingPage.jsx` ấn tượng, tải nhanh, hiển thị tour mẫu trực quan kích thích khách đăng ký tài khoản (Yêu cầu 1).
+  - [x] Trang `SharedTripPage.jsx` hiển thị đẹp mắt, bảo mật, nút sao chép chuyến đi và in ấn hoạt động chuẩn xác.
+  - [x] Lệnh `npm run build` tạo bundle production thành công 100% không cảnh báo.
 
 ---
 
@@ -350,31 +352,28 @@ website-ai-travel/
 
 ---
 
-#### 👤 Thành viên 6: Đàng Minh Hạo — Full-Stack: Quản Lý Chuyến Đi, Chia Sẻ & Đồng Bộ Google Calendar (Trips, Share & Calendar)
+#### 👤 Thành viên 6: Đàng Minh Hạo — Full-Stack: Quản Lý Chuyến Đi, Đánh Giá AI & Google Calendar (Trips Portfolio, Rating & Calendar Sync)
 - **Họ và tên người phụ trách:** **Đàng Minh Hạo**
 - **Mã số sinh viên (MSSV):** `....................................................`
 - **Vai trò chuyên môn:** Full-Stack Integrations & Trip Services Developer
 - **Thư mục & File phụ trách:**
-  - *Backend Trips & Calendar API:* `server/app/services/calendar_service.py`, `server/app/api/v1/endpoints/calendar.py`, `server/app/api/v1/endpoints/trips.py` (CRUD, share, rating), `server/app/schemas/calendar.py`
-  - *Frontend Pages & Modals:* `client/src/pages/MyTripsPage.jsx`, `client/src/pages/TripDetailPage.jsx`, `client/src/pages/SharedTripPage.jsx`, Modal Đồng bộ Calendar, Modal Đánh giá sao, `client/src/services/tripService.js`, `client/src/services/calendarService.js`
+  - *Backend Trips & Calendar API:* `server/app/services/calendar_service.py`, `server/app/api/v1/endpoints/calendar.py`, `server/app/api/v1/endpoints/trips.py` (CRUD trips, share trigger, rating), `server/app/schemas/calendar.py`
+  - *Frontend Pages & Modals:* `client/src/pages/MyTripsPage.jsx`, `client/src/pages/TripDetailPage.jsx`, Modal Đồng bộ Calendar, Modal Đánh giá sao (`RatingModal.jsx`), `client/src/services/tripService.js`, `client/src/services/calendarService.js`
 - **Nhiệm vụ cần làm chi tiết:**
-  1. *Backend - Nghiệp vụ Quản lý Chuyến đi (My Trips):* Xây dựng các API `GET /api/v1/trips` (danh sách chuyến đi của user đang đăng nhập), `GET /api/v1/trips/{id}` (lấy toàn bộ chi tiết ngày/hoạt động), `DELETE /api/v1/trips/{id}` (xóa chuyến đi).
-  2. *Backend - Chia sẻ Liên kết Công khai — Read-only Share Link (Yêu cầu 5):*
-     - Endpoint `POST /api/v1/trips/{id}/share`: Sinh mã token ngẫu nhiên bảo mật (`uuid4`).
-     - Endpoint `GET /api/v1/trips/public/{share_token}`: Cho phép người ngoài truy cập xem toàn bộ lịch trình ở chế độ chỉ đọc (Read-only) không cần đăng nhập.
-     - Hỗ trợ chủ sở hữu thu hồi (revoke) liên kết chia sẻ bất kỳ lúc nào.
-  3. *Backend - Đánh giá Chất lượng Lịch trình (Yêu cầu 5):* Endpoint `POST /api/v1/trips/{id}/rating` nhận đánh giá 1-5 sao và nhận xét chi tiết, lưu trữ vào bảng `trip_ratings`.
+  1. *Backend - Nghiệp vụ Quản lý Chuyến đi (My Trips - Yêu cầu 5):* Xây dựng các API `GET /api/v1/trips` (danh sách chuyến đi của user đang đăng nhập), `GET /api/v1/trips/{id}` (lấy toàn bộ chi tiết ngày/hoạt động), `DELETE /api/v1/trips/{id}` (xóa chuyến đi).
+  2. *Backend - Sinh mã Token chia sẻ (Yêu cầu 5):* Endpoint `POST /api/v1/trips/{id}/share`: Sinh mã token ngẫu nhiên bảo mật (`uuid4`), quản lý trạng thái bật/tắt (thu hồi) liên kết chia sẻ.
+  3. *Backend - Đánh giá Chất lượng Lịch trình (Yêu cầu 5):* Endpoint `POST /api/v1/trips/{id}/rating` nhận đánh giá 1-5 sao và nhận xét chi tiết, lưu trữ vào bảng `trip_ratings` phục vụ phản hồi chất lượng AI.
   4. *Backend - Tự động Đồng bộ Google Calendar (Yêu cầu 6):*
      - Xây dựng giải pháp 2 tầng:
        - *Tầng 1 (Tức thì):* Sinh đường dẫn tạo sự kiện nhanh (Google Calendar Web Template Link).
        - *Tầng 2 (API):* Tích hợp Google Calendar OAuth2 API, tự động tạo hàng loạt Event cho từng hoạt động theo đúng ngày giờ, cấu hình thông báo nhắc nhở trước **đúng 30 phút**.
   5. *Frontend - Màn hình My Trips:* Dựng `MyTripsPage.jsx` hiển thị danh sách chuyến đi đã tạo dạng lưới (Card Grid), tìm kiếm chuyến đi, bộ lọc theo ngày/ngân sách, nút xem chi tiết và nút xóa chuyến đi.
-  6. *Frontend - Màn hình Chi tiết & Chia sẻ:* Dựng `TripDetailPage.jsx` xem lại lịch trình đầy đủ; nút "Chia sẻ" tự động sao chép link dạng `/s/:shareToken` vào clipboard; dựng trang `SharedTripPage.jsx` cho người ngoài xem chỉ đọc (ẩn toàn bộ nút chỉnh sửa).
+  6. *Frontend - Màn hình Chi tiết Chuyến đi:* Dựng `TripDetailPage.jsx` xem lại lịch trình đầy đủ; nút "Chia sẻ" tự động gọi API sinh token và sao chép link dạng `/s/:shareToken` vào clipboard của người dùng.
   7. *Frontend - Modal Calendar & Modal Đánh giá sao:* Xây dựng Modal "Đồng bộ Google Calendar" (hiển thị thông báo hướng dẫn và nút mở Calendar); dựng Modal Đánh giá sao (chọn 1-5 sao, nhập nhận xét và gửi feedback).
 - **Tiêu chuẩn nghiệm thu (DoD):**
   - [x] Trang My Trips và Trip Detail hiển thị đầy đủ, tải nhanh dữ liệu chuyến đi.
-  - [x] Đường link chia sẻ `/s/:shareToken` hoạt động hoàn hảo cho người ngoài mà không yêu cầu đăng nhập.
-  - [x] Tính năng đồng bộ Google Calendar tạo đúng sự kiện kèm thông báo nhắc trước 30 phút.
+  - [x] Nút tạo link chia sẻ hoạt động chính xác, tự động copy đường link `/s/:shareToken` vào clipboard.
+  - [x] Tính năng đồng bộ Google Calendar tạo đúng sự kiện kèm thông báo nhắc trước đúng 30 phút.
   - [x] Đánh giá chất lượng 1-5 sao lưu thành công vào cơ sở dữ liệu.
 
 ---
