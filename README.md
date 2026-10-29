@@ -318,7 +318,7 @@ website-ai-travel/
 ---
 
 #### 👤 Thành viên 5: Backend Developer — Algorithm & Smart Logistics
-- **Họ và tên người phụ trách:** Diệp Bảo Danh
+- **Họ và tên người phụ trách:** **Diệp Bảo Danh**
 - **Mã số sinh viên (MSSV):** `
 - **Thư mục & File phụ trách:**
   - `server/app/utils/transit_calculator.py`
