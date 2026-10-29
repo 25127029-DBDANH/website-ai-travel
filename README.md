@@ -398,16 +398,29 @@ website-ai-travel/
 
 ## 📚 Danh Mục Tài Liệu Kỹ Thuật (Trong thư mục `docs/`)
 
-Tất cả tài liệu quan trọng của dự án được lưu trữ tại thư mục `docs/` để phục vụ quá trình bảo vệ đồ án:
+Toàn bộ 31 tài liệu kỹ thuật, kiến trúc và đặc tả chi tiết của dự án được lưu trữ tập trung tại thư mục `docs/`:
 
+### 1. Kế Hoạch Tổng Thể & Đặc Tả Cốt Lõi
 | Tên File | Vai Trò & Nội Dung Chi Tiết |
 |---|---|
-| [**yeu-cau-moi.md**](docs/yeu-cau-moi.md) | Phân tích chi tiết 7 yêu cầu mới của giảng viên, các kịch bản sử dụng thực tế và tiêu chí nghiệm thu. |
-| [**user-flow.md**](docs/user-flow.md) | Sơ đồ luồng trải nghiệm người dùng tổng thể (Mermaid Flowchart) từ lúc ghé thăm trang, đăng nhập, nhập form đến nhận lịch trình và đồng bộ Calendar. |
+| [**KE_HOACH_TONG_THE_DU_AN.md**](docs/KE_HOACH_TONG_THE_DU_AN.md) | **Hồ sơ tổng thể Master (Zero-code):** Bản kế hoạch toàn diện từ kiến trúc, 7 yêu cầu mới, phân tích WBS 7 người đến kịch bản demo bảo vệ. |
+| [**yeu-cau-moi.md**](docs/yeu-cau-moi.md) | Đặc tả chi tiết 7 yêu cầu mới của giảng viên, phân tích kịch bản nghiệp vụ và tiêu chí nghiệm thu. |
+| [**user-flow.md**](docs/user-flow.md) | Sơ đồ luồng trải nghiệm người dùng tổng thể (Mermaid Flowchart) từ Landing Page đến Lên lịch và Đồng bộ Calendar. |
 | [**ke-hoach-thuc-hien.md**](docs/ke-hoach-thuc-hien.md) | Kế hoạch phân rã công việc WBS theo các Sprint, tiến độ bàn giao và chuẩn nghiệm thu từng tính năng (Definition of Done). |
 | [**thay-doi-so-voi-ke-hoach-cu.md**](docs/thay-doi-so-voi-ke-hoach-cu.md) | Bảng so sánh đối chiếu những điểm khác biệt giữa tài liệu cũ và 7 yêu cầu mới của giảng viên. |
 | [**kien-truc-api-db.md**](docs/kien-truc-api-db.md) | Thiết kế kiến trúc kỹ thuật hệ thống, sơ đồ quan hệ cơ sở dữ liệu (ERD) và danh mục các RESTful API. |
 | [**openapi.yaml**](docs/openapi.yaml) | Bản đặc tả kỹ thuật tiêu chuẩn OpenAPI 3.0 đầy đủ cho toàn bộ hệ thống API, dùng để import vào Swagger UI hoặc Postman. |
+
+### 2. Bộ Hồ Sơ Đặc Tả Đánh Số (01 — 15)
+| Nhóm Hồ Sơ | Các File Thành Phần | Nội Dung Trọng Tâm |
+|---|---|---|
+| **Tổng Quan & Phạm Vi** | [01-tong-quan.md](docs/01-tong-quan.md), [02-scope.md](docs/02-scope.md) | Bối cảnh du lịch TP.HCM, mục tiêu đồ án, phạm vi In-scope & Out-of-scope |
+| **Kiến Trúc & AI Flow** | [03-kien-truc-api-db.md](docs/03-kien-truc-api-db.md), [04-prompt-ai-flow.md](docs/04-prompt-ai-flow.md) | Kiến trúc Client-Server FastAPI, System Instruction & Luồng 4 bước sinh Structured JSON |
+| **Kỹ Thuật Vận Hành** | [05-timeline.md](docs/05-timeline.md), [06-error-handling.md](docs/06-error-handling.md), [07-security.md](docs/07-security.md) | Tiến độ triển khai, xử lý lỗi & fallback, cơ chế bảo mật JWT & phân quyền |
+| **Kiểm Thử & Đóng Gói** | [08-testing.md](docs/08-testing.md), [09-deploy.md](docs/09-deploy.md), [11-risks.md](docs/11-risks.md) | Kế hoạch kiểm thử Pytest, triển khai Docker & phân tích ma trận rủi ro |
+| **Hệ Thống Thiết Kế UI** | [10a-ui-design-system.md](docs/10a-ui-design-system.md), [10b-ui-wireframes.md](docs/10b-ui-wireframes.md), [10c-ui-chat-motion-settings.md](docs/10c-ui-chat-motion-settings.md) | Design System, Wireframes 8 màn hình, hiệu ứng động và Mini-map card |
+| **Hồ Sơ Thiết Kế Module** | [12-1](docs/12-1-schema-sql.md) đến [12-8](docs/12-8-adaptive-layer.md) | Đặc tả DDL CSDL, Haversine Transit, Places Service, Trip Service, Seed Data, Identity, Auth & Adaptive Layer |
+| **Bảo Vệ Đồ Án & Nghiệm Thu** | [13-demo-qa.md](docs/13-demo-qa.md), [14-checklist.md](docs/14-checklist.md), [15-roadmap.md](docs/15-roadmap.md) | Kịch bản Live Demo 5 phút, bộ câu hỏi phản biện, checklist bàn giao & định hướng phát triển |
 
 ---
 

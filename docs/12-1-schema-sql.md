@@ -121,13 +121,15 @@ CREATE TABLE IF NOT EXISTS travel_profiles (
 );
 ```
 
-### 12.1.b. Lưu ý driver `pg` cho cột NUMERIC (Hữu Lam cấu hình trong `server/src/db/connection.js`)
+### 12.1.b. Lưu ý cấu hình kiểu dữ liệu trong SQLAlchemy & Pydantic (trong `server/app/db/session.py`)
 
-Cột `rating NUMERIC(2,1)` trong PostgreSQL có type OID là 1700. Mặc định driver `pg` trả về kiểu chuỗi (ví dụ `"4.3"`) để bảo toàn độ chính xác số học. Để contract test và frontend nhận kiểu `number` (`4.3`), Lam cần cấu hình type parser ngay khi khởi tạo connection pool:
+Cột `rating NUMERIC(2,1)` trong PostgreSQL được ánh xạ sang kiểu `Float` trong SQLAlchemy ORM và Pydantic schemas. Trong Pydantic Schema (`server/app/schemas/trip.py`), định nghĩa field: `rating: Optional[float] = None` để tự động parse kiểu số thực (`float`) chuẩn xác cho Client React:
 
-```javascript
-import pg from 'pg';
+```python
+from pydantic import BaseModel
+from typing import Optional
 
-// Ép kiểu OID 1700 (NUMERIC) từ chuỗi về số thực (float)
-pg.types.setTypeParser(1700, (v) => (v === null ? null : parseFloat(v)));
+class PlaceRatingSchema(BaseModel):
+    place_id: str
+    rating: Optional[float] = None  # Tự động parse từ Numeric DB sang float
 ```
