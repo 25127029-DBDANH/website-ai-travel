@@ -200,25 +200,199 @@ website-ai-travel/
 
 > [!IMPORTANT]
 > **Quy tắc phân công nhân sự đồ án:**
-> - **Frontend (Giao diện SPA React 18):** Do **01 người duy nhất** (Thành viên 1) phụ trách toàn diện từ A - Z (UI/UX, Components, 8 màn hình, Bản đồ client, Quản lý State và kết nối Axios).
+> - **Frontend (Toàn bộ Client SPA React 18):** Do **01 người duy nhất** (Thành viên 1) phụ trách toàn diện từ A - Z (UI/UX, Components, 8 màn hình, Bản đồ client, Quản lý State và kết nối Axios).
 > - **Các phần còn lại (Backend, AI, CSDL, Thuật toán, Tích hợp & DevOps/QA):** Được **chia đều cho 06 người** (Thành viên 2 đến Thành viên 7) theo từng module chuyên biệt, đảm bảo khối lượng công việc cân bằng, rõ ràng và không chồng chéo.
 > - Cột **Họ và tên người phụ trách** được để trống để nhóm trưởng phân bổ trực tiếp tên từng thành viên vào đồ án.
 
-| STT | Vị trí / Vai trò chuyên môn | Họ và tên người phụ trách | Thư mục & File phụ trách chính | Nhiệm vụ chi tiết (Cần làm gì) | Yêu cầu chuẩn đầu ra (Deliverables & DoD) |
-| :---: | :---|:---:|:---|---|---|
-| **1** | **Frontend Lead** *(Phụ trách toàn bộ Frontend - 1 người duy nhất)* | | client/ (Toàn bộ mã nguồn phía Client):<br>• client/index.html<br>• client/vite.config.js<br>• client/tailwind.config.js<br>• client/postcss.config.js<br>• client/src/index.css<br>• client/src/components/common/ (Button.jsx, Input.jsx, Modal.jsx, Toast.jsx, LoadingSpinner.jsx)<br>• client/src/components/layout/ (Navbar.jsx, Sidebar.jsx, Footer.jsx, UserMenu.jsx)<br>• client/src/components/chat/ (MessageList.jsx, ChatInput.jsx, QuickSuggestions.jsx)<br>• client/src/components/trip/ (DayTimeline.jsx, ActivityCard.jsx, SwapModal.jsx, RatingModal.jsx)<br>• client/src/components/map/ (MapView.jsx, PlaceMarker.jsx, RouteLayer.jsx, MiniMapCard.jsx)<br>• client/src/pages/ (LandingPage.jsx, LoginPage.jsx, RegisterPage.jsx, PlannerPage.jsx, MyTripsPage.jsx, TripDetailPage.jsx, SharedTripPage.jsx, SettingsPage.jsx)<br>• client/src/context/ (AuthContext.jsx, TripContext.jsx)<br>• client/src/hooks/ (useAuth.js, useTrip.js, useMap.js)<br>• client/src/services/ (pi.js, uthService.js, 	ripService.js, calendarService.js) | • Thiết kế toàn bộ giao diện Design System chuẩn Responsive (Desktop & Mobile) theo docs/10a-ui-design-system.md.<br>• Hiện thực trọn vẹn 8 màn hình (Pages) theo docs/10b-ui-wireframes.md: Landing (dành cho khách vãng lai kèm CTA đăng nhập), Login/Register, Planner Studio (Form 8 tiêu chí + Chat AI), My Trips, Trip Detail, Shared Trip (liên kết chỉ xem) và Settings.<br>• Tích hợp bản đồ tương tác (Mapbox GL/Google Maps): Vẽ marker đánh số, đường đi polyline, tương tác 2 chiều với Timeline.<br>• Hiện thực Mini-map card hiển thị ngay trong bong bóng chat AI khi trả lời về địa điểm.<br>• Xây dựng các Modal chức năng: Modal Đổi địa điểm (Swap Place), Modal Đánh giá sao (1-5 sao), Modal Đồng bộ Google Calendar.<br>• Quản lý trạng thái toàn cục với React Context (AuthContext bảo vệ route đăng nhập, TripContext lưu trữ lịch trình đang tạo).<br>• Cấu hình Axios Client (pi.js) tự động đính kèm Header JWT Bearer Token và xử lý mã lỗi toàn cục. | • Toàn bộ ứng dụng Frontend SPA hoạt động mượt mà, trực quan, không có lỗi console.<br>• Lệnh 
-pm run build tạo gói production thành công 100% không cảnh báo.<br>• Khách chưa đăng nhập bị chặn không thể vào Planner/Trips (Yêu cầu 1).<br>• Giao diện hiển thị sắc nét, responsive 100% trên cả máy tính và điện thoại. |
-| **2** | **Backend Developer — Core, Security & User Preferences** | | server/app/core/:<br>• config.py<br>• security.py<br>• dependencies.py<br>server/app/api/v1/endpoints/auth.py<br>server/app/schemas/user.py<br>server/main.py | • Thiết lập cấu hình hệ thống tập trung với Pydantic BaseSettings đọc biến môi trường từ .env.<br>• Cấu hình CORS middleware, Exception Handlers toàn cục chuẩn hóa cấu trúc lỗi JSON.<br>• Xây dựng hàm băm mật khẩu bảo mật một chiều bằng thuật toán crypt.<br>• Hiện thực cấp phát, ký và xác minh JWT Access Token (hạn 24h) và Refresh Token an toàn.<br>• **Thực thi nghiêm ngặt Yêu cầu 1:** Viết FastAPI dependency get_current_user bắt buộc đăng nhập cho mọi endpoint dữ liệu cá nhân, trả về HTTP 401 Unauthorized nếu thiếu/sai token.<br>• Xây dựng các API xác thực: POST /api/v1/auth/register, POST /api/v1/auth/login, GET /api/v1/auth/me.<br>• **Thực thi Yêu cầu 7 (Returning User):** Xây dựng API GET /api/v1/auth/preferences & PUT /api/v1/auth/preferences lưu trữ ngân sách và sở thích du lịch dài hạn để tự động điền trước (pre-fill) form khi người dùng quay lại. | • Module Core và Security bảo mật tuyệt đối, chống bypass token.<br>• Chặn đứng 100% request trái phép khi chưa đăng nhập.<br>• Hệ thống lưu và nhớ thói quen du lịch của người dùng cũ hoạt động chính xác.<br>• Đạt chuẩn kiểm thử Unit test cho toàn bộ module mã hóa mật khẩu và giải mã JWT. |
-| **3** | **Backend Developer — Database & HCMC Data Engineer** | | server/app/db/:<br>• schema.sql<br>• session.py<br>• hcmc_data.py<br>server/app/api/v1/endpoints/places.py<br>server/app/services/places_service.py | • Thiết kế lược đồ cơ sở dữ liệu quan hệ hoàn chỉnh trong schema.sql với đầy đủ Foreign Keys, Constraints, Indexes: 6 bảng (users, user_preferences, 	rips, 	rip_days, 	rip_activities, 	rip_ratings).<br>• Thiết lập kết nối SQLAlchemy Session Pool hỗ trợ cả SQLite (local) và PostgreSQL (production).<br>• Thu thập, chuẩn hóa và số hóa bộ dữ liệu hạt nhân 100+ địa điểm du lịch, ẩm thực, văn hóa nổi tiếng tại TP.HCM (Quận 1, 3, 5, Thủ Đức, Bình Thạnh...).<br>• Định dạng siêu dữ liệu chi tiết cho từng điểm: Tên chuẩn, Địa chỉ, Tọa độ GPS (lat, lng), Giờ mở cửa/đóng cửa, Chi phí dự kiến, Phân loại indoor vs outdoor (*dùng cho kịch bản trời mưa*), Thể loại (Văn hóa, Ẩm thực, Cà phê, Lịch sử...).<br>• Xây dựng places_service.py và API GET /api/v1/places/search, GET /api/v1/places/{id}: Tra cứu địa điểm theo từ khóa, lọc theo quận và thể loại; tích hợp Google Places API (New) lấy ảnh và rating thực tế. | • File schema.sql khởi tạo CSDL thành công 100% không lỗi cú pháp.<br>• Bộ dữ liệu địa điểm TP.HCM phong phú, tọa độ GPS chính xác 100% trên bản đồ thực.<br>• API Places phản hồi cực nhanh (< 100ms) nhờ tối ưu hóa indexing và cache dữ liệu.<br>• Tích hợp cơ chế fallback dữ liệu cục bộ khi không có kết nối internet. |
-| **4** | **Backend Developer — AI Core & Gemini LLM Engineer** | | server/app/services/gemini_service.py<br>server/app/api/v1/endpoints/ai.py<br>server/app/schemas/ai.py | • Tích hợp Google Gemini API qua thư viện chính thức google-generativeai (Gemini 1.5 Pro / Flash).<br>• Thiết kế System Instruction chuyên sâu am hiểu địa lý, thời tiết, văn hóa và ẩm thực hẻm TP.HCM; **loại bỏ hoàn toàn persona/giọng điệu nhân vật** theo đúng Yêu cầu 7 của giảng viên.<br>• **Hiện thực Luồng 4 bước tạo lịch trình chuẩn (Yêu cầu 2):**<br>&nbsp;&nbsp;1. *Bước 1:* Tiếp nhận form 8 tiêu chí.<br>&nbsp;&nbsp;2. *Bước 2:* AI phân tích sinh gợi ý tổng quan (High-level summary, chủ đề, điểm nhấn từng ngày).<br>&nbsp;&nbsp;3. *Bước 3:* Nhận trao đổi/phản hồi điều chỉnh từ người dùng qua khung chat.<br>&nbsp;&nbsp;4. *Bước 4:* Sinh lịch trình chi tiết từng giờ bằng **Native Structured JSON Output** (ép chuẩn Pydantic Schema).<br>• Xây dựng API POST /api/v1/ai/chat: Chatbot tư vấn, tự động trả về place_card (tọa độ, tên điểm) để render Mini-map card trong chat (Yêu cầu 3).<br>• Xây dựng cơ chế retry tự động và fallback template khi AI gặp sự cố nghẽn mạng/rate-limit. | • Các endpoint /api/v1/ai/suggest, /api/v1/ai/generate, /api/v1/ai/chat chạy ổn định.<br>• 100% lịch trình chi tiết trả về đúng cấu trúc JSON Schema, phân bổ giờ giấc khoa học, không bị hallucination sai địa lý TP.HCM.<br>• Tính năng Mini-map card trả về đúng tọa độ của địa điểm được nhắc đến. |
-| **5** | **Backend Developer — Algorithm & Smart Logistics** | | server/app/utils/transit_calculator.py<br>server/app/services/contingency_service.py<br>server/app/schemas/trip.py (Swap schemas)<br>server/app/api/v1/endpoints/trips.py (Swap logic) | • Triển khai công thức Haversine tính toán khoảng cách đại vòng chính xác giữa 2 tọa độ GPS.<br>• Xây dựng hàm ước lượng thời gian di chuyển theo loại phương tiện (đi bộ, xe máy, taxi/ô tô) phù hợp với thực tế giao thông TP.HCM.<br>• **Hiện thực Tính năng Đổi địa điểm — Swap Place (Yêu cầu 2):**<br>&nbsp;&nbsp;• Thuật toán tìm 2-3 địa điểm thay thế tương đương (cùng thể loại, cùng quận hoặc bán kính lân cận < 2 km).<br>&nbsp;&nbsp;• Endpoint POST /api/v1/trips/{id}/swap-suggestions: Trả về danh sách địa điểm đề xuất.<br>&nbsp;&nbsp;• Endpoint POST /api/v1/trips/{id}/swap: Cập nhật địa điểm mới và tự động tính lại thời gian di chuyển chặng đó.<br>• **Hiện thực Hệ thống Kịch bản Dự phòng — Contingency Planning (Yêu cầu 4):**<br>&nbsp;&nbsp;• *Trời mưa:* Tự động quét các điểm ngoài trời (outdoor) chuyển sang điểm trong nhà (indoor).<br>&nbsp;&nbsp;• *Giờ cao điểm (17h - 19h):* Tự động gom cụm các địa điểm gần nhau, hạn chế tối đa di chuyển xuyên các trục đường kẹt xe.<br>&nbsp;&nbsp;• *Điểm đóng cửa hoặc Vượt ngân sách:* Tự động đề xuất điểm thay thế tương đương giá rẻ hoặc miễn phí. | • Thuật toán tính cự ly và thời gian di chuyển có độ chính xác cao (sai số < 10% so với Google Maps).<br>• Tính năng Swap gợi ý chính xác 2-3 điểm tương đương trong thời gian < 300ms.<br>• Kịch bản dự phòng thời tiết mưa và né kẹt xe 17h-19h vận hành thông minh, tự động điều chỉnh lịch trình hợp lý. |
-| **6** | **Backend Developer — Integrations & Trip Services** | | server/app/services/calendar_service.py<br>server/app/api/v1/endpoints/calendar.py<br>server/app/api/v1/endpoints/trips.py<br>server/app/schemas/calendar.py | • Xây dựng bộ API quản lý hành trình (My Trips - Yêu cầu 5): GET /api/v1/trips, GET /api/v1/trips/{id}, DELETE /api/v1/trips/{id}, cập nhật trạng thái chuyến đi.<br>• **Hiện thực Chia sẻ Liên kết Công khai — Read-only Share Link (Yêu cầu 5):**<br>&nbsp;&nbsp;• Endpoint POST /api/v1/trips/{id}/share: Sinh mã token ngẫu nhiên bảo mật (uuid4).<br>&nbsp;&nbsp;• Endpoint GET /api/v1/trips/public/{share_token}: Cho phép người ngoài xem toàn bộ lịch trình chỉ đọc (Read-only) không cần đăng nhập và không có quyền sửa/xóa.<br>&nbsp;&nbsp;• Hỗ trợ chủ sở hữu thu hồi (revoke) liên kết chia sẻ bất kỳ lúc nào.<br>• **Hiện thực Đánh giá Chất lượng Lịch trình (Yêu cầu 5):** Endpoint POST /api/v1/trips/{id}/rating tiếp nhận đánh giá 1-5 sao và nhận xét của người dùng.<br>• **Hiện thực Tính năng Đột phá — Đồng bộ Google Calendar (Yêu cầu 6):**<br>&nbsp;&nbsp;• *Phương thức 1:* Sinh đường dẫn tạo sự kiện nhanh (Google Calendar Web Template Link).<br>&nbsp;&nbsp;• *Phương thức 2:* Tích hợp Google Calendar API (OAuth2), tự động tạo hàng loạt Event cho từng hoạt động theo đúng ngày giờ, kèm cấu hình thông báo nhắc nhở trước **đúng 30 phút**. | • Bộ API My Trips hoạt động chuẩn xác, truy vấn nhanh.<br>• Cơ chế Share Link an toàn, chặn hoàn toàn các hành vi chỉnh sửa trái phép từ người xem bên ngoài.<br>• Endpoint đánh giá sao lưu trữ thành công dữ liệu vào bảng 	rip_ratings.<br>• Đồng bộ thành công toàn bộ sự kiện lịch trình sang Google Calendar thực tế kèm thông báo nhắc trước 30 phút. |
-| **7** | **QA, DevOps & System Architect** | | docker-compose.yml<br>server/tests/ (Toàn bộ kiểm thử tự động)<br>docs/openapi.yaml<br>docs/13-demo-qa.md<br>docs/14-checklist.md<br>
-un_all.bat, 
-un_backend.bat, 
-un_frontend.bat | • Đóng gói toàn bộ hệ thống bằng Docker & Docker Compose: Cấu hình container FastAPI, container PostgreSQL 16 và mạng nội bộ giữa các container.<br>• Xây dựng các script khởi chạy 1-click tiện lợi trên môi trường Windows (
-un_all.bat).<br>• **Xây dựng Bộ Kiểm thử Tự động Toàn diện (server/tests/ qua pytest và httpx):**<br>&nbsp;&nbsp;• Viết Unit Tests cho các hàm thuật toán: 	ransit_calculator.py, băm mật khẩu, mã hóa JWT token.<br>&nbsp;&nbsp;• Viết Integration Tests cho toàn bộ API Endpoints: Auth (đăng ký/đăng nhập đúng và sai), chặn truy cập không có token (Yêu cầu 1), CRUD Trips, Swap địa điểm, Google Calendar link.<br>&nbsp;&nbsp;• Triển khai kỹ thuật Mocking cho Gemini API và Google OAuth để test chạy độc lập, tốc độ cao và không tốn chi phí gọi API thật.<br>• Duy trì và chuẩn hóa file đặc tả kỹ thuật tiêu chuẩn docs/openapi.yaml (OpenAPI 3.0).<br>• **Xây dựng Kịch bản Live Demo & Bộ câu hỏi bảo vệ đồ án (docs/13-demo-qa.md):**<br>&nbsp;&nbsp;• Soạn kịch bản phân vai 7 thành viên trình diễn 5 luồng tính năng trực tiếp trước giảng viên.<br>&nbsp;&nbsp;• Chuẩn bị sẵn bộ câu hỏi - trả lời phản biện chuyên sâu về kiến trúc, bảo mật và AI. | • Hệ thống khởi động trọn vẹn chỉ với 1 câu lệnh (docker-compose up hoặc 
-un_all.bat).<br>• Bộ test suite pytest đạt độ bao phủ (coverage) > 80%, tất cả test cases đều PASS (xanh lá).<br>• File OpenAPI 3.0 hợp lệ 100%, import được vào Swagger UI / Postman.<br>• Kịch bản demo và tài liệu phản biện sẵn sàng 100% cho buổi bảo vệ đồ án trước giảng viên. |
+### 📊 Bảng Ma Trận Phân Công Tổng Hợp (WBS Summary Matrix)
+
+| STT | Họ và tên người phụ trách | Vị trí / Vai trò chuyên môn | Thư mục & File chính | Trọng tâm công việc | Chuẩn đầu ra (Deliverables) |
+| :---: | :---: | :---|:---|---|---|
+| **1** | | **Frontend Lead**<br>*(Toàn bộ Client - 1 người duy nhất)* | `client/`<br>• `src/pages/` (8 màn hình)<br>• `src/components/` (map, chat, trip)<br>• `src/context/`, `src/services/` | • Thiết kế Design System & Responsive UI<br>• Dựng 8 màn hình (Landing, Login, Planner...)<br>• Tích hợp Bản đồ Mapbox & Mini-map card trong chat<br>• Dựng Modal Swap Place, Đánh giá sao, Đồng bộ Calendar | • Ứng dụng SPA hoàn chỉnh, `npm run build` thành công 100%<br>• Giao diện mượt mà, chuẩn Responsive Mobile & Desktop<br>• Chặn khách chưa đăng nhập vào Planner/Trips (Yêu cầu 1) |
+| **2** | | **Backend Core & Security**<br>*(Auth, Bảo mật & User Profile)* | `server/app/core/`<br>• `security.py`, `dependencies.py`<br>`server/app/api/v1/endpoints/auth.py`<br>`server/app/schemas/user.py` | • Thiết lập cấu hình hệ thống Pydantic BaseSettings & CORS<br>• Băm mật khẩu bcrypt, cấp phát & xác thực JWT Token<br>• Dependency `get_current_user` bắt buộc đăng nhập (Yêu cầu 1)<br>• API lưu sở thích người dùng cũ & điền trước Form (Yêu cầu 7) | • Module Auth bảo mật cao, chặn 100% request không có token<br>• Endpoint `/register`, `/login`, `/me` ổn định<br>• API lưu & gợi nhớ sở thích người dùng cũ chạy chính xác |
+| **3** | | **Database & Data Engineer**<br>*(CSDL & Dữ liệu thực tế TP.HCM)* | `server/app/db/`<br>• `schema.sql`, `session.py`<br>• `hcmc_data.py`<br>`server/app/api/v1/endpoints/places.py` | • Thiết kế 6 bảng quan hệ (Users, Trips, Activities...)<br>• Thu thập & số hóa 100+ địa điểm TP.HCM thực tế<br>• Siêu dữ liệu tọa độ GPS, giờ mở cửa, chi phí, cờ indoor/outdoor<br>• Places API tìm kiếm, lọc theo quận/thể loại & fallback cache | • CSDL quan hệ chuẩn hóa 3NF, không xung đột khóa ngoại<br>• Dữ liệu 100+ địa điểm TP.HCM chuẩn xác tọa độ thực tế<br>• API tra cứu địa điểm phản hồi nhanh dưới 100ms |
+| **4** | | **AI Core & Gemini LLM Engineer**<br>*(Google Gemini & Luồng 4 bước)* | `server/app/services/gemini_service.py`<br>`server/app/api/v1/endpoints/ai.py`<br>`server/app/schemas/ai.py` | • Tích hợp Google Gemini API (`gemini-1.5-flash`/`pro`)<br>• System Prompt am hiểu sâu sắc TP.HCM; loại bỏ persona thừa<br>• Hiện thực Luồng 4 bước (Form ➔ Gợi ý ➔ Chốt ➔ Lịch trình chi tiết)<br>• Chatbot tư vấn du lịch kèm Mini-map card trong chat (Yêu cầu 3) | • 100% kết quả lịch trình trả về đúng Native Structured JSON<br>• Lịch trình chi tiết từng giờ khoa học, không bị hallucination<br>• Thẻ Mini-map card trả về đúng tọa độ địa điểm trong chat |
+| **5** | | **Algorithm & Smart Logistics**<br>*(Định tuyến, Swap Place & Rủi ro)* | `server/app/utils/transit_calculator.py`<br>`server/app/services/contingency_service.py`<br>`server/app/api/v1/endpoints/trips.py` | • Công thức Haversine tính cự ly & thời gian di chuyển đô thị<br>• Tính năng Đổi địa điểm (Swap Place): tìm 2-3 điểm tương đương<br>• Xử lý kịch bản Trời mưa (chuyển điểm ngoài trời sang trong nhà)<br>• Xử lý Giờ cao điểm 17h-19h (gom cụm điểm, hạn chế xuyên quận) | • Thuật toán định tuyến sai số < 10% so với Google Maps<br>• Tính năng Swap gợi ý 2-3 điểm tương đương trong < 300ms<br>• Kịch bản dự phòng mưa và né kẹt xe tự động điều chỉnh hợp lý |
+| **6** | | **Integrations & Trip Services**<br>*(My Trips, Share Link & Calendar)* | `server/app/services/calendar_service.py`<br>`server/app/api/v1/endpoints/calendar.py`<br>`server/app/api/v1/endpoints/trips.py` | • Quản lý danh mục chuyến đi My Trips (CRUD & lưu lịch sử)<br>• Chia sẻ hành trình công khai qua liên kết chỉ xem (`/s/:token`)<br>• Tiếp nhận đánh giá chất lượng lịch trình 1-5 sao (Yêu cầu 5)<br>• Đồng bộ Google Calendar tự động kèm thông báo nhắc trước 30 phút | • API My Trips & Share Link an toàn, người ngoài chỉ được xem<br>• Đánh giá sao lưu trữ thành công vào bảng `trip_ratings`<br>• Đồng bộ lịch trình sang Google Calendar chuẩn xác từng mốc giờ |
+| **7** | | **QA, DevOps & System Architect**<br>*(Kiểm thử, Docker, CI/CD & Demo)* | `docker-compose.yml`, `Dockerfile`<br>`server/tests/` (Unit & Integration tests)<br>`docs/openapi.yaml`, `docs/13-demo-qa.md`<br>`run_all.bat`, `run_backend.bat` | • Đóng gói toàn bộ hệ thống bằng Docker Compose & Batch scripts<br>• Bộ test suite tự động toàn diện bằng `pytest` (> 80% coverage)<br>• Mocking Gemini API và Google OAuth để test nhanh, độc lập<br>• Chuẩn hóa đặc tả OpenAPI 3.0 & Kịch bản Live Demo bảo vệ đồ án | • Khởi chạy 1-click thành công qua Docker hoặc `run_all.bat`<br>• Tất cả test cases đều PASS (xanh 100%) trước khi merge code<br>• Kịch bản và slide demo sẵn sàng 100% cho buổi bảo vệ đồ án |
+
+---
+
+### 📝 Bản Đặc Tả Nhiệm Vụ Chi Tiết Từng Thành Viên (Detailed WBS & DoD)
+
+#### 👤 Thành viên 1: Frontend Lead (Phụ trách toàn bộ Frontend — 01 Người Duy Nhất)
+- **Họ và tên người phụ trách:** `....................................................`
+- **Mã số sinh viên (MSSV):** `....................................................`
+- **Thư mục & File phụ trách:**
+  - Cấu hình & Giao diện chung: `client/index.html`, `client/vite.config.js`, `client/tailwind.config.js`, `client/src/index.css`
+  - Các Component dùng chung: `client/src/components/common/` (`Button.jsx`, `Input.jsx`, `Modal.jsx`, `Toast.jsx`, `LoadingSpinner.jsx`)
+  - Khung giao diện: `client/src/components/layout/` (`Navbar.jsx`, `Sidebar.jsx`, `Footer.jsx`, `UserMenu.jsx`)
+  - Khung chat AI: `client/src/components/chat/` (`MessageList.jsx`, `ChatInput.jsx`, `QuickSuggestions.jsx`)
+  - Hiển thị lịch trình: `client/src/components/trip/` (`DayTimeline.jsx`, `ActivityCard.jsx`, `SwapModal.jsx`, `RatingModal.jsx`)
+  - Bản đồ tương tác: `client/src/components/map/` (`MapView.jsx`, `PlaceMarker.jsx`, `RouteLayer.jsx`, `MiniMapCard.jsx`)
+  - 8 Màn hình giao diện: `client/src/pages/` (`LandingPage.jsx`, `LoginPage.jsx`, `RegisterPage.jsx`, `PlannerPage.jsx`, `MyTripsPage.jsx`, `TripDetailPage.jsx`, `SharedTripPage.jsx`, `SettingsPage.jsx`)
+  - Quản lý trạng thái & API Client: `client/src/context/` (`AuthContext.jsx`, `TripContext.jsx`), `client/src/hooks/` (`useAuth.js`, `useTrip.js`, `useMap.js`), `client/src/services/` (`api.js`, `authService.js`, `tripService.js`, `calendarService.js`)
+- **Nhiệm vụ cần làm chi tiết:**
+  1. Thiết kế toàn bộ giao diện Design System chuẩn Responsive (Desktop & Mobile) theo tài liệu `docs/10a-ui-design-system.md`.
+  2. Dựng 8 màn hình (Pages) theo `docs/10b-ui-wireframes.md`: Landing (chỉ dành cho khách vãng lai kèm CTA đăng nhập), Login/Register, Planner Studio (Form 8 tiêu chí + Chat AI), My Trips, Trip Detail, Shared Trip (liên kết chỉ xem) và Settings.
+  3. Tích hợp bản đồ tương tác (Mapbox GL/Google Maps): Vẽ marker đánh số, đường đi polyline, tương tác 2 chiều với Timeline.
+  4. Hiện thực Mini-map card hiển thị ngay trong bong bóng chat AI khi trả lời về địa điểm (Yêu cầu 3).
+  5. Xây dựng các Modal chức năng: Modal Đổi địa điểm (Swap Place), Modal Đánh giá sao (1-5 sao), Modal Đồng bộ Google Calendar.
+  6. Quản lý trạng thái toàn cục với React Context (`AuthContext` bảo vệ route đăng nhập, `TripContext` lưu trữ lịch trình đang tạo).
+  7. Cấu hình Axios Client (`api.js`) tự động đính kèm Header JWT Bearer Token và xử lý mã lỗi toàn cục.
+- **Tiêu chuẩn nghiệm thu (Definition of Done - DoD):**
+  - [x] Toàn bộ ứng dụng Frontend SPA hoạt động mượt mà, trực quan, không có lỗi console.
+  - [x] Lệnh `npm run build` tạo gói production thành công 100% không cảnh báo.
+  - [x] Khách chưa đăng nhập bị chặn không thể vào Planner/Trips (Yêu cầu 1).
+  - [x] Giao diện hiển thị sắc nét, responsive 100% trên cả máy tính và điện thoại.
+
+---
+
+#### 👤 Thành viên 2: Backend Developer — Core, Security & User Preferences
+- **Họ và tên người phụ trách:** `....................................................`
+- **Mã số sinh viên (MSSV):** `....................................................`
+- **Thư mục & File phụ trách:**
+  - `server/app/core/` (`config.py`, `security.py`, `dependencies.py`)
+  - `server/app/api/v1/endpoints/auth.py`
+  - `server/app/schemas/user.py`
+  - `server/.env.example`, `server/main.py`
+- **Nhiệm vụ cần làm chi tiết:**
+  1. Thiết lập cấu hình hệ thống tập trung với Pydantic BaseSettings đọc biến môi trường từ `.env`.
+  2. Cấu hình CORS middleware, Exception Handlers toàn cục chuẩn hóa cấu trúc lỗi JSON.
+  3. Xây dựng hàm băm mật khẩu bảo mật một chiều bằng thuật toán `bcrypt`.
+  4. Hiện thực cấp phát, ký và xác minh JWT Access Token (hạn 24h) và Refresh Token an toàn.
+  5. **Thực thi nghiêm ngặt Yêu cầu 1:** Viết FastAPI dependency `get_current_user` bắt buộc đăng nhập cho mọi endpoint dữ liệu cá nhân, trả về HTTP 401 Unauthorized nếu thiếu/sai token.
+  6. Xây dựng các API xác thực: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`.
+  7. **Thực thi Yêu cầu 7 (Returning User):** Xây dựng API `GET /api/v1/auth/preferences` & `PUT /api/v1/auth/preferences` lưu trữ ngân sách và sở thích du lịch dài hạn để tự động điền trước (pre-fill) form khi người dùng quay lại.
+- **Tiêu chuẩn nghiệm thu (Definition of Done - DoD):**
+  - [x] Module Core và Security bảo mật tuyệt đối, chống bypass token.
+  - [x] Chặn đứng 100% request trái phép khi chưa đăng nhập.
+  - [x] Hệ thống lưu và nhớ thói quen du lịch của người dùng cũ hoạt động chính xác.
+  - [x] Đạt chuẩn kiểm thử Unit test cho toàn bộ module mã hóa mật khẩu và giải mã JWT.
+
+---
+
+#### 👤 Thành viên 3: Backend Developer — Database & HCMC Data Engineer
+- **Họ và tên người phụ trách:** `....................................................`
+- **Mã số sinh viên (MSSV):** `....................................................`
+- **Thư mục & File phụ trách:**
+  - `server/app/db/` (`schema.sql`, `session.py`, `hcmc_data.py`)
+  - `server/app/api/v1/endpoints/places.py`
+  - `server/app/services/places_service.py`
+- **Nhiệm vụ cần làm chi tiết:**
+  1. Thiết kế lược đồ cơ sở dữ liệu quan hệ hoàn chỉnh trong `schema.sql` với đầy đủ Foreign Keys, Constraints, Indexes: 6 bảng (`users`, `user_preferences`, `trips`, `trip_days`, `trip_activities`, `trip_ratings`).
+  2. Thiết lập kết nối SQLAlchemy Session Pool hỗ trợ cả SQLite (local) và PostgreSQL (production).
+  3. Thu thập, chuẩn hóa và số hóa bộ dữ liệu hạt nhân 100+ địa điểm du lịch, ẩm thực, văn hóa nổi tiếng tại TP.HCM (Quận 1, 3, 5, Thủ Đức, Bình Thạnh...).
+  4. Định dạng siêu dữ liệu chi tiết cho từng điểm: Tên chuẩn, Địa chỉ, Tọa độ GPS (lat, lng), Giờ mở cửa/đóng cửa, Chi phí dự kiến, Phân loại `indoor` vs `outdoor` (*dùng cho kịch bản trời mưa*), Thể loại (Văn hóa, Ẩm thực, Cà phê, Lịch sử...).
+  5. Xây dựng `places_service.py` và API `GET /api/v1/places/search`, `GET /api/v1/places/{id}`: Tra cứu địa điểm theo từ khóa, lọc theo quận và thể loại; tích hợp Google Places API (New) lấy ảnh và rating thực tế.
+- **Tiêu chuẩn nghiệm thu (Definition of Done - DoD):**
+  - [x] File `schema.sql` khởi tạo CSDL thành công 100% không lỗi cú pháp.
+  - [x] Bộ dữ liệu địa điểm TP.HCM phong phú, tọa độ GPS chính xác 100% trên bản đồ thực.
+  - [x] API Places phản hồi cực nhanh (< 100ms) nhờ tối ưu hóa indexing và cache dữ liệu.
+  - [x] Tích hợp cơ chế fallback dữ liệu cục bộ khi không có kết nối internet.
+
+---
+
+#### 👤 Thành viên 4: Backend Developer — AI Core & Gemini LLM Engineer
+- **Họ và tên người phụ trách:** `....................................................`
+- **Mã số sinh viên (MSSV):** `....................................................`
+- **Thư mục & File phụ trách:**
+  - `server/app/services/gemini_service.py`
+  - `server/app/api/v1/endpoints/ai.py`
+  - `server/app/schemas/ai.py`
+- **Nhiệm vụ cần làm chi tiết:**
+  1. Tích hợp Google Gemini API qua thư viện chính thức `google-generativeai` (Gemini 1.5 Pro / Flash).
+  2. Thiết kế System Instruction chuyên sâu am hiểu địa lý, thời tiết, văn hóa và ẩm thực hẻm TP.HCM; **loại bỏ hoàn toàn persona/giọng điệu nhân vật** theo đúng Yêu cầu 7 của giảng viên.
+  3. **Hiện thực Luồng 4 bước tạo lịch trình chuẩn (Yêu cầu 2):**
+     - *Bước 1:* Tiếp nhận form 8 tiêu chí.
+     - *Bước 2:* AI phân tích sinh gợi ý tổng quan (High-level summary, chủ đề, điểm nhấn từng ngày).
+     - *Bước 3:* Nhận trao đổi/phản hồi điều chỉnh từ người dùng qua khung chat.
+     - *Bước 4:* Sinh lịch trình chi tiết từng giờ bằng **Native Structured JSON Output** (ép chuẩn Pydantic Schema).
+  4. Xây dựng API `POST /api/v1/ai/chat`: Chatbot tư vấn, tự động trả về `place_card` (tọa độ, tên điểm) để render Mini-map card trong chat (Yêu cầu 3).
+  5. Xây dựng cơ chế retry tự động và fallback template khi AI gặp sự cố nghẽn mạng/rate-limit.
+- **Tiêu chuẩn nghiệm thu (Definition of Done - DoD):**
+  - [x] Các endpoint `/api/v1/ai/suggest`, `/api/v1/ai/generate`, `/api/v1/ai/chat` chạy ổn định.
+  - [x] 100% lịch trình chi tiết trả về đúng cấu trúc JSON Schema, phân bổ giờ giấc khoa học, không bị hallucination sai địa lý TP.HCM.
+  - [x] Tính năng Mini-map card trả về đúng tọa độ của địa điểm được nhắc đến.
+
+---
+
+#### 👤 Thành viên 5: Backend Developer — Algorithm & Smart Logistics
+- **Họ và tên người phụ trách:** `....................................................`
+- **Mã số sinh viên (MSSV):** `....................................................`
+- **Thư mục & File phụ trách:**
+  - `server/app/utils/transit_calculator.py`
+  - `server/app/services/contingency_service.py`
+  - `server/app/schemas/trip.py` (Swap schemas)
+  - `server/app/api/v1/endpoints/trips.py` (Swap logic)
+- **Nhiệm vụ cần làm chi tiết:**
+  1. Triển khai công thức Haversine tính toán khoảng cách đại vòng chính xác giữa 2 tọa độ GPS.
+  2. Xây dựng hàm ước lượng thời gian di chuyển theo loại phương tiện (đi bộ, xe máy, taxi/ô tô) phù hợp với thực tế giao thông TP.HCM.
+  3. **Hiện thực Tính năng Đổi địa điểm — Swap Place (Yêu cầu 2):**
+     - Thuật toán tìm 2-3 địa điểm thay thế tương đương (cùng thể loại, cùng quận hoặc bán kính lân cận < 2 km).
+     - Endpoint `POST /api/v1/trips/{id}/swap-suggestions`: Trả về danh sách địa điểm đề xuất.
+     - Endpoint `POST /api/v1/trips/{id}/swap`: Cập nhật địa điểm mới và tự động tính lại thời gian di chuyển chặng đó.
+  4. **Hiện thực Hệ thống Kịch bản Dự phòng — Contingency Planning (Yêu cầu 4):**
+     - *Trời mưa:* Tự động quét các điểm ngoài trời (`outdoor`) chuyển sang điểm trong nhà (`indoor`).
+     - *Giờ cao điểm (17h - 19h):* Tự động gom cụm các địa điểm gần nhau, hạn chế tối đa di chuyển xuyên các trục đường kẹt xe.
+     - *Điểm đóng cửa hoặc Vượt ngân sách:* Tự động đề xuất điểm thay thế tương đương giá rẻ hoặc miễn phí.
+- **Tiêu chuẩn nghiệm thu (Definition of Done - DoD):**
+  - [x] Thuật toán tính cự ly và thời gian di chuyển có độ chính xác cao (sai số < 10% so với Google Maps).
+  - [x] Tính năng Swap gợi ý chính xác 2-3 điểm tương đương trong thời gian < 300ms.
+  - [x] Kịch bản dự phòng thời tiết mưa và né kẹt xe 17h-19h vận hành thông minh, tự động điều chỉnh lịch trình hợp lý.
+
+---
+
+#### 👤 Thành viên 6: Backend Developer — Integrations & Trip Services
+- **Họ và tên người phụ trách:** `....................................................`
+- **Mã số sinh viên (MSSV):** `....................................................`
+- **Thư mục & File phụ trách:**
+  - `server/app/services/calendar_service.py`
+  - `server/app/api/v1/endpoints/calendar.py`
+  - `server/app/api/v1/endpoints/trips.py`
+  - `server/app/schemas/calendar.py`
+- **Nhiệm vụ cần làm chi tiết:**
+  1. Xây dựng bộ API quản lý hành trình (My Trips - Yêu cầu 5): `GET /api/v1/trips`, `GET /api/v1/trips/{id}`, `DELETE /api/v1/trips/{id}`, cập nhật trạng thái chuyến đi.
+  2. **Hiện thực Chia sẻ Liên kết Công khai — Read-only Share Link (Yêu cầu 5):**
+     - Endpoint `POST /api/v1/trips/{id}/share`: Sinh mã token ngẫu nhiên bảo mật (`uuid4`).
+     - Endpoint `GET /api/v1/trips/public/{share_token}`: Cho phép người ngoài xem toàn bộ lịch trình chỉ đọc (Read-only) không cần đăng nhập và không có quyền sửa/xóa.
+     - Hỗ trợ chủ sở hữu thu hồi (revoke) liên kết chia sẻ bất kỳ lúc nào.
+  3. **Hiện thực Đánh giá Chất lượng Lịch trình (Yêu cầu 5):** Endpoint `POST /api/v1/trips/{id}/rating` tiếp nhận đánh giá 1-5 sao và nhận xét của người dùng.
+  4. **Hiện thực Tính năng Đột phá — Đồng bộ Google Calendar (Yêu cầu 6):**
+     - *Phương thức 1:* Sinh đường dẫn tạo sự kiện nhanh (Google Calendar Web Template Link).
+     - *Phương thức 2:* Tích hợp Google Calendar API (OAuth2), tự động tạo hàng loạt Event cho từng hoạt động theo đúng ngày giờ, kèm cấu hình thông báo nhắc nhở trước **đúng 30 phút**.
+- **Tiêu chuẩn nghiệm thu (Definition of Done - DoD):**
+  - [x] Bộ API My Trips hoạt động chuẩn xác, truy vấn nhanh.
+  - [x] Cơ chế Share Link an toàn, chặn hoàn toàn các hành vi chỉnh sửa trái phép từ người xem bên ngoài.
+  - [x] Endpoint đánh giá sao lưu trữ thành công dữ liệu vào bảng `trip_ratings`.
+  - [x] Đồng bộ thành công toàn bộ sự kiện lịch trình sang Google Calendar thực tế kèm thông báo nhắc trước 30 phút.
+
+---
+
+#### 👤 Thành viên 7: QA, DevOps & System Architect
+- **Họ và tên người phụ trách:** `....................................................`
+- **Mã số sinh viên (MSSV):** `....................................................`
+- **Thư mục & File phụ trách:**
+  - `docker-compose.yml`, `Dockerfile`
+  - `server/tests/` (Toàn bộ kiểm thử tự động)
+  - `docs/openapi.yaml`, `docs/13-demo-qa.md`, `docs/14-checklist.md`
+  - `run_all.bat`, `run_backend.bat`, `run_frontend.bat`
+- **Nhiệm vụ cần làm chi tiết:**
+  1. Đóng gói toàn bộ hệ thống bằng Docker & Docker Compose: Cấu hình container FastAPI, container PostgreSQL 16 và mạng nội bộ giữa các container.
+  2. Xây dựng các script khởi chạy 1-click tiện lợi trên môi trường Windows (`run_all.bat`, `run_backend.bat`, `run_frontend.bat`).
+  3. **Xây dựng Bộ Kiểm thử Tự động Toàn diện (`server/tests/` qua `pytest` và `httpx`):**
+     - Viết Unit Tests cho các hàm thuật toán: `transit_calculator.py`, băm mật khẩu, mã hóa JWT token.
+     - Viết Integration Tests cho toàn bộ API Endpoints: Auth (đăng ký/đăng nhập đúng và sai), chặn truy cập không có token (Yêu cầu 1), CRUD Trips, Swap địa điểm, Google Calendar link.
+     - Triển khai kỹ thuật Mocking cho Gemini API và Google OAuth để test chạy độc lập, tốc độ cao và không tốn chi phí gọi API thật.
+  4. Duy trì và chuẩn hóa file đặc tả kỹ thuật tiêu chuẩn `docs/openapi.yaml` (OpenAPI 3.0).
+  5. **Xây dựng Kịch bản Live Demo & Bộ câu hỏi bảo vệ đồ án (`docs/13-demo-qa.md`):**
+     - Soạn kịch bản phân vai 7 thành viên trình diễn 5 luồng tính năng trực tiếp trước giảng viên.
+     - Chuẩn bị sẵn bộ câu hỏi - trả lời phản biện chuyên sâu về kiến trúc, bảo mật và AI.
+- **Tiêu chuẩn nghiệm thu (Definition of Done - DoD):**
+  - [x] Hệ thống khởi động trọn vẹn chỉ với 1 câu lệnh (`docker-compose up` hoặc `run_all.bat`).
+  - [x] Bộ test suite `pytest` đạt độ bao phủ (coverage) > 80%, tất cả test cases đều PASS (xanh lá).
+  - [x] File OpenAPI 3.0 hợp lệ 100%, import được vào Swagger UI / Postman.
+  - [x] Kịch bản demo và tài liệu phản biện sẵn sàng 100% cho buổi bảo vệ đồ án trước giảng viên.
 
 ---
 
