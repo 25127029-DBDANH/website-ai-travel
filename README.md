@@ -208,7 +208,7 @@ website-ai-travel/
 
 | STT | Họ và tên người phụ trách | Vị trí / Vai trò chuyên môn | Thư mục & File chính | Trọng tâm công việc | Chuẩn đầu ra (Deliverables) |
 | :---: | :---: | :---|:---|---|---|
-| **1** | | **Frontend Lead**<br>*(Toàn bộ Client - 1 người duy nhất)* | `client/`<br>• `src/pages/` (8 màn hình)<br>• `src/components/` (map, chat, trip)<br>• `src/context/`, `src/services/` | • Thiết kế Design System & Responsive UI<br>• Dựng 8 màn hình (Landing, Login, Planner...)<br>• Tích hợp Bản đồ Mapbox & Mini-map card trong chat<br>• Dựng Modal Swap Place, Đánh giá sao, Đồng bộ Calendar | • Ứng dụng SPA hoàn chỉnh, `npm run build` thành công 100%<br>• Giao diện mượt mà, chuẩn Responsive Mobile & Desktop<br>• Chặn khách chưa đăng nhập vào Planner/Trips (Yêu cầu 1) |
+| **1** | | **Frontend Lead**<br>*(Toàn bộ Client)* | `client/`<br>• `src/pages/` (8 màn hình)<br>• `src/components/` (map, chat, trip)<br>• `src/context/`, `src/services/` | • Thiết kế Design System & Responsive UI<br>• Dựng 8 màn hình (Landing, Login, Planner...)<br>• Tích hợp Bản đồ Mapbox & Mini-map card trong chat<br>• Dựng Modal Swap Place, Đánh giá sao, Đồng bộ Calendar | • Ứng dụng SPA hoàn chỉnh, `npm run build` thành công 100%<br>• Giao diện mượt mà, chuẩn Responsive Mobile & Desktop<br>• Chặn khách chưa đăng nhập vào Planner/Trips (Yêu cầu 1) |
 | **2** | | **Backend Core & Security**<br>*(Auth, Bảo mật & User Profile)* | `server/app/core/`<br>• `security.py`, `dependencies.py`<br>`server/app/api/v1/endpoints/auth.py`<br>`server/app/schemas/user.py` | • Thiết lập cấu hình hệ thống Pydantic BaseSettings & CORS<br>• Băm mật khẩu bcrypt, cấp phát & xác thực JWT Token<br>• Dependency `get_current_user` bắt buộc đăng nhập (Yêu cầu 1)<br>• API lưu sở thích người dùng cũ & điền trước Form (Yêu cầu 7) | • Module Auth bảo mật cao, chặn 100% request không có token<br>• Endpoint `/register`, `/login`, `/me` ổn định<br>• API lưu & gợi nhớ sở thích người dùng cũ chạy chính xác |
 | **3** | | **Database & Data Engineer**<br>*(CSDL & Dữ liệu thực tế TP.HCM)* | `server/app/db/`<br>• `schema.sql`, `session.py`<br>• `hcmc_data.py`<br>`server/app/api/v1/endpoints/places.py` | • Thiết kế 6 bảng quan hệ (Users, Trips, Activities...)<br>• Thu thập & số hóa 100+ địa điểm TP.HCM thực tế<br>• Siêu dữ liệu tọa độ GPS, giờ mở cửa, chi phí, cờ indoor/outdoor<br>• Places API tìm kiếm, lọc theo quận/thể loại & fallback cache | • CSDL quan hệ chuẩn hóa 3NF, không xung đột khóa ngoại<br>• Dữ liệu 100+ địa điểm TP.HCM chuẩn xác tọa độ thực tế<br>• API tra cứu địa điểm phản hồi nhanh dưới 100ms |
 | **4** | | **AI Core & Gemini LLM Engineer**<br>*(Google Gemini & Luồng 4 bước)* | `server/app/services/gemini_service.py`<br>`server/app/api/v1/endpoints/ai.py`<br>`server/app/schemas/ai.py` | • Tích hợp Google Gemini API (`gemini-1.5-flash`/`pro`)<br>• System Prompt am hiểu sâu sắc TP.HCM; loại bỏ persona thừa<br>• Hiện thực Luồng 4 bước (Form ➔ Gợi ý ➔ Chốt ➔ Lịch trình chi tiết)<br>• Chatbot tư vấn du lịch kèm Mini-map card trong chat (Yêu cầu 3) | • 100% kết quả lịch trình trả về đúng Native Structured JSON<br>• Lịch trình chi tiết từng giờ khoa học, không bị hallucination<br>• Thẻ Mini-map card trả về đúng tọa độ địa điểm trong chat |
@@ -221,8 +221,8 @@ website-ai-travel/
 ### 📝 Bản Đặc Tả Nhiệm Vụ Chi Tiết Từng Thành Viên (Detailed WBS & DoD)
 
 #### 👤 Thành viên 1: Frontend Lead (Phụ trách toàn bộ Frontend — 01 Người Duy Nhất)
-- **Họ và tên người phụ trách:** `....................................................`
-- **Mã số sinh viên (MSSV):** `....................................................`
+- **Họ và tên người phụ trách:** `Phạm Gia Hưng
+- **Mã số sinh viên (MSSV):** `
 - **Thư mục & File phụ trách:**
   - Cấu hình & Giao diện chung: `client/index.html`, `client/vite.config.js`, `client/tailwind.config.js`, `client/src/index.css`
   - Các Component dùng chung: `client/src/components/common/` (`Button.jsx`, `Input.jsx`, `Modal.jsx`, `Toast.jsx`, `LoadingSpinner.jsx`)
@@ -249,8 +249,8 @@ website-ai-travel/
 ---
 
 #### 👤 Thành viên 2: Backend Developer — Core, Security & User Preferences
-- **Họ và tên người phụ trách:** `....................................................`
-- **Mã số sinh viên (MSSV):** `....................................................`
+- **Họ và tên người phụ trách:** `Đỗ Nguyễn An Khang
+- **Mã số sinh viên (MSSV):** `
 - **Thư mục & File phụ trách:**
   - `server/app/core/` (`config.py`, `security.py`, `dependencies.py`)
   - `server/app/api/v1/endpoints/auth.py`
@@ -273,8 +273,8 @@ website-ai-travel/
 ---
 
 #### 👤 Thành viên 3: Backend Developer — Database & HCMC Data Engineer
-- **Họ và tên người phụ trách:** `....................................................`
-- **Mã số sinh viên (MSSV):** `....................................................`
+- **Họ và tên người phụ trách:** `Ngô Tấn Đạt
+- **Mã số sinh viên (MSSV):** `
 - **Thư mục & File phụ trách:**
   - `server/app/db/` (`schema.sql`, `session.py`, `hcmc_data.py`)
   - `server/app/api/v1/endpoints/places.py`
@@ -294,8 +294,8 @@ website-ai-travel/
 ---
 
 #### 👤 Thành viên 4: Backend Developer — AI Core & Gemini LLM Engineer
-- **Họ và tên người phụ trách:** `....................................................`
-- **Mã số sinh viên (MSSV):** `....................................................`
+- **Họ và tên người phụ trách:** `Lê Hữu Lam
+- **Mã số sinh viên (MSSV):** `
 - **Thư mục & File phụ trách:**
   - `server/app/services/gemini_service.py`
   - `server/app/api/v1/endpoints/ai.py`
@@ -318,8 +318,8 @@ website-ai-travel/
 ---
 
 #### 👤 Thành viên 5: Backend Developer — Algorithm & Smart Logistics
-- **Họ và tên người phụ trách:** `....................................................`
-- **Mã số sinh viên (MSSV):** `....................................................`
+- **Họ và tên người phụ trách:** Diệp Bảo Danh
+- **Mã số sinh viên (MSSV):** `
 - **Thư mục & File phụ trách:**
   - `server/app/utils/transit_calculator.py`
   - `server/app/services/contingency_service.py`
@@ -344,8 +344,8 @@ website-ai-travel/
 ---
 
 #### 👤 Thành viên 6: Backend Developer — Integrations & Trip Services
-- **Họ và tên người phụ trách:** `....................................................`
-- **Mã số sinh viên (MSSV):** `....................................................`
+- **Họ và tên người phụ trách:** `Đàng Minh Hạo
+- **Mã số sinh viên (MSSV):** `
 - **Thư mục & File phụ trách:**
   - `server/app/services/calendar_service.py`
   - `server/app/api/v1/endpoints/calendar.py`
@@ -370,8 +370,8 @@ website-ai-travel/
 ---
 
 #### 👤 Thành viên 7: QA, DevOps & System Architect
-- **Họ và tên người phụ trách:** `....................................................`
-- **Mã số sinh viên (MSSV):** `....................................................`
+- **Họ và tên người phụ trách:** `Đoàn Hải Đăng
+- **Mã số sinh viên (MSSV):** `
 - **Thư mục & File phụ trách:**
   - `docker-compose.yml`, `Dockerfile`
   - `server/tests/` (Toàn bộ kiểm thử tự động)
