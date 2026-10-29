@@ -41,6 +41,11 @@ Thumbs.db
 .codegraph/
 *.tmp
 
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
 # Python
 venv/
 .venv/
