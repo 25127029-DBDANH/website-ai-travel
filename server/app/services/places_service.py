@@ -166,15 +166,17 @@ async def get_place_by_id(
             live_rating = google_data.get("rating")
             if live_rating:
                 place["average_rating"] = live_rating
-            # Use first photo reference if available
+            # Use first photo reference if available.
+            # [Security] Store only the photo resource name — never embed the
+            # API key in the response.  The actual image is served through the
+            # backend proxy endpoint  GET /api/v1/places/photo?name=<photo_name>
+            # so the secret key never reaches the client or browser history.
             photos = google_data.get("photos", [])
             if photos and not place.get("photo_url"):
                 photo_name = photos[0].get("name", "")
-                if photo_name and GOOGLE_PLACES_API_KEY:
-                    place["photo_url"] = (
-                        f"{GOOGLE_PLACES_BASE_URL}/{photo_name}/media"
-                        f"?key={GOOGLE_PLACES_API_KEY}&maxWidthPx=800"
-                    )
+                if photo_name:
+                    # Store a backend-proxy URL, not a key-bearing Google URL
+                    place["photo_url"] = f"/api/v1/places/photo?name={photo_name}"
 
     return place
 
@@ -223,7 +225,21 @@ async def get_nearby_places(
 
     where = " AND ".join(filters)
 
-    # Haversine formula in Postgres
+    # Haversine formula in Postgres.
+    # [Bug-fix] Clamp the acos() argument to [-1, 1] with GREATEST/LEAST to
+    # guard against floating-point values that exceed the valid domain (e.g.
+    # when two coordinates are identical or extremely close).  Without the
+    # clamp, acos() raises "input is out of range" in PostgreSQL and the
+    # whole query fails instead of returning distance = 0.
+    haversine_expr = (
+        "6371 * acos("
+        "  LEAST(1.0, GREATEST(-1.0,"
+        "    cos(radians(:lat)) * cos(radians(latitude)) *"
+        "    cos(radians(longitude) - radians(:lng)) +"
+        "    sin(radians(:lat)) * sin(radians(latitude))"
+        "  ))"
+        ")"
+    )
     sql = text(
         f"""
         SELECT
@@ -231,22 +247,10 @@ async def get_nearby_places(
             latitude, longitude, category, is_indoor,
             open_time, close_time, entry_fee_vnd,
             average_rating, photo_url, description, tags,
-            (
-                6371 * acos(
-                    cos(radians(:lat)) * cos(radians(latitude)) *
-                    cos(radians(longitude) - radians(:lng)) +
-                    sin(radians(:lat)) * sin(radians(latitude))
-                )
-            ) AS distance_km
+            ({haversine_expr}) AS distance_km
         FROM places
         WHERE {where}
-            AND (
-                6371 * acos(
-                    cos(radians(:lat)) * cos(radians(latitude)) *
-                    cos(radians(longitude) - radians(:lng)) +
-                    sin(radians(:lat)) * sin(radians(latitude))
-                )
-            ) <= :radius_km
+            AND ({haversine_expr}) <= :radius_km
         ORDER BY distance_km ASC
         LIMIT :limit
         """

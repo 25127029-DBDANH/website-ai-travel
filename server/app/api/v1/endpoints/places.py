@@ -6,13 +6,17 @@ Endpoints:
     GET  /api/v1/places/search          — search & filter places
     GET  /api/v1/places/{place_id}      — get place detail (+ Google enrichment)
     GET  /api/v1/places/nearby          — find nearby places (for Swap feature)
+    GET  /api/v1/places/photo           — backend proxy for Google Places photo
+                                          (keeps API key server-side only)
 """
 from __future__ import annotations
 
+import os
 from typing import Annotated, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -23,6 +27,9 @@ from app.services.places_service import (
 )
 
 router = APIRouter(prefix="/places", tags=["Places"])
+
+_GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY", "")
+_GOOGLE_PLACES_BASE_URL = "https://places.googleapis.com/v1"
 
 # ---------------------------------------------------------------------------
 # Dependency alias
@@ -121,3 +128,46 @@ async def get_place_detail(
             detail=f"Không tìm thấy địa điểm với id={place_id}",
         )
     return place
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/places/photo  — backend proxy for Google Places photos
+# [Security] The Google API key is injected server-side here; clients only
+# receive the proxied image bytes — the key is never visible in the browser.
+# ---------------------------------------------------------------------------
+@router.get("/photo", summary="Proxy ảnh từ Google Places API (giữ API key phía server)")
+async def proxy_google_place_photo(
+    name: str = Query(..., description="Google Places photo resource name"),
+    max_width: int = Query(800, ge=100, le=4800, description="Chiều rộng ảnh tối đa (px)"),
+):
+    """
+    Backend proxy that fetches a Google Places photo and streams it to the
+    client.  The `GOOGLE_PLACES_API_KEY` is **never** exposed in the response
+    body, HTTP headers, or browser history.
+    """
+    if not _GOOGLE_PLACES_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google Places API key chưa được cấu hình.",
+        )
+
+    google_url = (
+        f"{_GOOGLE_PLACES_BASE_URL}/{name}/media"
+        f"?key={_GOOGLE_PLACES_API_KEY}&maxWidthPx={max_width}&skipHttpRedirect=true"
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            resp = await client.get(google_url)
+            if resp.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="Không thể tải ảnh từ Google Places API.",
+                )
+            content_type = resp.headers.get("content-type", "image/jpeg")
+            return Response(content=resp.content, media_type=content_type)
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Lỗi kết nối Google Places: {exc}",
+        )

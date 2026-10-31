@@ -114,12 +114,7 @@ export default function MapView({
 
       const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
         .setLngLat([activity.place_longitude, activity.place_latitude])
-        .setPopup(
-          new mapboxgl.Popup({ offset: 25, closeButton: false }).setHTML(
-            `<div class="text-sm font-semibold">${activity.place_name}</div>
-             <div class="text-xs text-gray-500">${activity.start_time} – ${activity.end_time}</div>`,
-          ),
-        )
+        .setPopup(buildSafePopup(activity))
         .addTo(map);
 
       if (addMarker) addMarker(String(activity.id), marker);
@@ -207,6 +202,38 @@ export default function MapView({
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * [Security] Build a Mapbox popup using DOM text nodes instead of setHTML()
+ * to prevent XSS.  place_name, start_time, end_time are set via
+ * textContent — never interpolated as raw HTML.
+ *
+ * @param {object} activity — trip_activity object
+ * @returns {mapboxgl.Popup}
+ */
+function buildSafePopup(activity) {
+  const container = document.createElement('div');
+
+  const nameEl = document.createElement('div');
+  nameEl.className = 'text-sm font-semibold';
+  nameEl.textContent = activity.place_name ?? '';   // ← textContent, not innerHTML
+
+  const timeEl = document.createElement('div');
+  timeEl.className = 'text-xs text-gray-500';
+  // Compose time range safely — no interpolation into HTML
+  const dash = document.createTextNode(` \u2013 `);
+  const startNode = document.createTextNode(activity.start_time ?? '');
+  const endNode   = document.createTextNode(activity.end_time   ?? '');
+  timeEl.appendChild(startNode);
+  timeEl.appendChild(dash);
+  timeEl.appendChild(endNode);
+
+  container.appendChild(nameEl);
+  container.appendChild(timeEl);
+
+  return new mapboxgl.Popup({ offset: 25, closeButton: false })
+    .setDOMContent(container);
+}
 
 /**
  * Creates a DOM element for a numbered map marker.
