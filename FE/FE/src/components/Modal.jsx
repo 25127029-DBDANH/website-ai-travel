@@ -70,7 +70,7 @@ export default function Modal({ open, onClose, title, children, footer, classNam
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/40 backdrop-blur-sm sm:items-center sm:p-6"
+          className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/45 backdrop-blur-sm sm:items-center sm:p-6"
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
@@ -89,21 +89,26 @@ export default function Modal({ open, onClose, title, children, footer, classNam
             ref={dialogRef}
             tabIndex={-1}
             initial={
-              reduced ? { opacity: 0 } : { opacity: 0, y: 30, scale: 0.95 }
+              reduced
+                ? { opacity: 0 }
+                : { opacity: 0, y: 40, scale: 0.96 }
             }
             animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
-            exit={reduced ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.98 }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, y: 30, scale: 0.98 }}
             transition={
               reduced
                 ? { duration: 0.12 }
-                : { type: 'spring', stiffness: 380, damping: 30 }
+                : { type: 'spring', stiffness: 380, damping: 32 }
             }
             className={cn(
-              'relative flex max-h-[100dvh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-soft outline-none sm:max-h-[calc(100dvh-3rem)] sm:rounded-3xl',
+              'relative flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-[28px] border border-slate-200 bg-white pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl outline-none sm:max-h-[calc(100dvh-3rem)] sm:rounded-3xl sm:pb-0',
               className
             )}
           >
-            <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5 sm:px-6 sm:pt-6">
+            {/* Thanh kéo Bottom Sheet giả lập trên mobile */}
+            <div className="mx-auto mt-2.5 h-1.5 w-12 shrink-0 rounded-full bg-slate-300 sm:hidden" aria-hidden="true" />
+
+            <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-3 sm:px-6 sm:pt-6">
               <h2 id={titleId} className="font-display text-lg font-extrabold text-slate-900">
                 {title}
               </h2>
@@ -118,12 +123,12 @@ export default function Modal({ open, onClose, title, children, footer, classNam
             </div>
             <div
               data-lenis-prevent
-              className="scrollbar-thin mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 sm:px-6 sm:pb-6"
+              className="scrollbar-thin mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 sm:px-6 sm:pb-6"
             >
               {children}
             </div>
             {footer ? (
-              <div className="flex shrink-0 flex-wrap justify-end gap-2 px-5 pb-5 sm:px-6 sm:pb-6">
+              <div className="flex shrink-0 flex-wrap justify-end gap-2 px-5 pb-3 sm:px-6 sm:pb-6">
                 {footer}
               </div>
             ) : null}

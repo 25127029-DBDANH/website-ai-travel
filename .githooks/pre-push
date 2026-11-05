@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Git Pre-Push Hook: Lớp bảo vệ thứ 2 trước khi đẩy code lên remote server
+
+FORBIDDEN_FILES=(
+  ".agent"
+  ".claude"
+  ".cursor"
+  ".gemini"
+  ".impeccable"
+  ".qoder"
+  ".mcp.json"
+  "skills-lock.json"
+  "AGENTS.md"
+  "GEMINI.md"
+  "COMMANDS.md"
+  "HUONG_DAN_SU_DUNG_TOOLS.md"
+  "docs/superpowers"
+  ".env"
+)
+
+REMOTE="$1"
+URL="$2"
+
+# Kiểm tra các commit sắp được push
+while read LOCAL_REF LOCAL_OID REMOTE_REF REMOTE_OID; do
+  if [ "$LOCAL_OID" = "0000000000000000000000000000000000000000" ]; then
+    continue
+  fi
+
+  if [ "$REMOTE_OID" = "0000000000000000000000000000000000000000" ]; then
+    RANGE="$LOCAL_OID"
+  else
+    RANGE="$REMOTE_OID..$LOCAL_OID"
+  fi
+
+  CHANGED_FILES=$(git diff --name-only "$RANGE" 2>/dev/null)
+
+  for FORBIDDEN in "${FORBIDDEN_FILES[@]}"; do
+    MATCH=$(echo "$CHANGED_FILES" | grep -E "(^|/)$FORBIDDEN(/|$)" | head -n 5)
+    if [ -n "$MATCH" ]; then
+      echo ""
+      echo "🚫 [GIT PRE-PUSH HOOK] TỪ CHỐI PUSH LÊN REMOTE!"
+      echo "Commit của bạn chứa file/thư mục nội bộ không được phép đưa lên repository:"
+      echo "$MATCH"
+      echo ""
+      echo "Vui lòng rebase hoặc loại bỏ các file này trước khi push!"
+      exit 1
+    fi
+  done
+done
+
+exit 0
+

@@ -56,3 +56,37 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 *.egg-info/
+
+# Local preview & review files
+/package.json
+/start-preview.sh
+/start-preview.command
+
+# AI Agent & Assistant Tooling (Local)
+.agent/
+.agents
+.claude/
+.codex/
+.cursor/
+.gemini/
+.impeccable/
+.qoder/
+.mcp.json
+opencode.jsonc
+skills-lock.json
+
+# Local Agent Instructions & Cheatsheets
+AGENTS.md
+COMMANDS.md
+DESIGN.md
+GEMINI.md
+HUONG_DAN_SU_DUNG_TOOLS.md
+docs/superpowers/
+
+# Media, Screenshots & Performance Profiling
+screenshots/
+*.cpuprofile
+*.heapsnapshot
+*.trace
+lighthouse-report/
+

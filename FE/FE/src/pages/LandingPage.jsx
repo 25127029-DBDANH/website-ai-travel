@@ -11,7 +11,6 @@ import {
 import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react';
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import BrandMark from '../components/BrandMark.jsx';
 import CategoryTile from '../components/CategoryTile.jsx';
 import MagneticButton from '../components/landing/MagneticButton.jsx';
 import PhotoMarquee from '../components/landing/PhotoMarquee.jsx';
@@ -72,14 +71,14 @@ export default function LandingPage() {
           <div className="bg-grid absolute inset-0 opacity-40" />
           <div className="vn-pattern absolute inset-0 opacity-60" aria-hidden="true" />
           <div className="grain absolute inset-0" aria-hidden="true" />
-          <div className="relative mx-auto grid max-w-7xl items-center gap-14 px-4 pb-20 pt-12 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:pb-28 lg:pt-20">
+          <div className="relative mx-auto grid max-w-7xl items-center gap-8 px-4 pb-12 pt-8 sm:gap-14 sm:px-6 sm:pb-20 sm:pt-12 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:pb-28 lg:pt-20">
             <div className="animate-fade-up">
               <span className="section-eyebrow">
                 <Sparkles className="h-3.5 w-3.5" />
                 {t('hero.badge')}
               </span>
 
-              <h1 className="mt-5 font-display text-4xl font-extrabold leading-[1.05] tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
+              <h1 className="mt-4 font-display text-[32px] sm:text-5xl lg:text-6xl font-extrabold leading-[1.1] tracking-tight text-slate-900">
                 {t('hero.title')}
                 <span className="mt-1 block bg-gradient-to-r from-brand-600 via-brand-500 to-accent-500 bg-clip-text text-transparent">
                   {t('hero.titleAccent')}
@@ -143,7 +142,9 @@ export default function LandingPage() {
               <SpotlightCard className="relative overflow-hidden rounded-4xl border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2.5">
-                    <BrandMark className="h-10 w-10 shrink-0 rounded-2xl shadow-glow" />
+                    <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-brand-600 to-accent-500 text-white shadow-glow">
+                      <MapPin className="h-5 w-5" strokeWidth={2.4} />
+                    </span>
                     <div>
                       <p className="font-display text-sm font-extrabold text-slate-900">
                         {t('hero.card.title')}

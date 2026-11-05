@@ -1,6 +1,6 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { ChevronDown, ChevronUp, Map as MapIcon } from 'lucide-react';
+import { ChevronDown, ChevronUp, Lock, Map as MapIcon, Unlock } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../i18n/I18nContext.jsx';
@@ -23,8 +23,9 @@ function toLatLng(stop) {
 }
 
 export default function TripMap({ stops = [], activeDay = 1, focusRequest = null, className }) {
-  const { t } = useI18n();
+  const { lang, t } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
+  const [interactive, setInteractive] = useState(false);
   const reduced = useReducedMotion();
   const sectionRef = useRef(null);
   const containerRef = useRef(null);
@@ -49,9 +50,13 @@ export default function TripMap({ stops = [], activeDay = 1, focusRequest = null
   useEffect(() => {
     if (collapsed || !hasPoints || !containerRef.current) return undefined;
 
+    const isTouch = window.matchMedia('(pointer: coarse)').matches;
+
     const map = L.map(containerRef.current, {
       scrollWheelZoom: false,
-      zoomControl: true
+      zoomControl: true,
+      dragging: !isTouch || interactive,
+      touchZoom: !isTouch || interactive
     }).setView(HCMC_CENTER, 13);
 
     L.tileLayer(OSM_TILE_URL, {
@@ -71,6 +76,22 @@ export default function TripMap({ stops = [], activeDay = 1, focusRequest = null
       polylineRef.current = null;
     };
   }, [collapsed, hasPoints]);
+
+  // Cập nhật trạng thái tương tác trên mobile
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const isTouch = window.matchMedia('(pointer: coarse)').matches;
+    if (isTouch) {
+      if (interactive) {
+        map.dragging.enable();
+        map.touchZoom.enable();
+      } else {
+        map.dragging.disable();
+        map.touchZoom.disable();
+      }
+    }
+  }, [interactive]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -134,7 +155,6 @@ export default function TripMap({ stops = [], activeDay = 1, focusRequest = null
     const entry = markersRef.current.find(({ key }) => key === focusRequest.key);
     if (!entry) return undefined;
 
-    // Panel có thể vừa hiện từ tab ẩn: Leaflet còn cache size 0 nên flyTo sẽ NaN.
     map.invalidateSize();
     const size = map.getSize();
     if (size.x === 0 || size.y === 0) return undefined;
@@ -172,15 +192,36 @@ export default function TripMap({ stops = [], activeDay = 1, focusRequest = null
             {t('itinerary.map.pins', { count: points.length })}
           </span>
         </span>
-        <button
-          type="button"
-          onClick={() => setCollapsed((value) => !value)}
-          aria-expanded={!collapsed}
-          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-500 transition-[transform,border-color,color] duration-200 ease-out-strong hover:border-slate-300 hover:text-slate-800 active:scale-[0.97]"
-        >
-          {collapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
-          {collapsed ? t('itinerary.map.expand') : t('itinerary.map.collapse')}
-        </button>
+        <div className="flex items-center gap-1.5">
+          {/* Nút bật/tắt tương tác trên mobile để chống bẫy cuộn ngón tay */}
+          {!collapsed && hasPoints && (
+            <button
+              type="button"
+              onClick={() => setInteractive((prev) => !prev)}
+              aria-pressed={interactive}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-bold transition-colors duration-200 ease-out-strong',
+                interactive
+                  ? 'border-brand-300 bg-brand-50 text-brand-700'
+                  : 'border-slate-200 bg-white text-slate-500 hover:text-slate-800'
+              )}
+              title={interactive ? 'Đang mở tương tác bản đồ' : 'Chạm để mở tương tác bản đồ'}
+            >
+              {interactive ? <Unlock className="h-3 w-3 text-brand-600" /> : <Lock className="h-3 w-3" />}
+              <span>{interactive ? (lang === 'vi' ? 'Mở tương tác' : 'Unlocked') : (lang === 'vi' ? 'Khóa cuộn' : 'Locked')}</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setCollapsed((value) => !value)}
+            aria-expanded={!collapsed}
+            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-500 transition-[transform,border-color,color] duration-200 ease-out-strong hover:border-slate-300 hover:text-slate-800 active:scale-[0.97]"
+          >
+            {collapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+            {collapsed ? t('itinerary.map.expand') : t('itinerary.map.collapse')}
+          </button>
+        </div>
       </div>
 
       {!collapsed &&
@@ -189,12 +230,24 @@ export default function TripMap({ stops = [], activeDay = 1, focusRequest = null
             {t('itinerary.map.empty')}
           </p>
         ) : (
-          <div
-            ref={containerRef}
-            role="region"
-            aria-label={t('itinerary.map.title')}
-            className="h-40 w-full border-t border-slate-200 sm:h-56"
-          />
+          <div className="relative">
+            <div
+              ref={containerRef}
+              role="region"
+              aria-label={t('itinerary.map.title')}
+              className="h-44 w-full border-t border-slate-200 sm:h-56"
+            />
+            {!interactive && (
+              <div
+                onClick={() => setInteractive(true)}
+                className="pointer-events-auto absolute inset-0 z-[500] flex items-center justify-center bg-slate-900/5 backdrop-blur-[0.5px] cursor-pointer sm:hidden"
+              >
+                <span className="rounded-full bg-slate-900/80 px-3 py-1.5 text-[10px] font-bold text-white shadow-md">
+                  👆 {lang === 'vi' ? 'Chạm để di chuyển bản đồ' : 'Tap to interact with map'}
+                </span>
+              </div>
+            )}
+          </div>
         ))}
     </section>
   );

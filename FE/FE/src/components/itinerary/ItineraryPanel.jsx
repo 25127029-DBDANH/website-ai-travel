@@ -260,7 +260,7 @@ export default function ItineraryPanel({
             </Suspense>
 
             {dayPhotos.length > 0 && (
-              <div className="scrollbar-thin mt-4 flex gap-2 overflow-x-auto pb-1" role="list">
+              <div className="scrollbar-thin mt-4 flex gap-2 overflow-x-auto pb-1.5 touch-pan-x overscroll-x-contain" role="list">
                 {dayPhotos.map((item) => (
                   <button
                     key={`gallery-${item.place_id || item.place_name}-${item.order_index}`}
@@ -284,7 +284,7 @@ export default function ItineraryPanel({
               </div>
             )}
 
-            <div className="scrollbar-thin mt-4 flex gap-1.5 overflow-x-auto pb-1">
+            <div className="scrollbar-thin mt-4 flex gap-1.5 overflow-x-auto pb-1.5 touch-pan-x overscroll-x-contain snap-x">
               {Array.from({ length: dayCount }, (_, index) => index + 1).map((day) => {
                 const count = itemsByDay.get(day)?.length || 0;
                 const isActive = day === activeDay;
@@ -297,7 +297,7 @@ export default function ItineraryPanel({
                     aria-label={t('itinerary.dayTabLabel', { day: label, count })}
                     aria-pressed={isActive}
                     className={cn(
-                      'touch-target shrink-0 rounded-xl border px-3 py-1.5 text-[11px] font-bold transition-[transform,color,border-color,background-color,box-shadow] duration-200 ease-out-strong active:scale-[0.97]',
+                      'touch-target shrink-0 snap-start rounded-xl border px-3 py-1.5 text-[11px] font-bold transition-[transform,color,border-color,background-color,box-shadow] duration-200 ease-out-strong active:scale-[0.97]',
                       isActive
                         ? 'border-brand-500 bg-gradient-to-r from-brand-600 to-brand-500 text-white shadow-sm'
                         : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-800'

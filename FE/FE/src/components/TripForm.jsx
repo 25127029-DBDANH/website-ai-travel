@@ -317,16 +317,16 @@ export default function TripForm() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {BUDGET_PRESETS.map((value) => (
                 <button
                   key={value}
                   type="button"
                   onClick={() => setBudget(value)}
                   className={cn(
-                    'rounded-full border px-2.5 py-1.5 text-[10.5px] font-bold transition-[transform,color,border-color,background-color] duration-200 ease-out-strong active:scale-[0.97]',
+                    'rounded-full border px-3 py-1.5 text-xs font-bold transition-[transform,color,border-color,background-color] duration-200 ease-out-strong active:scale-[0.97]',
                     budget === value
-                      ? 'border-accent-400 bg-accent-50 text-accent-700'
+                      ? 'border-accent-400 bg-accent-50 text-accent-700 ring-1 ring-accent-300'
                       : 'border-slate-200 bg-white text-slate-500 hover:border-accent-300 hover:text-accent-700'
                   )}
                 >

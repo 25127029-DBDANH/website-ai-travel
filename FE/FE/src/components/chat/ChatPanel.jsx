@@ -148,7 +148,7 @@ export default function ChatPanel({ messages, quickReplies, sending, onSend, cla
 
       <footer className="border-t border-slate-200/80 bg-white px-3 pb-3 pt-2.5">
         {!sending && quickReplies.length > 0 && (
-          <div className="scrollbar-thin mb-2.5 flex gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible">
+          <div className="scrollbar-thin mb-2.5 flex gap-2 overflow-x-auto pb-1.5 touch-pan-x overscroll-x-contain lg:flex-wrap lg:overflow-visible">
             {quickReplies.map((reply) => (
               <button
                 key={reply}

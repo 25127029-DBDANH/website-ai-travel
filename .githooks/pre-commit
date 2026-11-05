@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Git Pre-Commit Hook: Ngăn chặn commit các file cấu hình AI, hiệu năng, bí mật & rác nội bộ
+
+# Danh sách mẫu file/thư mục cấm commit vào repo
+FORBIDDEN_PATTERNS=(
+  # AI Tooling & Metadata cá nhân
+  "^\.agent/"
+  "^\.agents"
+  "^\.claude/"
+  "^\.codex/"
+  "^\.cursor/"
+  "^\.gemini/"
+  "^\.impeccable/"
+  "^\.qoder/"
+  "^\.mcp\.json$"
+  "^opencode\.jsonc$"
+  "^skills-lock\.json$"
+  
+  # Hướng dẫn prompt cá nhân & tài liệu superpowers nội bộ
+  "^AGENTS\.md$"
+  "^COMMANDS\.md$"
+  "^DESIGN\.md$"
+  "^GEMINI\.md$"
+  "^HUONG_DAN_SU_DUNG_TOOLS\.md$"
+  "^docs/superpowers/"
+
+  # File cấu hình môi trường chứa secret
+  "^\.env$"
+  "^\.env\.local$"
+  "^\.env\.development\.local$"
+  "^\.env\.production\.local$"
+
+  # Media, ảnh chụp màn hình & file đo hiệu năng/profiling
+  "^screenshots/"
+  "\.heapsnapshot$"
+  "\.cpuprofile$"
+  "\.trace$"
+  "\.DS_Store$"
+)
+
+# Lấy danh sách các file đang được staged (chuẩn bị commit)
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+if [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+VIOLATIONS=()
+
+for FILE in $STAGED_FILES; do
+  for PATTERN in "${FORBIDDEN_PATTERNS[@]}"; do
+    if [[ "$FILE" =~ $PATTERN ]]; then
+      VIOLATIONS+=("$FILE (khớp quy tắc: $PATTERN)")
+      break
+    fi
+  done
+done
+
+# Nếu phát hiện vi phạm, chặn commit ngay lập tức
+if [ ${#VIOLATIONS[@]} -gt 0 ]; then
+  echo ""
+  echo "❌ [GIT PRE-COMMIT HOOK] PHÁT HIỆN FILE KHÔNG ĐƯỢC PHÉP COMMIT:"
+  echo "------------------------------------------------------------------"
+  for ITEM in "${VIOLATIONS[@]}"; do
+    echo "   ⚠️  $ITEM"
+  done
+  echo "------------------------------------------------------------------"
+  echo "💡 HƯỚNG DẪN XỬ LÝ:"
+  echo "   Chạy lệnh sau để bỏ stage (unstage) các file trên:"
+  echo "   👉 git reset HEAD <tên_file>"
+  echo ""
+  echo "   (Hoặc kiểm tra lại .gitignore để đảm bảo các file này đã bị bỏ qua)"
+  echo ""
+  exit 1
+fi
+
+exit 0
+
