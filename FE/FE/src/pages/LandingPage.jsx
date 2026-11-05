@@ -19,6 +19,8 @@ import Reveal from '../components/Reveal.jsx';
 import SiteFooter from '../components/SiteFooter.jsx';
 import SiteHeader from '../components/SiteHeader.jsx';
 import TripForm from '../components/TripForm.jsx';
+import CuratedTripCard from '../components/CuratedTripCard.jsx';
+import { CURATED_TRIPS } from '../lib/curatedTrips.js';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { formatDayLabel, formatVnd } from '../lib/format.js';
 
@@ -333,6 +335,30 @@ export default function LandingPage() {
                   </Reveal>
                 );
               })}
+            </div>
+          </div>
+        </section>
+
+        {/* Curated Starter Trips Section */}
+        <section id="curated" className="bg-slate-50/80 px-4 py-16 sm:px-6 lg:px-8 border-b border-slate-200/60">
+          <div className="mx-auto max-w-7xl">
+            <Reveal className="text-center max-w-2xl mx-auto mb-10">
+              <span className="section-eyebrow mx-auto">
+                <Sparkles className="h-3.5 w-3.5" />
+                Lịch trình mẫu 1-chạm không cần chờ
+              </span>
+              <h2 className="mt-3 font-display text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+                Khám phá Sài Gòn cùng lịch trình chọn sẵn
+              </h2>
+              <p className="mt-3 text-sm text-slate-600 leading-relaxed">
+                Được biên soạn chuẩn mực bởi các chuyên gia bản địa. Mở xem chi tiết ngay lập tức, có sẵn bản đồ, ước tính chi phí và tự do tinh chỉnh!
+              </p>
+            </Reveal>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              {CURATED_TRIPS.map((curated) => (
+                <CuratedTripCard key={curated.id} trip={curated} />
+              ))}
             </div>
           </div>
         </section>
