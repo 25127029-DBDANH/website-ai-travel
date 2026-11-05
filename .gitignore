@@ -39,6 +39,7 @@ Thumbs.db
 
 # CodeGraph & Temp
 .codegraph/
+.superpowers/
 *.tmp
 
 # Database
