@@ -17,7 +17,7 @@ const FALLBACK_GRADIENTS = [
 
 function MarqueeCard({ card }) {
   return (
-    <figure className="relative h-40 w-56 shrink-0 overflow-hidden rounded-2xl border border-slate-200/70 bg-slate-100 shadow-card transition-transform duration-300 ease-out-strong hover:-translate-y-1 hover:shadow-lift sm:h-44 sm:w-64">
+    <figure className="relative h-44 w-60 shrink-0 overflow-hidden rounded-2xl border border-slate-200/70 bg-slate-900 shadow-card transition-transform duration-300 ease-out-strong hover:-translate-y-1 hover:shadow-lift sm:h-48 sm:w-68 snap-start">
       {card.src ? (
         <img
           src={card.src}
@@ -29,21 +29,21 @@ function MarqueeCard({ card }) {
       ) : (
         <div className={`absolute inset-0 bg-gradient-to-br ${card.gradient}`} />
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-slate-900/75 via-slate-900/10 to-transparent" />
-      <figcaption className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3">
+      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/70 via-50% to-transparent" />
+      <figcaption className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3.5">
         <div className="min-w-0">
-          <p className="truncate text-[12px] font-extrabold text-white">
+          <p className="truncate text-sm font-extrabold text-white">
             {card.name || <MapPin className="inline h-3.5 w-3.5 -translate-y-px text-white/70" />}
           </p>
           {card.district && (
-            <p className="mt-0.5 flex items-center gap-1 text-[9.5px] font-bold text-white/70">
-              <MapPin className="h-2.5 w-2.5" />
+            <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-slate-100 drop-shadow-sm">
+              <MapPin className="h-3 w-3 text-brand-400" />
               {card.district}
             </p>
           )}
         </div>
         {card.category && (
-          <span className="shrink-0 rounded-full bg-white/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white/90 backdrop-blur">
+          <span className="shrink-0 rounded-full bg-white/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-white backdrop-blur-md shadow-sm">
             {card.category}
           </span>
         )}
@@ -133,7 +133,7 @@ export default function PhotoMarquee() {
               {['hero.card.area1', 'hero.card.area3', 'hero.card.area5'].map((key) => (
                 <span
                   key={key}
-                  className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold text-slate-500"
+                  className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600"
                 >
                   {t(key)}
                 </span>
@@ -143,12 +143,12 @@ export default function PhotoMarquee() {
         </div>
 
         <div className="mask-fade-x group relative mt-6 overflow-hidden">
-          <div className="flex w-max animate-marquee gap-4 px-4 group-hover:[animation-play-state:paused]">
+          <div className="flex w-max gap-4 px-4 overflow-x-auto scrollbar-thin snap-x py-2">
             {Array.from({ length: 6 }, (_, index) => (
               <figure
                 key={index}
                 aria-hidden="true"
-                className="h-40 w-56 shrink-0 rounded-2xl border border-slate-200/70 bg-black shadow-card sm:h-44 sm:w-64"
+                className="h-44 w-60 shrink-0 rounded-2xl border border-slate-200/70 bg-black shadow-card sm:h-48 sm:w-68 snap-start"
               />
             ))}
           </div>
@@ -167,13 +167,13 @@ export default function PhotoMarquee() {
               <Camera className="h-3.5 w-3.5" />
               {t('hero.gallery')}
             </span>
-            <p className="mt-3 text-sm font-semibold text-slate-500">{t('hero.galleryHint')}</p>
+            <p className="mt-3 text-sm font-semibold text-slate-600">{t('hero.galleryHint')}</p>
           </div>
           <div className="hidden items-center gap-1.5 sm:flex">
             {['hero.card.area1', 'hero.card.area3', 'hero.card.area5'].map((key) => (
               <span
                 key={key}
-                className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-bold text-slate-500"
+                className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-600"
               >
                 {t(key)}
               </span>
@@ -182,16 +182,10 @@ export default function PhotoMarquee() {
         </div>
       </div>
 
-      <div className="mask-fade-x group relative mt-6 overflow-hidden" aria-hidden={photos !== null && photos.length === 0}>
-        <div ref={stripRef} className={reduced ? 'overflow-x-auto pb-1' : undefined}>
-          <div
-            className={cn(
-              'flex gap-4 px-4',
-              reduced ? 'w-max' : 'w-max animate-marquee group-hover:[animation-play-state:paused]',
-              !scrolling && !reduced && '[animation-play-state:paused]'
-            )}
-          >
-            {track.map((card, index) => (
+      <div className="mask-fade-x relative mt-6 overflow-hidden" aria-hidden={photos !== null && photos.length === 0}>
+        <div ref={stripRef} className="overflow-x-auto scrollbar-thin snap-x px-4 py-2">
+          <div className="flex w-max gap-4">
+            {cards.map((card, index) => (
               <MarqueeCard key={`${card.key}-${index}`} card={card} />
             ))}
           </div>

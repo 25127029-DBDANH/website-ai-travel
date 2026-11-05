@@ -20,6 +20,14 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  h1, h2, h3, h4 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
   ::selection {
     @apply bg-brand-200 text-brand-900;
   }
@@ -36,9 +44,9 @@
     *,
     ::before,
     ::after {
-      animation-duration: 0.01ms !important;
+      animation-duration: 0.001ms !important;
       animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
+      transition-duration: 0.1s !important;
     }
   }
 }

@@ -40,7 +40,7 @@ export default function CuratedTripCard({ trip, onSelect }) {
         
         <span
           className={cn(
-            'absolute top-3 left-3 rounded-full border px-2.5 py-1 text-[10.5px] font-extrabold backdrop-blur-md shadow-sm',
+            'absolute top-3 left-3 rounded-full border px-2.5 py-1 text-xs font-extrabold backdrop-blur-md shadow-sm',
             trip.tagColor || 'bg-white/90 text-slate-800 border-white'
           )}
         >
@@ -69,17 +69,10 @@ export default function CuratedTripCard({ trip, onSelect }) {
         </p>
 
         <div className="mt-3">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Điểm nổi bật:</span>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {trip.highlights.slice(0, 3).map((item) => (
-              <span
-                key={item}
-                className="rounded-md bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold text-slate-600"
-              >
-                {item}
-              </span>
-            ))}
-          </div>
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Điểm nổi bật:</span>
+          <p className="mt-1 text-xs font-medium text-slate-700 leading-relaxed">
+            {trip.highlights.slice(0, 3).join(' · ')}
+          </p>
         </div>
 
         <div className="mt-auto pt-4 border-t border-slate-100">

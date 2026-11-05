@@ -25,7 +25,7 @@ export default function ThinkingIndicator() {
           {[0, 1, 2].map((index) => (
             <span
               key={index}
-              className="h-1.5 w-1.5 animate-bounce-dot rounded-full bg-brand-500"
+              className="h-1.5 w-1.5 animate-pulse-dot rounded-full bg-brand-500"
               style={{ animationDelay: `${index * 160}ms` }}
             />
           ))}

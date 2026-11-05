@@ -21,9 +21,9 @@ export const CATEGORY_META = {
   },
   shopping: {
     icon: ShoppingBag,
-    gradient: 'from-fuchsia-500 via-purple-500 to-indigo-500',
-    tile: 'border-fuchsia-100 bg-fuchsia-50 text-fuchsia-700',
-    dot: 'bg-fuchsia-500'
+    gradient: 'from-amber-500 via-orange-400 to-rose-400',
+    tile: 'border-amber-100 bg-amber-50 text-amber-700',
+    dot: 'bg-amber-500'
   },
   nature: {
     icon: Trees,
@@ -33,9 +33,9 @@ export const CATEGORY_META = {
   },
   entertainment: {
     icon: Ticket,
-    gradient: 'from-indigo-500 via-purple-500 to-fuchsia-500',
-    tile: 'border-indigo-100 bg-indigo-50 text-indigo-700',
-    dot: 'bg-indigo-500'
+    gradient: 'from-brand-600 via-teal-500 to-emerald-500',
+    tile: 'border-brand-100 bg-brand-50 text-brand-700',
+    dot: 'bg-brand-600'
   }
 };
 

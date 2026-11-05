@@ -263,7 +263,7 @@ export default function TripForm() {
             type="button"
             onClick={() => changeMode('form')}
             className={cn(
-              'flex-1 rounded-lg px-3 py-2 text-[11.5px] font-bold transition-all duration-200 ease-out-strong active:scale-[0.98]',
+              'flex-1 rounded-lg px-3 py-2 text-xs font-bold transition-all duration-200 ease-out-strong active:scale-[0.98]',
               mode === 'form'
                 ? 'bg-slate-900 text-white shadow-sm'
                 : 'text-slate-500 hover:text-slate-900'
@@ -276,7 +276,7 @@ export default function TripForm() {
             type="button"
             onClick={() => changeMode('sentence')}
             className={cn(
-              'flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[11.5px] font-bold transition-all duration-200 ease-out-strong active:scale-[0.98]',
+              'flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-all duration-200 ease-out-strong active:scale-[0.98]',
               mode === 'sentence'
                 ? 'bg-slate-900 text-white shadow-sm'
                 : 'text-slate-500 hover:text-slate-900'
@@ -293,7 +293,7 @@ export default function TripForm() {
         {mode === 'form' ? (
           <>
             {/* 📍 CỤM 1: THÔNG TIN CƠ BẢN */}
-            <section className="rounded-2xl border border-slate-200/80 bg-slate-50/50 p-4 space-y-4">
+            <section className="space-y-4 pt-1">
               <div className="flex items-center gap-2 border-b border-slate-200/60 pb-2.5">
                 <span className="grid h-6 w-6 place-items-center rounded-lg bg-brand-600 text-white text-xs font-bold">
                   1
@@ -330,7 +330,7 @@ export default function TripForm() {
                       key={district}
                       type="button"
                       onClick={() => setStartLocation(district)}
-                      className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10.5px] font-medium text-slate-600 hover:border-brand-300 hover:text-brand-700 transition-colors"
+                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-brand-300 hover:text-brand-700 transition-colors"
                     >
                       {district.split(',')[0]}
                     </button>
@@ -370,7 +370,7 @@ export default function TripForm() {
                       <Plus className="h-4 w-4" />
                     </button>
                   </div>
-                  <p className="mt-1.5 text-[10.5px] font-medium text-slate-500">{t('form.daysHint')}</p>
+                  <p className="mt-1.5 text-xs font-medium text-slate-600">{t('form.daysHint')}</p>
                 </div>
 
                 <div>
@@ -393,11 +393,11 @@ export default function TripForm() {
                       }}
                       className="input pl-10 pr-14 font-semibold"
                     />
-                    <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[10px] font-extrabold tracking-wider text-slate-500">
+                    <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-extrabold tracking-wider text-slate-500">
                       VND
                     </span>
                   </div>
-                  <p className="mt-1.5 text-[10.5px] font-medium text-slate-500">
+                  <p className="mt-1.5 text-xs font-medium text-slate-600">
                     ≈ {formatVnd(budget, lang)} · Mức chi tiêu tổng chuyến đi
                   </p>
                 </div>
@@ -423,7 +423,7 @@ export default function TripForm() {
             </section>
 
             {/* 👥 CỤM 2: THÀNH PHẦN ĐOÀN & PHƯƠNG TIỆN */}
-            <section className="rounded-2xl border border-slate-200/80 bg-slate-50/50 p-4 space-y-4">
+            <section className="space-y-4 pt-5 border-t border-slate-200/70">
               <div className="flex items-center gap-2 border-b border-slate-200/60 pb-2.5">
                 <span className="grid h-6 w-6 place-items-center rounded-lg bg-brand-600 text-white text-xs font-bold">
                   2
@@ -456,7 +456,7 @@ export default function TripForm() {
                           {isSelected && <Check className="h-3.5 w-3.5 text-brand-600" />}
                         </div>
                         <span className="text-xs font-bold leading-tight">{opt.label}</span>
-                        <span className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">{opt.desc}</span>
+                        <span className="text-[11px] text-slate-600 mt-0.5 line-clamp-1">{opt.desc}</span>
                       </button>
                     );
                   })}
@@ -491,7 +491,7 @@ export default function TripForm() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-bold leading-tight">{opt.label}</p>
-                          <p className="text-[10px] text-slate-500 truncate">{opt.desc}</p>
+                          <p className="text-[11px] text-slate-600 truncate">{opt.desc}</p>
                         </div>
                       </button>
                     );
@@ -501,7 +501,7 @@ export default function TripForm() {
             </section>
 
             {/* ⚡ CỤM 3: NHỊP ĐỘ & KHUNG GIỜ SINH HOẠT */}
-            <section className="rounded-2xl border border-slate-200/80 bg-slate-50/50 p-4 space-y-4">
+            <section className="space-y-4 pt-5 border-t border-slate-200/70">
               <div className="flex items-center gap-2 border-b border-slate-200/60 pb-2.5">
                 <span className="grid h-6 w-6 place-items-center rounded-lg bg-brand-600 text-white text-xs font-bold">
                   3
@@ -529,7 +529,7 @@ export default function TripForm() {
                         )}
                       >
                         <span className="text-xs font-bold block">{opt.label}</span>
-                        <span className="text-[10.5px] text-slate-500 mt-0.5 block leading-tight">{opt.desc}</span>
+                        <span className="text-[11px] text-slate-600 mt-0.5 block leading-tight">{opt.desc}</span>
                       </button>
                     );
                   })}
@@ -552,7 +552,7 @@ export default function TripForm() {
                     <Sun className="h-5 w-5 text-amber-500 shrink-0" />
                     <div>
                       <p className="text-xs font-bold leading-tight">Dậy sớm ngắm phố</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">Khởi hành 6h30 - 7h00 sáng</p>
+                      <p className="text-[11px] text-slate-600 mt-0.5">Khởi hành 6h30 - 7h00 sáng</p>
                     </div>
                   </button>
 
@@ -569,7 +569,7 @@ export default function TripForm() {
                     <Moon className="h-5 w-5 text-indigo-500 shrink-0" />
                     <div>
                       <p className="text-xs font-bold leading-tight">Cú đêm & Nightlife</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">Hoạt động trưa đến 24h đêm</p>
+                      <p className="text-[11px] text-slate-600 mt-0.5">Hoạt động trưa đến 24h đêm</p>
                     </div>
                   </button>
                 </div>
@@ -577,7 +577,7 @@ export default function TripForm() {
             </section>
 
             {/* 🍜 CỤM 4: SỞ THÍCH & LƯU Ý ĐẶC BIỆT */}
-            <section className="rounded-2xl border border-slate-200/80 bg-slate-50/50 p-4 space-y-4">
+            <section className="space-y-4 pt-5 border-t border-slate-200/70">
               <div className="flex items-center gap-2 border-b border-slate-200/60 pb-2.5">
                 <span className="grid h-6 w-6 place-items-center rounded-lg bg-brand-600 text-white text-xs font-bold">
                   4
@@ -590,7 +590,7 @@ export default function TripForm() {
               <div>
                 <div className="flex items-end justify-between gap-2 mb-2">
                   <span className="label !mb-0">{t('form.preferencesLabel')}</span>
-                  <span className="text-[10px] font-bold text-slate-500">
+                  <span className="text-xs font-bold text-slate-500">
                     {preferences.length}/4 · Chọn tối đa 4 sở thích
                   </span>
                 </div>
@@ -668,7 +668,7 @@ export default function TripForm() {
                 <label className="label !mb-0" htmlFor="trip-sentence">
                   {t('form.sentenceLabel')}
                 </label>
-                <span className="pb-0.5 text-[10px] font-bold text-slate-500">
+                <span className="pb-0.5 text-xs font-bold text-slate-500">
                   {t('form.sentenceHint', { count: sentence.length })}
                 </span>
               </div>
@@ -694,7 +694,7 @@ export default function TripForm() {
                     setParsed(null);
                     clearError();
                   }}
-                  className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-2.5 py-1.5 text-left text-[10.5px] font-medium text-slate-500 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition-all"
+                  className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-2.5 py-1.5 text-left text-xs font-medium text-slate-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition-all"
                 >
                   “{sample}”
                 </button>
@@ -719,7 +719,7 @@ export default function TripForm() {
               >
                 <p
                   className={cn(
-                    'flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em]',
+                    'flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.14em]',
                     hasParsedContent ? 'text-emerald-700' : 'text-amber-700'
                   )}
                 >
@@ -730,12 +730,12 @@ export default function TripForm() {
                 {hasParsedContent && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {parsed.days && (
-                      <span className="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10.5px] font-bold text-emerald-800">
+                      <span className="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs font-bold text-emerald-800">
                         {t('form.sentence.parsedDays', { count: parsed.days })}
                       </span>
                     )}
                     {parsed.budget && (
-                      <span className="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10.5px] font-bold text-emerald-800">
+                      <span className="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs font-bold text-emerald-800">
                         {t('form.sentence.parsedBudget', {
                           budget: formatVnd(parsed.budget, lang)
                         })}
@@ -752,7 +752,7 @@ export default function TripForm() {
           <p
             id="trip-form-error"
             role="alert"
-            className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11.5px] font-semibold text-rose-700"
+            className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"
           >
             {error}
           </p>

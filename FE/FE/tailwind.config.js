@@ -60,7 +60,7 @@ export default {
         soft: '0 18px 50px -24px rgba(15, 23, 42, 0.28)',
         card: '0 10px 30px -18px rgba(15, 23, 42, 0.25)',
         lift: '0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px -8px rgb(15 23 42 / 0.12)',
-        glow: '0 20px 60px -20px rgba(37, 99, 235, 0.45)'
+        glow: '0 12px 28px -8px rgba(15, 23, 42, 0.12), 0 4px 10px -2px rgba(37, 99, 235, 0.08)'
       },
       borderRadius: {
         '4xl': '2rem'
@@ -85,9 +85,9 @@ export default {
         shimmer: {
           '100%': { transform: 'translateX(100%)' }
         },
-        'bounce-dot': {
-          '0%, 80%, 100%': { transform: 'translateY(0)', opacity: '0.4' },
-          '40%': { transform: 'translateY(-5px)', opacity: '1' }
+        'pulse-dot': {
+          '0%, 100%': { transform: 'scale(0.85)', opacity: '0.4' },
+          '50%': { transform: 'scale(1.15)', opacity: '1' }
         },
         marquee: {
           '0%': { transform: 'translateX(0)' },
@@ -99,7 +99,7 @@ export default {
         float: 'float 7s ease-in-out infinite',
         'pulse-soft': 'pulse-soft 2s ease-in-out infinite',
         shimmer: 'shimmer 1.8s infinite',
-        'bounce-dot': 'bounce-dot 1.2s infinite',
+        'pulse-dot': 'pulse-dot 1.2s cubic-bezier(0.16, 1, 0.3, 1) infinite',
         marquee: 'marquee 45s linear infinite'
       }
     }

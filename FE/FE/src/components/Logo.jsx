@@ -23,7 +23,7 @@ export default function Logo({ compact = false, light = false, className }) {
           </span>
           <span
             className={cn(
-              'hidden text-[10px] font-bold uppercase tracking-[0.18em] sm:block',
+              'hidden text-[11px] font-bold uppercase tracking-[0.18em] sm:block',
               light ? 'text-white/70' : 'text-slate-500'
             )}
           >
