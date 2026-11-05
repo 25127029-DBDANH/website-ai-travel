@@ -137,8 +137,14 @@ export const api = {
     const state = readState(); const entry = state.trips[id]; if (!entry) throw missing(); const messages = state.messages[id] || [];
     const content = String(text || '').trim(); const lower = content.toLocaleLowerCase('vi');
     const userMessage = { id: nextId(), role: 'user', content, created_at: new Date().toISOString() };
-    let reply = 'Mình đã ghi nhận yêu cầu. Bạn có thể xem lịch trình và chi phí được cập nhật ở bên cạnh nhé.';
-    if (/thêm.*(cà phê|cafe|coffee)|((cà phê|cafe|coffee).*thêm)/.test(lower)) {
+    let reply = 'Mình đã ghi nhận yêu cầu của bạn. Lịch trình và bản đồ đã được đồng bộ tự động ở bên cạnh nhé.';
+    if (/ốc.*(22h|khuya|đêm)|quán ốc/i.test(lower)) {
+      reply = 'Ốc đêm Sài Gòn là một nét văn hóa đặc sắc! Bạn có thể ghé Phố ốc Vĩnh Khánh (Quận 4) mở đến 1-2h sáng với các quán nổi tiếng như Ốc Oanh, Ốc Vũ; hoặc Ốc Đào (hẻm 212 Nguyễn Trãi, Q1) mở đến 23h. Nhớ gọi món ốc hương xào bơ tỏi ăn kèm bánh mì nóng nhé!';
+    } else if (/waterbus|xe buýt.*sông/i.test(lower)) {
+      reply = 'Kinh nghiệm đi Saigon Waterbus: Bạn nên đến Ga Tàu Thủy Bạch Đằng (đường Tôn Đức Thắng, Q1). Giá vé chỉ 15.000đ/lượt. Chuyến lý tưởng nhất là 17h00 - 17h30 để ngắm hoàng hôn buông xuống sông Sài Gòn và cầu Ba Son. Nên đặt vé trước trên app hoặc mua sớm tại quầy tránh hết vé cuối tuần.';
+    } else if (/an toàn.*xe máy|lưu ý.*xe máy/i.test(lower)) {
+      reply = 'Mẹo bản địa khi đi xe máy tại TP.HCM: Tránh cầm điện thoại trên tay khi dừng đèn đỏ; cẩn thận giờ cao điểm 17:00 - 19:00 tại các cầu nối quận (cầu Kênh Tẻ, cầu Chữ Y, ngã tư Hàng Xanh); luôn chuẩn bị sẵn một bộ áo mưa trong cốp xe vì Sài Gòn có thể mưa rào bất chợt!';
+    } else if (/thêm.*(cà phê|cafe|coffee)|((cà phê|cafe|coffee).*thêm)/.test(lower)) {
       const day = Number(lower.match(/ngày\s*(\d+)/)?.[1]) || 1;
       if (!entry.items.some((item) => item.day_number === day && item.category === 'cafe')) {
         const cafe = { ...PLACES[9], day_number: day, order_index: Math.max(0, ...entry.items.filter((item) => item.day_number === day).map((item) => item.order_index)) + 1, time_slot: '20:00', place_id: 'place-evening-cafe' };
