@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import ChatPanel from '../components/chat/ChatPanel.jsx';
 import ItineraryPanel from '../components/itinerary/ItineraryPanel.jsx';
+import SwapPlaceModal from '../components/itinerary/SwapPlaceModal.jsx';
 import SaveTripPrompt from '../components/SaveTripPrompt.jsx';
 import ShareDialog from '../components/ShareDialog.jsx';
 import SiteHeader from '../components/SiteHeader.jsx';
@@ -21,6 +22,7 @@ import Toast from '../components/Toast.jsx';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { DEMO, Black } from '../demo.jsx';
 import { api, ApiError } from '../lib/api.js';
+import { applyRainyPlan, optimizeBudget, PLACES_CATALOG } from '../lib/catalogService.js';
 import { cn } from '../lib/cn.js';
 import { translateApiError } from '../lib/errors.js';
 import { formatVnd } from '../lib/format.js';
@@ -74,6 +76,8 @@ export default function TripPage() {
   const [loadError, setLoadError] = useState('');
   const [shareOpen, setShareOpen] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const [swapTarget, setSwapTarget] = useState(null);
+  const [isRainActive, setIsRainActive] = useState(false);
   const [isDesktop, setIsDesktop] = useState(
     () => window.matchMedia('(min-width: 1024px)').matches
   );
@@ -202,30 +206,38 @@ export default function TripPage() {
     [id]
   );
 
+  // Tính toán lại ngân sách cục bộ tức thì với zero latency
+  const calcBudget = useCallback((currentTrip, currentItems) => {
+    const activities = currentItems.reduce((sum, item) => sum + Number(item.estimated_cost || 0), 0);
+    const transit = Math.round(currentItems.length * 18000);
+    const total = activities + transit;
+    const target = Number(currentTrip?.budget || 0);
+    return {
+      total_budget: target,
+      total_estimated: total,
+      activities_cost: activities,
+      transit_cost: transit,
+      percentage: target ? Math.round((total / target) * 100) : 0,
+      health: total > target ? 'over_budget' : total > target * 0.85 ? 'near_budget' : 'under_budget'
+    };
+  }, []);
+
+  // Thay vì tự động gửi prompt tốn token, hiển thị lời chào cục bộ ngay khi mở chuyến đi
   useEffect(() => {
     if (loading || !trip || bootRef.current) return;
     if (trip.status !== 'draft' || messages.length > 0) return;
     bootRef.current = true;
-    const prefs = (trip.preferences || [])
-      .map((preference) => {
-        const key = `preference.${preference}`;
-        const label = t(key);
-        return label === key ? preference : label;
-      })
-      .filter(Boolean);
-    const message =
-      prefs.length > 0
-        ? t('chat.initialMessageDetailed', {
-            days: Number(trip.days) || 1,
-            start: trip.start_location,
-            budget: formatVnd(trip.budget, lang),
-            preferences: prefs.join(', ')
-          })
-        : lang === 'vi'
-          ? t('chat.initialMessageVi')
-          : t('chat.initialMessage');
-    sendMessage(message);
-  }, [loading, trip, messages.length, lang, t, sendMessage]);
+    const welcome = lang === 'vi'
+      ? `Chào bạn! Mình đã chuẩn bị sẵn khung lịch trình du lịch Sài Gòn ${trip.days} ngày cho bạn. Bạn có thể bấm trực tiếp các nút trên lịch trình để đổi điểm, bật chế độ tránh mưa, hoặc tối ưu chi phí ngay lập tức nhé!`
+      : `Hello! I have prepared your ${trip.days}-day Ho Chi Minh City itinerary. You can directly tap the action buttons on the timeline to swap places, activate rain mode, or optimize budget instantly!`;
+    setMessages([
+      {
+        role: 'assistant',
+        content: welcome,
+        created_at: new Date().toISOString()
+      }
+    ]);
+  }, [loading, trip, messages.length, lang]);
 
   const displayTitle = useMemo(() => {
     if (!trip) return '';
@@ -242,32 +254,152 @@ export default function TripPage() {
 
   const fallbackReplies = useMemo(() => {
     if (sending) return [];
-    if (trip?.status === 'asking') {
-      return [t('chat.chip.food'), t('chat.chip.history'), t('chat.chip.balanced')];
-    }
-    if (trip?.status === 'completed' && items.length > 0) {
-      const dayOne = items.filter((item) => item.day_number === 1);
-      const target =
-        dayOne.find((item) => item.category === 'food') ||
-        items.find((item) => item.category === 'food') ||
-        items[0];
-      return [
-        t('chat.defaultSwap', { place: target.place_name, day: target.day_number }),
-        t('chat.defaultCoffee'),
-        t('chat.defaultCheaper')
-      ];
-    }
-    return [];
-  }, [sending, trip?.status, items, t]);
+    return [
+      'Gợi ý quán ốc ngon mở sau 22h gần đây',
+      'Cách đi xe buýt trên sông Sài Gòn (Waterbus)',
+      'Lưu ý an toàn khi đi xe máy ở TP.HCM'
+    ];
+  }, [sending]);
 
   const quickReplyChips = quickReplies.length > 0 ? quickReplies : fallbackReplies;
 
+  // 1-Click Smart Swap: Mở Modal thay vì gọi AI prompt
   const handleSwap = (item) => {
-    const key = `${item.day_number}-${item.order_index}`;
-    sendMessage(
-      t('chat.defaultSwap', { place: item.place_name, day: item.day_number }),
-      { swapKey: key }
-    );
+    setSwapTarget(item);
+  };
+
+  const handleSelectReplacement = (targetItem, replacement) => {
+    setItems((currentItems) => {
+      const next = currentItems.map((item) => {
+        if (item.day_number === targetItem.day_number && item.order_index === targetItem.order_index) {
+          return {
+            ...item,
+            place_id: replacement.place_id,
+            place_name: replacement.place_name,
+            address: replacement.address,
+            description: replacement.description,
+            latitude: replacement.latitude,
+            longitude: replacement.longitude,
+            estimated_cost: replacement.estimated_cost,
+            photo_url: replacement.photo_url,
+            editorial_score: replacement.editorial_score,
+            category: replacement.category || item.category,
+            is_indoor: replacement.is_indoor
+          };
+        }
+        return item;
+      });
+      setBudget(calcBudget(trip, next));
+      return next;
+    });
+    setToast({
+      message: `Đã đổi thành công sang ${replacement.place_name}!`,
+      tone: 'success'
+    });
+  };
+
+  const handleRequestAi = (targetItem, customPrompt) => {
+    sendMessage(`Nhờ AI đổi điểm ${targetItem.place_name}: ${customPrompt}`);
+  };
+
+  const handleDeleteItem = (targetItem) => {
+    setItems((currentItems) => {
+      const filtered = currentItems.filter(
+        (item) => !(item.day_number === targetItem.day_number && item.order_index === targetItem.order_index)
+      );
+      let order = 1;
+      const reindexed = filtered.map((item) => {
+        if (item.day_number === targetItem.day_number) {
+          const updated = { ...item, order_index: order };
+          order += 1;
+          return updated;
+        }
+        return item;
+      });
+      setBudget(calcBudget(trip, reindexed));
+      return reindexed;
+    });
+    setToast({
+      message: `Đã xóa điểm dừng ${targetItem.place_name}.`,
+      tone: 'neutral'
+    });
+  };
+
+  const handleMoveItem = (item, direction) => {
+    setItems((currentItems) => {
+      const dayItems = currentItems
+        .filter((i) => i.day_number === item.day_number)
+        .sort((a, b) => a.order_index - b.order_index);
+      const currentIndex = dayItems.findIndex((i) => i.order_index === item.order_index);
+      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+      if (targetIndex < 0 || targetIndex >= dayItems.length) return currentItems;
+
+      const tempOrder = dayItems[currentIndex].order_index;
+      dayItems[currentIndex].order_index = dayItems[targetIndex].order_index;
+      dayItems[targetIndex].order_index = tempOrder;
+
+      const otherDays = currentItems.filter((i) => i.day_number !== item.day_number);
+      return [...otherDays, ...dayItems].sort(
+        (a, b) => a.day_number - b.day_number || a.order_index - b.order_index
+      );
+    });
+  };
+
+  const handleRainMode = () => {
+    const { updatedItems, replacedCount } = applyRainyPlan(items);
+    if (replacedCount > 0) {
+      setItems(updatedItems);
+      setBudget(calcBudget(trip, updatedItems));
+      setIsRainActive(true);
+      setToast({
+        message: `Đã kích hoạt Tránh Mưa: Thay thế ${replacedCount} điểm ngoài trời bằng điểm trong nhà máy lạnh!`,
+        tone: 'success'
+      });
+    } else {
+      setToast({
+        message: 'Tất cả các điểm dừng hiện tại đều đã ở trong nhà hoặc có mái che.',
+        tone: 'neutral'
+      });
+    }
+  };
+
+  const handleBudgetOptimize = () => {
+    const { updatedItems, savings } = optimizeBudget(items, trip?.budget);
+    if (savings > 0) {
+      setItems(updatedItems);
+      setBudget(calcBudget(trip, updatedItems));
+      setToast({
+        message: `Đã tối ưu chi phí! Tiết kiệm ước tính ${formatVnd(savings, lang)} cho chuyến đi.`,
+        tone: 'success'
+      });
+    } else {
+      setToast({
+        message: 'Lịch trình của bạn đã ở mức chi phí tiết kiệm tối ưu.',
+        tone: 'neutral'
+      });
+    }
+  };
+
+  const handleAddCafe = () => {
+    const cafes = PLACES_CATALOG.filter((p) => p.category === 'cafe');
+    const existingNames = new Set(items.map((i) => (i.place_name || '').toLowerCase()));
+    const available = cafes.find((c) => !existingNames.has(c.place_name.toLowerCase())) || cafes[0];
+    const dayStops = items.filter((i) => i.day_number === activeDay);
+    const maxOrder = dayStops.length > 0 ? Math.max(...dayStops.map((i) => i.order_index)) : 0;
+    const newStop = {
+      ...available,
+      day_number: activeDay,
+      order_index: maxOrder + 1,
+      time_slot: '15:30',
+      place_id: `cafe-${Date.now()}`
+    };
+    const next = [...items, newStop];
+    setItems(next);
+    setBudget(calcBudget(trip, next));
+    setToast({
+      message: `Đã thêm điểm dừng ${available.place_name} vào ngày ${activeDay}!`,
+      tone: 'success'
+    });
   };
 
   const handleDuplicate = async () => {
@@ -489,6 +621,13 @@ export default function TripPage() {
                   activeDay={activeDay}
                   onSelectDay={setActiveDay}
                   onSwap={handleSwap}
+                  onDelete={handleDeleteItem}
+                  onMoveUp={(item) => handleMoveItem(item, 'up')}
+                  onMoveDown={(item) => handleMoveItem(item, 'down')}
+                  onRainMode={handleRainMode}
+                  onBudgetOptimize={handleBudgetOptimize}
+                  onAddCafe={handleAddCafe}
+                  isRainActive={isRainActive}
                   swappingKey={swappingKey}
                   loading={sending && items.length === 0}
                   actions={itineraryActions}
@@ -521,6 +660,13 @@ export default function TripPage() {
                     activeDay={activeDay}
                     onSelectDay={setActiveDay}
                     onSwap={handleSwap}
+                    onDelete={handleDeleteItem}
+                    onMoveUp={(item) => handleMoveItem(item, 'up')}
+                    onMoveDown={(item) => handleMoveItem(item, 'down')}
+                    onRainMode={handleRainMode}
+                    onBudgetOptimize={handleBudgetOptimize}
+                    onAddCafe={handleAddCafe}
+                    isRainActive={isRainActive}
                     swappingKey={swappingKey}
                     loading={sending && items.length === 0}
                     actions={itineraryActions}
@@ -531,6 +677,15 @@ export default function TripPage() {
           )}
         </div>
       </main>
+
+      <SwapPlaceModal
+        open={Boolean(swapTarget)}
+        onClose={() => setSwapTarget(null)}
+        targetItem={swapTarget}
+        itineraryItems={items}
+        onSelectReplacement={handleSelectReplacement}
+        onRequestAi={handleRequestAi}
+      />
 
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/80 bg-white/95 px-4 pt-1.5 backdrop-blur-xl lg:hidden">
         <div className="mx-auto flex max-w-md items-center gap-2">

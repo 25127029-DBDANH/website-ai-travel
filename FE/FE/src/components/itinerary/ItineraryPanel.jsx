@@ -11,6 +11,7 @@ import EmptyItinerary from './EmptyItinerary.jsx';
 import PlanLoading from './PlanLoading.jsx';
 import TimelineItem from './TimelineItem.jsx';
 import TransitConnector from './TransitConnector.jsx';
+import ItineraryToolbar from './ItineraryToolbar.jsx';
 
 const TripMap = lazy(() => import('./TripMap.jsx'));
 
@@ -62,6 +63,13 @@ export default function ItineraryPanel({
   activeDay,
   onSelectDay,
   onSwap,
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+  onRainMode,
+  onBudgetOptimize,
+  onAddCafe,
+  isRainActive = false,
   swappingKey,
   loading,
   actions,
@@ -284,6 +292,17 @@ export default function ItineraryPanel({
               </div>
             )}
 
+            {/* Quick Actions Toolbar */}
+            {items.length > 0 && (
+              <ItineraryToolbar
+                className="mt-4"
+                onRainMode={onRainMode}
+                onBudgetOptimize={onBudgetOptimize}
+                onAddCafe={onAddCafe}
+                isRainActive={isRainActive}
+              />
+            )}
+
             <div className="scrollbar-thin mt-4 flex gap-1.5 overflow-x-auto pb-1.5 touch-pan-x overscroll-x-contain snap-x">
               {Array.from({ length: dayCount }, (_, index) => index + 1).map((day) => {
                 const count = itemsByDay.get(day)?.length || 0;
@@ -355,6 +374,11 @@ export default function ItineraryPanel({
                           item={item}
                           onSwap={onSwap}
                           onLocate={handleLocate}
+                          onDelete={onDelete}
+                          onMoveUp={onMoveUp}
+                          onMoveDown={onMoveDown}
+                          isFirst={index === 0}
+                          isLast={index === dayItems.length - 1}
                           swapping={swappingKey === key}
                           disabled={Boolean(swappingKey)}
                         />

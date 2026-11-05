@@ -1,4 +1,4 @@
-import { Clock, Loader2, MapPin, Navigation, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronUp, Clock, CloudRain, Loader2, MapPin, Navigation, RefreshCw, Trash2, Zap } from 'lucide-react';
 import { useState } from 'react';
 import { useI18n } from '../../i18n/I18nContext.jsx';
 import { getCategoryMeta } from '../../lib/categories.jsx';
@@ -8,7 +8,18 @@ import { assetUrl } from '../../lib/api.js';
 import { osmPlaceUrl } from '../../lib/maps.js';
 import CategoryTile from '../CategoryTile.jsx';
 
-export default function TimelineItem({ item, onSwap, onLocate, swapping = false, disabled = false }) {
+export default function TimelineItem({
+  item,
+  onSwap,
+  onLocate,
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+  isFirst = false,
+  isLast = false,
+  swapping = false,
+  disabled = false
+}) {
   const { lang, t } = useI18n();
   const [imageFailed, setImageFailed] = useState(false);
   const meta = getCategoryMeta(item.category);
@@ -38,9 +49,23 @@ export default function TimelineItem({ item, onSwap, onLocate, swapping = false,
             className="h-full w-full object-cover transition-transform duration-700 ease-out-strong group-hover:scale-105"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/55 via-slate-950/5 to-transparent" />
-          <span className="absolute bottom-2.5 left-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold text-slate-700 backdrop-blur">
-            {t(`category.${item.category}`)}
-          </span>
+          <div className="absolute bottom-2.5 left-3 flex items-center gap-1.5 flex-wrap">
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold text-slate-700 backdrop-blur">
+              {t(`category.${item.category}`)}
+            </span>
+            {item.rain_replacement && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-sky-600/90 text-white px-2 py-0.5 text-[9.5px] font-extrabold backdrop-blur">
+                <CloudRain className="h-3 w-3" />
+                Tránh mưa
+              </span>
+            )}
+            {item.budget_optimized && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-600/90 text-white px-2 py-0.5 text-[9.5px] font-extrabold backdrop-blur">
+                <Zap className="h-3 w-3" />
+                Giá tốt
+              </span>
+            )}
+          </div>
           {editorialScore !== null && (
             <span className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold text-slate-800 backdrop-blur">
               {t('itinerary.card.editorScore')} {editorialScore.toFixed(1)}
@@ -73,19 +98,54 @@ export default function TimelineItem({ item, onSwap, onLocate, swapping = false,
           {!photo && <CategoryTile category={item.category} />}
 
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white">
-                {item.time_slot}
-              </span>
-              {!photo && (
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  {t(`category.${item.category}`)}
+            <div className="flex flex-wrap items-center justify-between gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white">
+                  {item.time_slot}
                 </span>
-              )}
-              {!photo && editorialScore !== null && (
-                <span className="text-[10.5px] font-bold text-slate-500">
-                  {t('itinerary.card.editorScore')} {editorialScore.toFixed(1)}
-                </span>
+                {!photo && (
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    {t(`category.${item.category}`)}
+                  </span>
+                )}
+                {!photo && editorialScore !== null && (
+                  <span className="text-[10.5px] font-bold text-slate-500">
+                    {t('itinerary.card.editorScore')} {editorialScore.toFixed(1)}
+                  </span>
+                )}
+                {item.is_indoor && (
+                  <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[9px] font-bold text-sky-700">
+                    Máy lạnh
+                  </span>
+                )}
+              </div>
+
+              {/* Nút di chuyển vị trí ▲ ▼ */}
+              {(onMoveUp || onMoveDown) && (
+                <div className="flex items-center gap-0.5 text-slate-400">
+                  {onMoveUp && (
+                    <button
+                      type="button"
+                      disabled={isFirst || disabled}
+                      onClick={() => onMoveUp(item)}
+                      title="Di chuyển lên trước"
+                      className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {onMoveDown && (
+                    <button
+                      type="button"
+                      disabled={isLast || disabled}
+                      onClick={() => onMoveDown(item)}
+                      title="Di chuyển xuống sau"
+                      className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 
@@ -119,7 +179,7 @@ export default function TimelineItem({ item, onSwap, onLocate, swapping = false,
                 </span>
               </span>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 {onLocate && mappable && (
                   <button
                     type="button"
@@ -156,6 +216,17 @@ export default function TimelineItem({ item, onSwap, onLocate, swapping = false,
                     {swapping ? t('itinerary.card.swapping') : t('itinerary.card.swap')}
                   </button>
                 ) : null}
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={() => onDelete(item)}
+                    disabled={disabled}
+                    title="Xóa điểm này"
+                    className="inline-flex items-center justify-center h-7 w-7 rounded-full text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -164,3 +235,4 @@ export default function TimelineItem({ item, onSwap, onLocate, swapping = false,
     </article>
   );
 }
+
