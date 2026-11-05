@@ -80,14 +80,14 @@ export default function LandingPage() {
                 {t('hero.badge')}
               </span>
 
-              <h1 className="mt-4 font-display text-[32px] sm:text-5xl lg:text-6xl font-extrabold leading-[1.1] tracking-tight text-slate-900">
+              <h1 className="mt-4 font-display text-[32px] sm:text-5xl lg:text-6xl font-extrabold leading-[1.15] sm:leading-[1.18] tracking-tight text-slate-900">
                 {t('hero.title')}
-                <span className="mt-1 block bg-gradient-to-r from-brand-600 via-brand-500 to-accent-500 bg-clip-text text-transparent">
+                <span className="mt-1 block bg-gradient-to-r from-brand-600 via-brand-500 to-accent-500 bg-clip-text text-transparent pb-2 sm:pb-3 tracking-normal">
                   {t('hero.titleAccent')}
                 </span>
               </h1>
 
-              <p className="mt-5 max-w-xl text-balance text-base leading-relaxed text-slate-800 sm:text-[17px]">
+              <p className="mt-4 sm:mt-5 max-w-xl text-balance text-base leading-relaxed text-slate-800 sm:text-[17px]">
                 {t('hero.subtitle')}
               </p>
 

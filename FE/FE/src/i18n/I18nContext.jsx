@@ -8,10 +8,13 @@ function getInitialLanguage() {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored === 'en' || stored === 'vi') return stored;
+    if (typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('vi')) {
+      return 'vi';
+    }
   } catch {
     // localStorage can be unavailable in private contexts.
   }
-  return 'en';
+  return 'vi';
 }
 
 function interpolate(template, values) {
