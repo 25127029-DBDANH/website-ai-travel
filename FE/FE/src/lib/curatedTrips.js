@@ -330,3 +330,4 @@ export async function useCuratedTrip(curatedId) {
 
   return trip.id;
 }
+

@@ -71,3 +71,4 @@ test('optimizeBudget reduces costs for high-cost items', () => {
   assert.ok(savings > 0);
   assert.ok(updatedItems[0].estimated_cost < 450000);
 });
+

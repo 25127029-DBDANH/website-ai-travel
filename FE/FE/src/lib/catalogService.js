@@ -520,3 +520,4 @@ export function optimizeBudget(items = [], targetBudget = 0) {
 
   return { updatedItems, savings: totalSavings };
 }
+
