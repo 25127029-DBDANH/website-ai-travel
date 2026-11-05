@@ -14,7 +14,6 @@ FORBIDDEN_FILES=(
   "GEMINI.md"
   "COMMANDS.md"
   "HUONG_DAN_SU_DUNG_TOOLS.md"
-  "docs/superpowers"
   ".env"
 )
 

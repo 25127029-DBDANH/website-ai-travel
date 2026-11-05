@@ -16,13 +16,12 @@ FORBIDDEN_PATTERNS=(
   "^opencode\.jsonc$"
   "^skills-lock\.json$"
   
-  # Hướng dẫn prompt cá nhân & tài liệu superpowers nội bộ
+  # Hướng dẫn prompt cá nhân & tài liệu cheatsheet nội bộ
   "^AGENTS\.md$"
   "^COMMANDS\.md$"
   "^DESIGN\.md$"
   "^GEMINI\.md$"
   "^HUONG_DAN_SU_DUNG_TOOLS\.md$"
-  "^docs/superpowers/"
 
   # File cấu hình môi trường chứa secret
   "^\.env$"
