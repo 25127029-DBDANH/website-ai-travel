@@ -102,7 +102,25 @@ export const api = {
   createTrip: async (payload = {}) => {
     const state = readState(); const id = nextId(); const days = Math.min(14, Math.max(1, Number(payload.days) || 3));
     const seed = Math.floor(Math.random() * PLACES.length); const items = makeItinerary(days, seed);
-    const trip = { id, title: `Khám phá Sài Gòn ${days} ngày`, days, budget: Number(payload.budget) || 5000000, status: 'completed', created_at: new Date().toISOString(), start_location: payload.start_location || 'Quận 1, TP. Hồ Chí Minh', preferences: payload.preferences || [], cover_photo: items[0]?.photo_url || photo('saigon-river.jpg'), cover_place_name: items[0]?.place_name || 'Sài Gòn', is_shared: false, source: payload.source || 'form' };
+    const trip = {
+      id,
+      title: `Khám phá Sài Gòn ${days} ngày`,
+      days,
+      budget: Number(payload.budget) || 5000000,
+      status: 'completed',
+      created_at: new Date().toISOString(),
+      start_location: payload.start_location || 'Quận 1, TP. Hồ Chí Minh',
+      preferences: payload.preferences || [],
+      group_type: payload.group_type || 'couple',
+      transport_mode: payload.transport_mode || 'motorbike',
+      pace: payload.pace || 'moderate',
+      schedule_profile: payload.schedule_profile || 'early_bird',
+      special_notes: payload.special_notes || [],
+      cover_photo: items[0]?.photo_url || photo('saigon-river.jpg'),
+      cover_place_name: items[0]?.place_name || 'Sài Gòn',
+      is_shared: false,
+      source: payload.source || 'form'
+    };
     trip.total_estimated = summarize(trip, items).total_estimated; trip.place_count = items.length; state.trips[id] = { trip, items }; state.messages[id] = []; save(state); return trip;
   },
   listTrips: async () => ({ trips: Object.values(readState().trips).map(({ trip }) => trip).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) }),
