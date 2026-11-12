@@ -165,3 +165,38 @@ Tự động đồng bộ toàn bộ lịch trình chi tiết lên ứng dụng 
 ### 7.3. Tiêu chí hoàn thành (DoD)
 - Không còn bất kỳ UI hay trường dữ liệu nào liên quan đến chọn nhân vật/giọng điệu AI.
 - Người dùng cũ mở trang thấy ngay lời chào và form điền sẵn sở thích cũ.
+
+---
+
+## 8. YÊU CẦU NÂNG CẤP MỚI: 4 CHẾ ĐỘ TRẢI NGHIỆM, ĐỒNG HÀNH THỜI GIAN THỰC & TỔNG KẾT CHUYẾN ĐI (COMPANION ECOSYSTEM)
+
+### 8.1. Bố cục 2 Khung hình Song song & Thiết kế Thẻ 3 tầng (Anti-overlap Layout)
+- **Khung 1 (Bản đồ Leaflet tương tác):** Hiển thị toàn cảnh lộ trình trong ngày, vẽ Marker đánh số [1, 2, 3, 4] nối bằng đường polyline; khi chặng đã đi qua (`visited === true`), marker tự động chuyển thành **dấu tích xanh `✓`**.
+- **Khung 2 (Lịch trình Timeline 3 tầng):**
+  - Khắc phục triệt để lỗi tràn/đè chữ khi tên địa điểm dài bằng cấu trúc 3 tầng riêng biệt:
+    - *Tầng 1 (Header):* Khung giờ hoạt động bên trái + Dự toán chi phí cố định góc phải.
+    - *Tầng 2 (Content):* Tên địa điểm chiếm 100% bề ngang, không bị co kéo, kèm mô tả ngắn và badge thể loại.
+    - *Tầng 3 (Action Bar):* Nút Chốt điểm (Accept), nút Đổi điểm (Swap), nút Xem chi tiết.
+  - Khi chặng đã hoàn thành: Tô màu xanh lá êm dịu, hiện huy hiệu `[✓ Chặng đã hoàn tất]`, **tuyệt đối không gạch ngang tên địa điểm (`line-through`)** và **khóa hoàn toàn nút đổi điểm phi logic**.
+
+### 8.2. Chế độ Đi thực tế thời gian thực (Tab 2: Live Companion)
+- **Thẻ Hero "Điểm đến tiếp theo":** Tự động phát hiện chặng sắp đến, hiển thị tên, địa chỉ, khoảng cách và thời lượng dự kiến.
+- **Tích hợp 3 ứng dụng gọi xe công nghệ hàng đầu TP.HCM:**
+  - Hỗ trợ lựa chọn linh hoạt giữa **Grab (GrabBike / GrabCar)**, **Xanh SM (Xe điện VinFast thân thiện môi trường)**, và **Be (BeBike / BeCar)**.
+  - Ước tính cước phí theo thời gian thực dựa trên cự ly thực tế giữa 2 điểm dừng.
+  - Deep-link mở thẳng ứng dụng gọi xe trên điện thoại thông minh với tọa độ điểm đến đã điền sẵn.
+- **Nút "Chỉ đường" (Google Maps):** Mở dẫn đường chi tiết đi bộ / xe máy.
+- **Nút "Chụp ảnh Check-in":** Kích hoạt camera chụp ảnh tại điểm đến hoặc tải ảnh từ máy, lưu dấu mốc vào nhật ký.
+- **Nút "Hoàn thành chuyến đi":** Khi đi xong tất cả chặng, bấm nút chuyển tức thì sang màn hình Tổng kết chuyến đi.
+
+### 8.3. Sổ Chi tiêu & Di chuyển Chi tiết (Tab 3: Expense Tracker)
+- Quản lý đồng bộ 3 hạng mục tài chính: Vé tham quan di tích, Chi phí ăn uống ẩm thực, và **Cước xe di chuyển giữa các chặng**.
+- **Tính năng Chỉnh sửa Cước xe trực tiếp (Inline Fare Editing):** Cho phép du khách tự do nhấp vào số tiền cước xe thực tế đã trả (ví dụ: GrabBike 28.000đ thay vì dự kiến 25.000đ) và lưu ngay vào hệ thống.
+- Bộ lọc danh mục thông minh và thanh tiến độ ngân sách trực quan với cảnh báo màu khi vượt ngân sách.
+
+### 8.4. Giao diện Tổng kết Chuyến đi & Xuất Thẻ Kỷ niệm (Tab 4: Trip Summary Dashboard)
+- **Bảng chỉ số KPI:** Số ngày khám phá, Số điểm đã ghé thăm, Tổng số tiền thực chi so với dự trù.
+- **Biểu đồ cơ cấu 3 nhóm chi tiêu:** Hoạt động - Ăn uống - Di chuyển.
+- **Dòng thời gian lịch sử & Album ảnh check-in:** Xem lại lộ trình từng ngày và toàn bộ ảnh kỷ niệm đã chụp.
+- **Xuất Thẻ ảnh kỷ niệm (Story Card Canvas):** Tạo ảnh đồ họa tổng kết chuyến đi (tỷ lệ 9:16 Story hoặc 1:1) tải về máy để chia sẻ Facebook/Instagram.
+

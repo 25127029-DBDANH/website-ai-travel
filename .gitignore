@@ -8,6 +8,8 @@ coverage/
 
 # Production Build
 dist/
+!client/dist/
+!client/dist/**
 build/
 .cache/
 
