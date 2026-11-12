@@ -35,7 +35,7 @@
 | ID | Tier | Phân loại | Tên Test Case | Input đầu vào | Kết quả kỳ vọng |
 | --- | --- | --- | --- | --- | --- |
 | `TC-11` | P1 | API Test | My Trips chỉ trả chuyến của mình | Khách A tạo 2 chuyến, khách B tạo 1 chuyến; A gọi `GET /api/trips` | Trả đúng 2 chuyến của A, không có chuyến của B |
-| `TC-12` | P1 | API Test | Link chia sẻ chỉ đọc, ẩn dữ liệu nội bộ | Tạo link, gọi `GET /api/shared/:token` không kèm header nào | `200`, payload **không** có `session_id`, `user_id`, chat; thử `PUT`/`DELETE` bằng token → `404`/`405` |
+| `TC-12` | P1 | API Test | Link chia sẻ chỉ đọc, ẩn dữ liệu nội bộ | Tạo link, gọi `GET /api/shared/:token` không kèm header nào | `200`, payload **không** có `session_id`, `user_id`, thông tin riêng tư; thử `PUT`/`DELETE` bằng token → `404`/`405` |
 | `TC-13` | P1 | API Test | Thu hồi link | `DELETE /api/trips/:id/share` rồi gọi lại link cũ | `404` (giống link ngẫu nhiên không tồn tại) |
 | `TC-14` | P2 | Unit Test | Mật khẩu được hash | Đăng ký với mật khẩu `Passw0rd!x` | Cột `password_hash` bắt đầu bằng `$2` (bcrypt), không chứa mật khẩu gốc; `compare` đúng → `true`, sai → `false` |
 | `TC-15` | P2 | API Test | Trùng username không phân biệt hoa thường | Đăng ký `Linh`, sau đó đăng ký `linh` | Lần 2 trả `409 AUTH_USERNAME_TAKEN` |

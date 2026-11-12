@@ -7,7 +7,7 @@
 
 | Hạng mục | Kế hoạch cũ (plan02-full.md) | Kế hoạch MỚI (7 yêu cầu Giảng viên) | Lý do thay đổi |
 |---|---|---|---|
-| **1. Quyền truy cập của Khách** | Khách được dùng đầy đủ Chat AI và lập kế hoạch mà không cần tài khoản (`session_id`). Chỉ nhắc đăng ký sau khi có lịch trình. | **BẮT BUỘC ĐĂNG NHẬP** để dùng mọi tiện ích (Chat AI, form, lịch trình, bản đồ, calendar). Khách chỉ xem trang giới thiệu. | Giảng viên yêu cầu: AI cần nhận diện người dùng, sở thích và kế hoạch dựa trên lịch sử trò chuyện cũ ngay từ đầu. |
+| **1. Quyền truy cập của Khách** | Khách được dùng thử demo không cần tài khoản. | **BẮT BUỘC ĐĂNG NHẬP** để lưu và đồng bộ lịch trình cá nhân (form khảo sát, lịch trình, bản đồ, calendar, companion). Khách chỉ xem trang giới thiệu. | Giảng viên yêu cầu: AI cần nhận diện người dùng, sở thích và kế hoạch dựa trên lịch sử trò chuyện cũ ngay từ đầu. |
 | **2. Bảng nhập yêu cầu (Form)** | Chỉ có 4 trường: Điểm xuất phát, ngân sách, số ngày, sở thích chung (tag chips). | **ĐẦY ĐỦ 8 TRƯỜNG TP.HCM:** Số ngày, Quận ở TP.HCM, Ngân sách, Sở thích, Số người, Phương tiện di chuyển, Nhịp độ (Pace), Ghi chú đặc biệt. | Thu thập thông tin sâu và chính xác hơn cho bối cảnh giao thông/địa lý TP.HCM. |
 | **3. Luồng đàm thoại với AI** | Gửi form -> AI gọi tool sinh ngay lịch trình chi tiết (kèm hỏi phụ 1 câu nếu thiếu thông tin). | **LUỒNG 4 BƯỚC:** Nhập form -> AI đưa gợi ý cụ thể (định hướng) -> Người dùng duyệt/đồng ý -> AI sinh lịch trình chi tiết. | Giúp người dùng nắm bắt và thống nhất ý tưởng trước khi bung lịch trình dài, tránh lãng phí token. |
 | **4. Cơ chế Đổi địa điểm** | Chat tự do: "Swap dinner on Day 1". | Bấm nút **[Đổi địa điểm này]**, AI đưa **2 - 3 lựa chọn thay thế cụ thể** cùng loại để người dùng chọn. | Thao tác một chạm trực quan, AI chủ động đưa lựa chọn thay thế thay vì bắt người dùng tự nghĩ. |
@@ -23,6 +23,6 @@
 ## 2. DANH SÁCH CÁC THÀNH PHẦN CŨ BỊ BÃI BỎ TRIỆT ĐỂ
 1. Bãi bỏ file `server/src/personas.js` và toàn bộ định nghĩa persona/tone.
 2. Bãi bỏ bảng chọn Avatar/Persona trong Settings UI (`PersonaPicker.jsx`).
-3. Bãi bỏ chế độ khách dùng không đăng nhập (Guest Mode on Chat/Trips).
+3. Bãi bỏ chế độ chat văn bản thủ công, chuyển sang Direct-Manipulation UI với Form khảo sát 8 tiêu chí và Dashboard 4 Chế độ làm việc trực quan.
 4. Bãi bỏ khái niệm `client_settings` gửi kèm persona từ client.
 5. Bãi bỏ giao diện điền khuyết tự do dạng Mad-Libs cũ, chuyển thành Form 8 trường chuẩn mực.

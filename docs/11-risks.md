@@ -13,7 +13,7 @@
 | **Phình phạm vi do tài khoản và AI thích ứng** *(mới)* | Cao | Cao | Ba tầng phòng thủ: (1) Gate A/B và Cut line (mục 5.2), (2) ước lượng công sức công khai (mục 5.1), (3) **Feature freeze 02/12**. Mặc định kỳ vọng dừng ở Cut line 2. |
 | **Claim làm mất chuyến của khách khi đăng ký** *(mới)* | Cao | Thấp | Claim chỉ **gán `user_id`**, không xóa dữ liệu; chạy trong cùng transaction với đăng ký/đăng nhập (lỗi thì rollback, vẫn là khách); có `TC-16`. |
 | **Rò rỉ mật khẩu hoặc dữ liệu cá nhân** *(mới)* | Cao | Thấp | bcrypt cost 12, không log body auth, thông báo lỗi chung, rate limit, không lưu SĐT, xóa tài khoản cascade (mục 7). |
-| **Hết quota Gemini do tính năng phụ** *(mới)* | Trung bình | Trung bình | Lời chào Type 2 dùng mẫu (0 lượt), Smart Start 1 lượt, tóm tắt profile chạy nền và bị bỏ qua khi thiếu slot; `geminiBudget` ưu tiên chat (mục 4.7.1). |
+| **Hết quota Gemini do tính năng phụ** *(mới)* | Trung bình | Trung bình | Lời chào Type 2 dùng mẫu (0 lượt), Smart Start 1 lượt, tóm tắt profile chạy nền và bị bỏ qua khi thiếu slot; `geminiBudget` ưu tiên sinh lịch trình và đổi địa điểm. |
 | **AI "nhớ" sai hoặc gây khó chịu** *(mới)* | Trung bình | Trung bình | AI luôn nêu giả định trong **một câu** để sửa ngay; profile xem/sửa/xóa/tắt được; trò chuyện ngoài lề tối thiểu và tắt được (mục 10.12). |
 | **Đăng nhập Google / email lỗi lúc demo** *(mới)* | Trung bình | Trung bình | Demo dùng **username + tài khoản `demo_traveler`** (không cần Internet ngoài Gemini/Places). Google và quên mật khẩu chỉ mô tả bằng ảnh chụp/video. |
 | **Injection qua trí nhớ của AI** *(mới)* | Trung bình | Thấp | Giá trị profile lấy từ **từ vựng cố định** (không có văn bản tự do), bọc `<user_profile>`, persona qua whitelist (mục 4.7.5). Có `TC-24`. |
