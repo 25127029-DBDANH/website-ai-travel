@@ -102,7 +102,6 @@ docker compose up --build
   * `client/src/components/companion/TripSummaryView.jsx` (Tab 4 Giao diện Tổng kết chuyến đi, 4 KPIs, album ảnh check-in)
   * `client/src/components/companion/StoryCardModal.jsx` & `client/src/lib/story-card.js` (Xuất Thẻ ảnh kỷ niệm Canvas 9:16)
   * `client/src/components/TripForm.jsx` (Bảng khảo sát yêu cầu du lịch 8 tiêu chí đặc thù TP.HCM)
-  * `client/src/components/chat/ChatPanel.jsx` (Khung chat đàm thoại 4 bước với AI)
   * `client/src/styles.css` (Tối ưu Responsive chuẩn Mobile First cho smartphone)
 * **Nhiệm vụ cụ thể:**
   1. *Xây dựng Tab 3 Sổ chi tiêu:* Tích hợp bảng thống kê các khoản vé, ăn uống và **từng chặng xe di chuyển**; phát triển tính năng bấm sửa cước xe trực tiếp (*Inline fare editing*) cho phép khách lưu số tiền thực chi.
@@ -167,19 +166,19 @@ docker compose up --build
 * **Thư mục & File sở hữu chính:**
   * `server/app/services/gemini_service.py` (SDK Google Gemini 2.5 Flash API, System Instructions TP.HCM)
   * `server/app/schemas/ai.py` (Pydantic Schema ràng buộc định dạng Structured JSON đầu ra)
-  * `server/app/api/v1/endpoints/ai.py` (Endpoint đàm thoại 4 bước, sinh lịch trình & Smart Swap)
+  * `server/app/api/v1/endpoints/ai.py` (Endpoint sinh lịch trình tối ưu & Smart Swap)
   * `docs/04-prompt-ai-flow.md` (Tài liệu kỹ nghệ prompt và ví dụ few-shot)
 * **Nhiệm vụ cụ thể & Yêu cầu Tự tích hợp Frontend:**
   1. *Tích hợp Google Gemini 2.5 Flash:* Xây dựng dịch vụ gọi Gemini an toàn, bảo vệ API Key, xử lý Rate Limit và cơ chế Retry khi mạng chập chờn.
   2. *Kỹ thuật Prompt Engineering chuyên sâu:* Định hình AI đóng vai trò *"Chuyên gia Du lịch Bản địa am hiểu sâu sắc Sài Gòn"*, gợi ý lịch trình có gu, phù hợp văn hóa TP.HCM.
   3. *Ràng buộc Structured JSON Output:* Ép AI sinh kết quả lịch trình tuân thủ 100% JSON Schema, không bao giờ sinh thừa ký tự markdown hay làm vỡ dữ liệu.
-  4. *Luồng đàm thoại 4 bước:* Submit form -> Gợi ý concept -> Người dùng duyệt -> Sinh lịch trình chi tiết.
+  4. *Thuật toán Phân tích & Tối ưu Lịch trình:* Tiếp nhận 8 tiêu chí từ Form -> kết hợp CSDL địa điểm -> sinh lịch trình chi tiết đa ngày cân đối chi phí và phân bổ thời gian.
   5. *Logic Đổi địa điểm thông minh (Smart Swap):* Gợi ý 3-4 điểm thay thế cùng quận và phân khúc giá.
-  6. **YÊU CẦU TỰ TÍCH HỢP & TEST:** **Lam chịu trách nhiệm kết nối trực tiếp API Gemini với Khung Chat (`ChatPanel.jsx`) và Modal Đổi điểm (`SwapModal.jsx`), tự test phản hồi AI trên giao diện tới khi không còn lỗi format.**
+  6. **YÊU CẦU TỰ TÍCH HỢP & TEST:** **Lam chịu trách nhiệm kết nối trực tiếp API Gemini vào `TripForm.jsx` và Modal Đổi điểm (`SwapModal.jsx`), tự test sinh lịch trình và đổi điểm trên giao diện tới khi không còn lỗi format.**
 * **Tiêu chuẩn nghiệm thu (Definition of Done - DoD):**
   - [x] AI sinh lịch trình 100% hợp lệ JSON Schema, không bao giờ bị crash giao diện.
   - [x] Thời gian phản hồi AI trung bình < 3-5 giây.
-  - [x] Đàm thoại tự nhiên, câu chữ tiếng Việt chuẩn xác mang phong vị TP.HCM.
+  - [x] Lịch trình đề xuất mang tính bản địa chân thực, câu chữ tiếng Việt chuẩn xác.
 
 ---
 
@@ -246,7 +245,7 @@ website-ai-travel/
 │   ├── ke-hoach-thuc-hien.md      # Bảng phân công RACI, danh mục WBS và Definition of Done
 │   ├── kien-truc-api-db.md        # Kiến trúc hệ thống, ERD CSDL và danh mục RESTful API
 │   ├── openapi.yaml               # Đặc tả kỹ thuật OpenAPI 3.0 cho toàn bộ hệ thống API
-│   ├── 04-prompt-ai-flow.md       # Thiết kế prompt Gemini và luồng đàm thoại 4 bước
+│   ├── 04-prompt-ai-flow.md       # Thiết kế prompt Gemini & kỹ thuật sinh lịch trình chuẩn
 │   ├── 08-testing.md              # Kế hoạch kiểm thử chất lượng và test cases
 │   ├── 09-deploy.md               # Hướng dẫn đóng gói Docker và triển khai Cloud
 │   └── 13-demo-qa.md              # Kịch bản Live Demo 5 phút và câu hỏi phản biện bảo vệ đồ án
@@ -277,10 +276,8 @@ website-ai-travel/
 │       │   │   ├── ExpenseTrackerView.jsx # Tab 3 Sổ chi tiêu & Di chuyển (sửa tiền inline)
 │       │   │   ├── TripSummaryView.jsx    # Tab 4 Màn hình Tổng kết chuyến đi (4 KPI, album ảnh)
 │       │   │   └── StoryCardModal.jsx     # Xuất Thẻ ảnh kỷ niệm Canvas
-│       │   ├── common/
-│       │   │   └── RidePickerModal.jsx    # Pop-up đặt xe 3 hãng: Grab, Xanh SM, Be
-│       │   └── chat/
-│       │       └── ChatPanel.jsx          # Khung đàm thoại 4 bước với trợ lý AI
+│       │   └── common/
+│       │       └── RidePickerModal.jsx    # Pop-up đặt xe 3 hãng: Grab, Xanh SM, Be
 │       └── lib/
 │           ├── api.js             # Client API kết nối Backend (kèm mock dữ liệu an toàn)
 │           └── story-card.js      # Thư viện vẽ đồ họa Canvas xuất thẻ ảnh Story Card
@@ -309,7 +306,7 @@ website-ai-travel/
    * `feature/fe-companion-v2-full` — **Danh** & **Hưng** (Mã nguồn Frontend hoàn chỉnh)
    * `feature/be-auth-trip` — **Khang** (Backend Auth & CRUD Chuyến đi)
    * `feature/db-schema-seed` — **Đạt** (Database PostgreSQL & Cache địa điểm)
-   * `feature/ai-gemini-flow` — **Lam** (Gemini AI & Luồng đàm thoại 4 bước)
+   * `feature/ai-gemini-flow` — **Lam** (Gemini AI & Tối ưu lịch trình)
    * `feature/be-transit-adaptive` — **Hạo** (Routing cước 3 xe & Kịch bản thích ứng)
    * `feature/devops-docker-ci` — **Đăng** (Docker, Pytest & Triển khai Cloud)
 4. **Quy tắc Merge:** Mọi thành viên sau khi hoàn thành tính năng phải mở Pull Request (PR) vào nhánh `dev` và được Trưởng nhóm (Danh) phê duyệt sau khi đã test không xung đột.

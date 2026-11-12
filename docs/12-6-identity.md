@@ -15,7 +15,7 @@ security = HTTPBearer()
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     """
     FastAPI Dependency bắt buộc đăng nhập (Auth Gate v3 - Thực thi Yêu cầu 1).
-    Mọi endpoint cá nhân (trips, chat, calendar, review) đều yêu cầu Bearer JWT hợp lệ.
+    Mọi endpoint cá nhân (trips, transit, calendar, review) đều yêu cầu Bearer JWT hợp lệ.
     """
     token = credentials.credentials
     try:

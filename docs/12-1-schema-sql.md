@@ -100,7 +100,7 @@ CREATE TABLE IF NOT EXISTS itinerary_items (
 CREATE INDEX IF NOT EXISTS idx_itinerary_trip_day ON itinerary_items(trip_id, day_number, order_index);
 CREATE INDEX IF NOT EXISTS idx_itinerary_place_id ON itinerary_items(place_id_google);
 
--- 4. Bảng lưu lịch sử hội thoại nhiều lượt với Gemini
+-- 4. Bảng lưu lịch sử chuyến đi nhiều lượt với Gemini
 CREATE TABLE IF NOT EXISTS conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,

@@ -18,9 +18,9 @@
 | Đánh cắp JWT | Token trong `localStorage` bị XSS lấy | Không dùng `dangerouslySetInnerHTML`, CSP cơ bản, token hết hạn sau 7 ngày, payload chỉ có `sub`, `JWT_SECRET` ≥ 32 byte ngẫu nhiên trong biến môi trường. Đăng xuất xóa token **và xoay `session_id`** |
 | Giả mạo đăng nhập Google | Client gửi ID token giả hoặc của ứng dụng khác | **Backend** gọi `verifyIdToken` với `audience = GOOGLE_CLIENT_ID`, kiểm tra `email_verified`; không tin bất kỳ trường nào client gửi riêng |
 | Token đặt lại mật khẩu bị đánh cắp hoặc đoán | Chiếm tài khoản qua email | 32 byte ngẫu nhiên, DB chỉ lưu **SHA-256**, hết hạn 30 phút, dùng một lần, đổi mật khẩu xong thì vô hiệu mọi token cũ |
-| Lộ dữ liệu qua link chia sẻ | Link chuyền tay hoặc bị lộ | Token 128-bit không đoán được, **chỉ đọc**, thu hồi được (token cũ → 404), payload lược bỏ `session_id`/`user_id`/chat/email, `X-Robots-Tag: noindex`, rate limit 30 req/phút/IP |
+| Lộ dữ liệu qua link chia sẻ | Link chuyền tay hoặc bị lộ | Token 128-bit không đoán được, **chỉ đọc**, thu hồi được (token cũ → 404), payload lược bỏ `session_id`/`user_id`/email, `X-Robots-Tag: noindex`, rate limit 30 req/phút/IP |
 | Quyền riêng tư dữ liệu | Trí nhớ AI và dữ liệu tài khoản là dữ liệu cá nhân | Chỉ lưu dữ liệu tối thiểu (không lưu SĐT), profile xem/sửa/xóa/tắt được, xóa tài khoản xóa **cascade** toàn bộ chuyến đi và profile |
-| Khách lạm dụng quota Gemini | Ai cũng dùng được nên có thể spam | Rate limit theo IP + trần toàn server `geminiBudget`; chat luôn được ưu tiên hơn các lượt gọi phụ |
+| Khách lạm dụng quota Gemini | Ai cũng dùng được nên có thể spam | Rate limit theo IP + trần toàn server `geminiBudget`; tạo lịch trình luôn được ưu tiên |
 
 **Checklist**:
 
@@ -28,7 +28,7 @@
 - [x] HTTPS tự động từ Vercel/Render
 - [ ] Parameterized query (`$1, $2...`) cho mọi truy vấn SQL PostgreSQL
 - [ ] Ẩn `GOOGLE_PLACES_API_KEY` khỏi URL ảnh bằng Photo Proxy / Redirect resolver
-- [ ] Rate limiting ở backend (`express-rate-limit`: 10 req/phút/IP cho chat)
+- [ ] Rate limiting ở backend (`express-rate-limit`: 10 req/phút/IP cho API AI)
 - [ ] Validate input (frontend + backend) + kiểm tra `x-session-id`
 - [ ] Cấu hình CORS chỉ cho domain frontend thật (kèm `Authorization` và `X-Auth-Status`)
 - [ ] Prompt injection protection
