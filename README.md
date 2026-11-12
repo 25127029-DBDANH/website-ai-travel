@@ -61,12 +61,46 @@ docker compose up --build
 
 ---
 
-## 👥 BẢNG PHÂN CÔNG NHIỆM VỤ CHI TIẾT 7 THÀNH VIÊN
+## 👥 BẢNG PHÂN CÔNG NHIỆM VỤ CHI TIẾT 7 THÀNH VIÊN (100% FILE OWNERSHIP)
 
 > [!IMPORTANT]
 > **Quy định phân công cốt lõi của nhóm:**
-> 1. **Diệp Bảo Danh (Trưởng nhóm)** và **Phạm Gia Hưng** **cố định phụ trách toàn diện mảng Front-end**.
-> 2. Các thành viên phụ trách mảng Backend/AI/Data (**Khang, Đạt, Lam, Hạo**) chịu trách nhiệm **tự tích hợp trực tiếp API vào Frontend và tự kiểm thử (E2E Testing)** cho đến khi tính năng vận hành trơn tru trên giao diện người dùng.
+> 1. **Diệp Bảo Danh (Trưởng nhóm - MSSV: 25127029)** và **Phạm Gia Hưng** **cố định phụ trách toàn diện mảng Front-end**.
+> 2. Các thành viên phụ trách Backend/AI/Data (**Khang, Đạt, Lam, Hạo**) chịu trách nhiệm **tự tích hợp trực tiếp API vào Frontend và tự kiểm thử (E2E Testing)** cho đến khi tính năng vận hành trơn tru trên giao diện người dùng.
+> 3. **Đoàn Hải Đăng** chịu trách nhiệm toàn diện về **Mã nguồn Hạ tầng DevOps (Docker, CI/CD GitHub Actions), Bộ mã nguồn Kiểm thử tự động (Pytest Test Suite), Báo cáo Kỹ thuật và Thuyết trình/Video Demo**.
+> 4. **100% File Code có chủ sở hữu rõ ràng:** Tuyệt đối không để sót bất kỳ file cấu hình, component, endpoint hay script kiểm thử nào.
+
+---
+
+### 📊 Bảng Ma Trận Phân Công Mã Nguồn Chi Tiết (Exhaustive Code Mapping)
+
+| Phân hệ / Hạng mục | Danh mục File Mã nguồn (Code Files) | Thành viên chịu trách nhiệm |
+| :--- | :--- | :---: |
+| **Frontend: Điều phối Workspace & Bản đồ Leaflet** | `client/src/pages/TripPage.jsx`, `client/src/components/itinerary/TripMap.jsx` | **Diệp Bảo Danh** |
+| **Frontend: Lịch trình Timeline 3 tầng & Thanh điều hướng** | `client/src/components/itinerary/TimelineItem.jsx`, `ItineraryPanel.jsx` | **Diệp Bảo Danh** |
+| **Frontend: Chế độ Đi thực tế & Modal Check-in ảnh** | `client/src/components/companion/LiveCompanionView.jsx`, `CheckinModal.jsx` | **Diệp Bảo Danh** |
+| **Frontend: Cấu trúc Client API Gateway & Server Demo** | `client/src/lib/api.js`, `client/server.py` | **Diệp Bảo Danh** |
+| **Frontend: Sổ chi tiêu, Cước xe inline & Báo cáo Tổng kết** | `client/src/components/companion/ExpenseTrackerView.jsx`, `TripSummaryView.jsx` | **Phạm Gia Hưng** |
+| **Frontend: Xuất Thẻ kỷ niệm Canvas & Popup Recap** | `client/src/components/companion/TripRecapModal.jsx`, `StoryCardCanvas` | **Phạm Gia Hưng** |
+| **Frontend: Form khảo sát 8 tiêu chí & Landing Page 3D** | `client/src/components/TripForm.jsx`, `LandingPage.jsx`, `components/landing/*` | **Phạm Gia Hưng** |
+| **Frontend: Quản lý Chuyến của tôi & Cài đặt Profile** | `client/src/pages/MyTripsPage.jsx`, `client/src/pages/SettingsPage.jsx` | **Phạm Gia Hưng** |
+| **Frontend: Hệ thống Đa ngôn ngữ Song ngữ Anh - Việt** | `client/src/i18n/I18nContext.jsx`, `client/src/i18n/translations.js` | **Phạm Gia Hưng** |
+| **Frontend: Tích hợp Đăng nhập, Google Sign-In & Auth State** | `client/src/components/AuthModal.jsx`, `context/AuthContext.jsx`, `lib/auth.js` | **Đỗ Nguyễn An Khang** *(Tự tích hợp)* |
+| **Frontend: Tích hợp Trang xem chuyến đi công khai** | `client/src/pages/SharedTripPage.jsx`, `client/src/components/ShareDialog.jsx` | **Đỗ Nguyễn An Khang** *(Tự tích hợp)* |
+| **Frontend: Tích hợp Modal Chi tiết địa điểm TP.HCM** | `client/src/components/itinerary/PlaceDetailModal.jsx` | **Ngô Tấn Đạt** *(Tự tích hợp)* |
+| **Frontend: Tích hợp Cước xe 3 hãng & Khối di chuyển chặng** | `client/src/components/itinerary/TransitConnector.jsx`, `RidePickerModal.jsx` | **Đàng Minh Hạo & Diệp Bảo Danh** |
+| **Backend: Khung FastAPI, Core Security & JWT Dependency** | `server/main.py`, `server/app/core/security.py`, `config.py`, `dependencies.py` | **Đỗ Nguyễn An Khang** |
+| **Backend: Pydantic Schemas & Endpoints Auth / Trips** | `server/app/schemas/user.py`, `trip.py`, `endpoints/auth.py`, `trips.py` | **Đỗ Nguyễn An Khang** |
+| **Backend: Lược đồ CSDL PostgreSQL, Session & Data TP.HCM** | `server/app/db/schema.sql`, `session.py`, `hcmc_data.py` | **Ngô Tấn Đạt** |
+| **Backend: Places Cache TTL 7 ngày & Endpoints Places** | `server/app/services/places_service.py`, `endpoints/places.py` | **Ngô Tấn Đạt** |
+| **Backend: SDK Gemini 2.5 Flash, Prompt & Endpoints AI** | `server/app/services/gemini_service.py`, `schemas/ai.py`, `endpoints/ai.py` | **Lê Hữu Lam** |
+| **Backend: Thuật toán Haversine, Cước xe Grab/XanhSM/Be** | `server/app/utils/transit_calculator.py` | **Đàng Minh Hạo** |
+| **Backend: Động cơ Kịch bản Thích ứng Trời mưa & Kẹt xe** | `server/app/services/contingency_service.py` | **Đàng Minh Hạo** |
+| **Backend: Dịch vụ Calendar .ICS & REST API Google Calendar** | `server/app/services/calendar_service.py`, `endpoints/calendar.py` | **Đàng Minh Hạo** |
+| **DevOps: Docker Compose & Dockerfiles Multi-stage** | `docker-compose.yml`, `client/Dockerfile`, `server/Dockerfile` | **Đoàn Hải Đăng** |
+| **DevOps: Pipeline CI/CD GitHub Actions Tự động hóa** | `.github/workflows/ci.yml` | **Đoàn Hải Đăng** |
+| **QA/Test: Toàn bộ Bộ mã nguồn Kiểm thử tự động Pytest** | `server/app/tests/conftest.py`, `test_auth.py`, `test_trips.py`, `test_places.py`... | **Đoàn Hải Đăng** |
+| **DevOps: Hệ thống Script Windows 1-Click Execution** | `CHAY-DEMO.bat`, `run_all.bat`, `run_frontend.bat`, `run_backend.bat` | **Đoàn Hải Đăng & Diệp Bảo Danh** |
 
 ---
 
@@ -76,154 +110,163 @@ docker compose up --build
 * **Vai trò chuyên môn:** Trưởng nhóm — Kiến trúc sư Hệ thống & Lead Frontend
 * **Thư mục & File sở hữu chính:**
   * `client/src/pages/TripPage.jsx` (Điều phối 4 chế độ tab, state đồng bộ giữa bản đồ & timeline)
-  * `client/src/components/itinerary/TripMap.jsx` (Khung 1 Bản đồ Leaflet tương tác, vẽ marker số [1,2,3,4] và đổi pin sang dấu tích xanh `✓`)
+  * `client/src/components/itinerary/TripMap.jsx` (Khung 1 Bản đồ Leaflet tương tác, marker số [1,2,3,4], polyline, đổi pin sang dấu tích xanh `✓`)
   * `client/src/components/itinerary/TimelineItem.jsx` (Khung 2 Thẻ lịch trình 3 tầng chống tràn/đè chữ, chốt Accept, Swap)
   * `client/src/components/itinerary/ItineraryPanel.jsx` (Thanh điều khiển lịch trình tối ưu, dọn nút trùng lặp)
-  * `client/src/components/companion/LiveCompanionView.jsx` (Tab 2 Chế độ Đi thực tế thời gian thực, thẻ Hero, check-in)
-  * `client/src/components/common/RidePickerModal.jsx` (Modal gọi xe tích hợp 3 hãng Grab, Xanh SM, Be)
+  * `client/src/components/companion/LiveCompanionView.jsx` (Tab 2 Chế độ Đi thực tế thời gian thực, thẻ Hero Next Stop, hoàn thành chuyến đi)
+  * `client/src/components/companion/CheckinModal.jsx` (Modal check-in chặng, tải ảnh lưu niệm, ghi chú)
+  * `client/src/lib/api.js` (Cấu trúc Gateway API trung tâm kết nối Backend)
+  * `client/server.py` & `CHAY-DEMO.bat` (Server phục vụ Single Page Demo và script 1-click)
 * **Nhiệm vụ cụ thể:**
   1. *Quản trị Repository GitHub:* Phân chia nhánh tính năng (`feature/*`), review Pull Request, giải quyết xung đột mã nguồn (merge conflict).
   2. *Thiết kế Khung 1 (Bản đồ Leaflet):* Vẽ tuyến đường polyline nối các chặng, pan/zoom tự động theo tọa độ GPS, đổi marker thành icon `✓` khi chặng được check-in.
-  3. *Tái cấu trúc Khung 2 (Timeline 3 tầng):* Giải quyết dứt điểm lỗi đè chữ khi địa điểm tên dài (*như Công viên Bến Bạch Đằng & Bến Tàu Thủy*). Khóa nút đổi điểm trên các chặng đã hoàn thành.
-  4. *Xây dựng Chế độ Đi thực tế (Companion):* Thẻ Hero chỉ đường chặng kế tiếp, nút mở Google Maps, nút kích hoạt gọi xe 3 hãng, nút *"Hoàn thành chuyến đi"*.
-* **Tiêu chuẩn nghiệm thu (Definition of Done - DoD):**
-  - [x] Giao diện 2 khung hình vận hành mượt mà, không vỡ layout trên desktop/laptop.
-  - [x] Trạng thái check-in đồng bộ tức thì: Timeline đổi màu xanh dịu, Bản đồ đổi sang pin `✓`.
-  - [x] Modal gọi xe hiển thị chính xác cước 3 hãng và kích hoạt deep-link mở ứng dụng tương ứng.
+  3. *Tái cấu trúc Khung 2 (Timeline 3 tầng):* Giải quyết triệt để lỗi tràn/đè chữ với tên địa điểm dài; chuyển nền thẻ sang màu xanh ngọc nhẹ (`emerald-50`) khi check-in; khóa toàn bộ thao tác đổi điểm khi chặng đã hoàn thành.
+  4. *Tab 2 Đi thực tế & Modal Gọi xe:* Thẻ Hero hiển thị điểm đến tiếp theo, tích hợp gọi xe 3 app (Grab, Xanh SM, Be) với giá cước và deep-link mở app di động; nút "Hoàn thành chuyến đi" chuyển sang Tab 4 Tổng kết.
+* **Tiêu chí hoàn thành (DoD):** Giao diện 2 khung hình hoạt động trơn tru; bản đồ và timeline đồng bộ tức thì; không có bất kỳ lỗi che khuất chữ nào trên giao diện.
 
 ---
 
 ### 2. PHẠM GIA HƯNG — FRONTEND DEVELOPER & UI/UX SPECIALIST
 * **Họ và tên:** **Phạm Gia Hưng**
-* **Mã số sinh viên (MSSV):** `....................................................`
-* **Vai trò chuyên môn:** Frontend Developer & Chuyên viên Thiết kế Giao diện Trải nghiệm (UI/UX)
+* **Vai trò chuyên môn:** Frontend Developer & Chuyên viên Thiết kế Giao diện (UI/UX)
 * **Thư mục & File sở hữu chính:**
-  * `client/src/components/companion/ExpenseTrackerView.jsx` (Tab 3 Sổ chi tiêu & Di chuyển, chỉnh sửa cước xe inline)
-  * `client/src/components/companion/TripSummaryView.jsx` (Tab 4 Giao diện Tổng kết chuyến đi, 4 KPIs, album ảnh check-in)
-  * `client/src/components/companion/StoryCardModal.jsx` & `client/src/lib/story-card.js` (Xuất Thẻ ảnh kỷ niệm Canvas 9:16)
-  * `client/src/components/TripForm.jsx` (Bảng khảo sát yêu cầu du lịch 8 tiêu chí đặc thù TP.HCM)
-  * `client/src/styles.css` (Tối ưu Responsive chuẩn Mobile First cho smartphone)
+  * `client/src/components/companion/ExpenseTrackerView.jsx` (Tab 3 Sổ chi tiêu, thêm chi tiêu, sửa cước xe inline)
+  * `client/src/components/companion/TripSummaryView.jsx` (Tab 4 Giao diện Tổng kết chuyến đi, 4 chỉ số KPI)
+  * `client/src/components/companion/TripRecapModal.jsx` (Modal chúc mừng hoàn thành chuyến đi)
+  * `client/src/components/TripForm.jsx` (Form khảo sát 8 tiêu chí chuyên sâu)
+  * `client/src/pages/LandingPage.jsx` & `client/src/components/landing/*` (`Hero3D.jsx`, `PhotoMarquee.jsx`, `SpotlightCard.jsx`)
+  * `client/src/pages/MyTripsPage.jsx` (Trang "Chuyến của tôi", danh sách chuyến đi, lọc trạng thái, nhân bản)
+  * `client/src/pages/SettingsPage.jsx` (Trang Cài đặt tài khoản, Travel Profile AI, liên kết Google Calendar, Dark mode)
+  * `client/src/i18n/I18nContext.jsx` & `client/src/i18n/translations.js` (Hệ thống Đa ngôn ngữ VI/EN)
 * **Nhiệm vụ cụ thể:**
-  1. *Xây dựng Tab 3 Sổ chi tiêu:* Tích hợp bảng thống kê các khoản vé, ăn uống và **từng chặng xe di chuyển**; phát triển tính năng bấm sửa cước xe trực tiếp (*Inline fare editing*) cho phép khách lưu số tiền thực chi.
-  2. *Xây dựng Tab 4 Tổng kết chuyến đi:* Thống kê 4 thẻ chỉ số KPI, phân bổ cơ cấu 3 nhóm tiền, dòng thời gian lịch sử các ngày kèm hình ảnh chụp thực tế.
-  3. *Lập trình Xuất Thẻ kỷ niệm (Story Card Canvas):* Sinh file ảnh đồ họa kích thước chuẩn Story (1080x1920) hoặc Vuông (1080x1080) sẵn sàng tải về máy đăng mạng xã hội.
-  4. *Tối ưu Responsive Mobile First:* Tinh chỉnh CSS đảm bảo giao diện hiển thị xuất sắc, không tràn ngang khi du khách cầm điện thoại di chuyển ngoài đường.
-* **Tiêu chuẩn nghiệm thu (Definition of Done - DoD):**
-  - [x] Sổ chi tiêu cập nhật ngân sách thời gian thực; tính năng inline fare editing lưu dữ liệu chuẩn xác.
-  - [x] Màn hình tổng kết hiển thị đầy đủ hình ảnh, số liệu và câu chuyện chuyến đi.
-  - [x] Xuất thẻ ảnh Story Card canvas sắc nét, tải về định dạng PNG trong 1 click.
-  - [x] Website đạt chuẩn responsive 100% trên cả iPhone và Android.
+  1. *Tab 3 Sổ chi tiêu & Quản lý di chuyển:* Hiển thị chi tiết tiền vé tham quan, ăn uống và **từng chặng xe di chuyển**; tính năng bấm sửa cước xe trực tiếp (*Inline fare editing*); bộ lọc danh mục và thanh tiến độ ngân sách.
+  2. *Tab 4 Giao diện Tổng kết chuyến đi:* Thống kê 4 chỉ số KPI cốt lõi (Tổng chi phí, Chênh lệch ngân sách, Số điểm đã ghé, Tổng cự ly); biểu đồ cơ cấu chi tiêu 3 nhóm; album ảnh check-in thực tế.
+  3. *Xuất Thẻ kỷ niệm (Story Card Canvas):* Lập trình sinh ảnh đồ họa tổng kết chuyến đi (tỷ lệ 9:16 Story / 1:1 Square) cho phép bấm tải ảnh về máy để chia sẻ mạng xã hội.
+  4. *Form khảo sát 8 tiêu chí chuyên sâu:* Xây dựng giao diện thu thập nhu cầu du khách kết nối trực tiếp AI Generator.
+  5. *Trang My Trips & Settings:* Lập trình giao diện quản lý các chuyến đi đã lưu, nhân bản chuyến đi, xem hồ sơ du lịch AI (Travel Profile) và bật tắt Chế độ Sáng/Tối.
+  6. *Hệ thống Đa ngôn ngữ (VI/EN) & Responsive Mobile:* Đảm bảo 100% nhãn giao diện chuẩn ngữ nghĩa Anh - Việt; tối ưu giao diện không vỡ khung trên Smartphone ngoài trời.
+* **Tiêu chí hoàn thành (DoD):** Sổ chi tiêu tính toán tiền chính xác; xuất ảnh Story Card sắc nét; giao diện responsive mượt mà trên iPhone/Android.
 
 ---
 
 ### 3. ĐỖ NGUYỄN AN KHANG — BACKEND LEAD & AUTHENTICATION SERVICE
 * **Họ và tên:** **Đỗ Nguyễn An Khang**
-* **Mã số sinh viên (MSSV):** `....................................................`
-* **Vai trò chuyên môn:** Backend Lead — Xác thực, Bảo mật & Dịch vụ Chuyến đi
+* **Vai trò chuyên môn:** Backend Lead & Kỹ sư Dịch vụ Xác thực & Quản trị Chuyến đi
 * **Thư mục & File sở hữu chính:**
-  * `server/main.py` & `server/app/api/v1/api.py` (Cấu hình FastAPI, CORS Middleware, Router tổng)
-  * `server/app/core/security.py` & `dependencies.py` (Mã hóa bcrypt, ký/giải mã JWT Token, phân quyền)
-  * `server/app/api/v1/endpoints/auth.py` (API đăng ký, đăng nhập email/mật khẩu, Google OAuth 2.0)
-  * `server/app/api/v1/endpoints/trips.py` (API CRUD chuyến đi, cập nhật chặng `visited`, My Trips, chia sẻ liên kết)
-  * `server/app/schemas/user.py` & `trip.py` (Pydantic validation schemas)
-* **Nhiệm vụ cụ thể & Yêu cầu Tự tích hợp Frontend:**
-  1. *Hệ thống Xác thực (Auth Service):* Xây dựng luồng đăng ký, đăng nhập bảo mật; cấp phát JWT Access Token (hạn 24h); tích hợp Google Sign-In (OAuth 2.0).
-  2. *API Quản lý Chuyến đi:* Xây dựng các endpoint lưu chuyến mới (`POST /api/v1/trips`), lấy chi tiết (`GET /api/v1/trips/{id}`), cập nhật trạng thái chặng (`PATCH /api/v1/trips/{id}/stops/{stopId}`), danh sách My Trips (`GET /api/v1/trips/me`), tạo link chia sẻ (`POST /api/v1/trips/{id}/share`).
-  3. **YÊU CẦU TỰ TÍCH HỢP & TEST:** **Khang chịu trách nhiệm kết nối trực tiếp các endpoint trên với Frontend (`client/src/components/AuthModal.jsx`, `TripPage.jsx`, `ShareDialog.jsx`), tự kiểm thử trên trình duyệt cho tới khi luồng đăng nhập, lưu chuyến đi và chia sẻ hoạt động ổn định 100%.**
-* **Tiêu chuẩn nghiệm thu (Definition of Done - DoD):**
-  - [x] Bắt buộc đăng nhập để sử dụng tính năng tạo chuyến (trả về 401 Unauthorized nếu thiếu JWT token).
-  - [x] Đăng nhập Google 1-chạm hoạt động trơn tru.
-  - [x] CRUD chuyến đi phản hồi nhanh < 100ms, dữ liệu lưu đồng bộ giữa FE và BE.
+  * `server/main.py` (File khởi chạy FastAPI, cấu hình CORS, Global Exception Handler)
+  * `server/app/api/v1/api.py` (Router tổng hợp API v1)
+  * `server/app/core/config.py`, `security.py`, `dependencies.py` (Cấu hình môi trường `.env`, mã hóa bcrypt, JWT Bearer)
+  * `server/app/schemas/user.py`, `trip.py` (Pydantic models)
+  * `server/app/api/v1/endpoints/auth.py` (Đăng ký, đăng nhập mật khẩu, Google OAuth 2.0)
+  * `server/app/api/v1/endpoints/trips.py` (CRUD chuyến đi, `GET /trips/me`, `POST /trips/{id}/clone`, `POST /share`)
+  * `client/src/pages/SharedTripPage.jsx` *(Tự tích hợp)*
+* **Nhiệm vụ cụ thể:**
+  1. *Khung dự án FastAPI:* Dựng cấu trúc mã nguồn Backend chuẩn RESTful; cấu hình CORS cho phép kết nối an toàn từ Frontend; thiết lập bắt lỗi ngoại lệ tập trung.
+  2. *Hệ thống Xác thực (Auth Service):* Mã hóa mật khẩu bằng `bcrypt`; cấp phát và xác thực JWT Bearer Token theo RFC 7519 trong Dependency `get_current_user`; tích hợp Google OAuth 2.0.
+  3. *Bộ API Quản lý Chuyến đi:* Lưu chuyến đi mới tạo từ AI; lấy dữ liệu chi tiết lịch trình; cập nhật trạng thái chặng (`visited`, ghi chú, ảnh); lấy danh sách chuyến đi của user; sao chép nhân bản chuyến đi; API chia sẻ link công khai ẩn thông tin nhạy cảm.
+  4. *YÊU CẦU TỰ TÍCH HỢP & TEST E2E:*
+     * Kết nối API đăng nhập/đăng ký vào `AuthModal.jsx` và `AuthContext.jsx`.
+     * Kết nối danh sách chuyến đi vào `MyTripsPage.jsx`.
+     * Kết nối trang chia sẻ công khai vào `SharedTripPage.jsx`.
+     * Tự test luồng đăng nhập, lưu chuyến đi và chia sẻ link công khai cho tới khi chạy thông suốt.
+* **Tiêu chí hoàn thành (DoD):** Xác thực an toàn 100%; bảo vệ route chặt chẽ; CRUD chuyến đi phản hồi dưới 100ms; luồng E2E trên Web hoạt động hoàn hảo.
 
 ---
 
 ### 4. NGÔ TẤN ĐẠT — DATABASE & DATA ENGINEER
 * **Họ và tên:** **Ngô Tấn Đạt**
-* **Mã số sinh viên (MSSV):** `....................................................`
-* **Vai trò chuyên môn:** Kỹ sư Dữ liệu & Quản trị Cơ sở Dữ liệu (Database Administrator)
+* **Vai trò chuyên môn:** Kỹ sư Cơ sở Dữ liệu & Quản trị Dữ liệu Địa điểm Sài Gòn
 * **Thư mục & File sở hữu chính:**
-  * `server/app/db/schema.sql` (Lược đồ CSDL PostgreSQL: `users`, `trips`, `itinerary_items`, `expenses`, `places_cache`)
-  * `server/app/db/session.py` (Cấu hình SQLAlchemy Session & Connection Pooling)
-  * `server/app/db/hcmc_data.py` (Bộ dữ liệu mồi Seed Data 30+ địa danh du lịch, lịch sử, ẩm thực TP.HCM)
-  * `server/app/services/places_service.py` (Bộ đệm Cache địa điểm thông minh với TTL 7 ngày)
-  * `server/app/api/v1/endpoints/places.py` (API tìm kiếm địa điểm, tích hợp Google Places API New)
-* **Nhiệm vụ cụ thể & Yêu cầu Tự tích hợp Frontend:**
-  1. *Thiết kế CSDL Quan hệ chuẩn hóa:* Thiết kế đầy đủ bảng, khóa chính UUID, khóa ngoại có ràng buộc `ON DELETE CASCADE`, tạo index tìm kiếm theo tọa độ và quận.
-  2. *Chuẩn bị Dữ liệu Thực tế TP.HCM:* Thu thập và nạp sẵn 30+ địa điểm đặc sắc nhất TP.HCM (tọa độ GPS WGS84 chính xác, giá vé thực tế, khung giờ mở cửa, mô tả và hình ảnh đẹp mắt).
-  3. *Hệ thống Bộ đệm Cache (places_cache):* Giúp hệ thống không cần gọi lại Google Places API nếu địa điểm đã có trong cache (giảm 80% chi phí API và tăng tốc truy vấn).
-  4. **YÊU CẦU TỰ TÍCH HỢP & TEST:** **Đạt chịu trách nhiệm đảm bảo dữ liệu địa điểm từ CSDL nạp lên hiển thị đầy đủ trên Bản đồ Leaflet (`TripMap.jsx`) và Thẻ Lịch trình (`TimelineItem.jsx`) của Frontend.**
-* **Tiêu chuẩn nghiệm thu (Definition of Done - DoD):**
-  - [x] CSDL triển khai thành công trên PostgreSQL/Supabase; script seed nạp dữ liệu chạy thành công trong 1 lệnh.
-  - [x] Tốc độ truy vấn dữ liệu địa điểm trong cache < 30ms.
-  - [x] Tọa độ của toàn bộ địa điểm khớp 100% với thực tế đường sá TP.HCM.
+  * `server/app/db/schema.sql` (Lược đồ CSDL PostgreSQL)
+  * `server/app/db/session.py` (Cấu hình SQLAlchemy Engine & SessionLocal)
+  * `server/app/db/hcmc_data.py` (Kho dữ liệu Seed 30+ địa điểm TP.HCM)
+  * `server/app/services/places_service.py` (Bộ đệm Cache TTL 7 ngày & Fallback Places API)
+  * `server/app/api/v1/endpoints/places.py` (Bộ API địa điểm TP.HCM)
+  * `client/src/components/itinerary/PlaceDetailModal.jsx` *(Tự tích hợp)*
+* **Nhiệm vụ cụ thể:**
+  1. *Lược đồ CSDL Quan hệ:* Thiết kế các bảng `users`, `trips`, `trip_days`, `itinerary_items`, `expenses`, `places_cache` với ràng buộc khóa ngoại (Foreign Keys) và Indexes tăng tốc truy vấn.
+  2. *Bộ đệm Địa điểm (Places Cache TTL 7 ngày):* Xây dựng cơ chế cache địa điểm trong bảng `places_cache`; tự động hoàn trả dữ liệu từ CSDL cục bộ; chỉ gọi Google Places API New khi cache miss hoặc dữ liệu quá hạn 7 ngày.
+  3. *Tập dữ liệu Mồi TP.HCM (`hcmc_data.py`):* Thu thập, làm sạch và chuẩn hóa hơn 30+ địa danh nổi tiếng Sài Gòn đầy đủ tọa độ GPS, mức giá, thời lượng tham quan, ảnh chất lượng cao.
+  4. *YÊU CẦU TỰ TÍCH HỢP & TEST E2E:*
+     * Đảm bảo dữ liệu từ DB hiển thị đầy đủ trên Bản đồ Leaflet (`TripMap.jsx`).
+     * Tự kết nối API chi tiết địa điểm vào `PlaceDetailModal.jsx` (ảnh, mô tả, giờ mở cửa).
+     * Tự test truy vấn dữ liệu địa điểm hiển thị chính xác trên giao diện Frontend.
+* **Tiêu chí hoàn thành (DoD):** CSDL triển khai hoàn tất trên PostgreSQL/Supabase; script seed nạp dữ liệu chạy 100% thành công; query địa điểm phản hồi dưới 30ms.
 
 ---
 
-### 5. LÊ HỮU LAM — AI ENGINE & PROMPT SPECIALIST (GEMINI INTEGRATION)
+### 5. LÊ HỮU LAM — AI ENGINE & PROMPT ENGINEER
 * **Họ và tên:** **Lê Hữu Lam**
-* **Mã số sinh viên (MSSV):** `....................................................`
-* **Vai trò chuyên môn:** Kỹ sư Trí tuệ Nhân tạo & Kỹ nghệ Prompt (AI / LLM Engineer)
+* **Vai trò chuyên môn:** Kỹ sư Trí tuệ Nhân tạo & Kỹ thuật Prompt (Google Gemini Integration)
 * **Thư mục & File sở hữu chính:**
-  * `server/app/services/gemini_service.py` (SDK Google Gemini 2.5 Flash API, System Instructions TP.HCM)
-  * `server/app/schemas/ai.py` (Pydantic Schema ràng buộc định dạng Structured JSON đầu ra)
-  * `server/app/api/v1/endpoints/ai.py` (Endpoint sinh lịch trình tối ưu & Smart Swap)
-  * `docs/04-prompt-ai-flow.md` (Tài liệu kỹ nghệ prompt và ví dụ few-shot)
-* **Nhiệm vụ cụ thể & Yêu cầu Tự tích hợp Frontend:**
-  1. *Tích hợp Google Gemini 2.5 Flash:* Xây dựng dịch vụ gọi Gemini an toàn, bảo vệ API Key, xử lý Rate Limit và cơ chế Retry khi mạng chập chờn.
-  2. *Kỹ thuật Prompt Engineering chuyên sâu:* Định hình AI đóng vai trò *"Chuyên gia Du lịch Bản địa am hiểu sâu sắc Sài Gòn"*, gợi ý lịch trình có gu, phù hợp văn hóa TP.HCM.
-  3. *Ràng buộc Structured JSON Output:* Ép AI sinh kết quả lịch trình tuân thủ 100% JSON Schema, không bao giờ sinh thừa ký tự markdown hay làm vỡ dữ liệu.
-  4. *Thuật toán Phân tích & Tối ưu Lịch trình:* Tiếp nhận 8 tiêu chí từ Form -> kết hợp CSDL địa điểm -> sinh lịch trình chi tiết đa ngày cân đối chi phí và phân bổ thời gian.
-  5. *Logic Đổi địa điểm thông minh (Smart Swap):* Gợi ý 3-4 điểm thay thế cùng quận và phân khúc giá.
-  6. **YÊU CẦU TỰ TÍCH HỢP & TEST:** **Lam chịu trách nhiệm kết nối trực tiếp API Gemini vào `TripForm.jsx` và Modal Đổi điểm (`SwapModal.jsx`), tự test sinh lịch trình và đổi điểm trên giao diện tới khi không còn lỗi format.**
-* **Tiêu chuẩn nghiệm thu (Definition of Done - DoD):**
-  - [x] AI sinh lịch trình 100% hợp lệ JSON Schema, không bao giờ bị crash giao diện.
-  - [x] Thời gian phản hồi AI trung bình < 3-5 giây.
-  - [x] Lịch trình đề xuất mang tính bản địa chân thực, câu chữ tiếng Việt chuẩn xác.
+  * `server/app/schemas/ai.py` (Pydantic Schema ràng buộc Gemini Structured Output JSON)
+  * `server/app/services/gemini_service.py` (SDK Gemini 2.5 Flash, Prompt Engineering chuyên sâu)
+  * `server/app/api/v1/endpoints/ai.py` (API `/api/v1/ai/generate` và `/api/v1/ai/swap`)
+* **Nhiệm vụ cụ thể:**
+  1. *Tích hợp Google Gemini API:* Cấu hình SDK Gemini (`gemini-2.5-flash`), quản lý API Key an toàn, xử lý Rate Limiting, Exponential Backoff Retry và kịch bản Fallback khi mất kết nối.
+  2. *Kỹ thuật Prompt Chuyên gia Bản địa:* Soạn thảo System Instruction định vị AI am hiểu sâu sắc văn hóa, ẩm thực từng con hẻm Sài Gòn; kỹ thuật Few-shot Prompting cân đối múi giờ sinh hoạt thực tế.
+  3. *Gemini Structured Outputs:* Ràng buộc chặt chẽ JSON Schema đầu ra, đảm bảo 100% phản hồi từ Gemini trả về JSON chuẩn xác theo cấu trúc Frontend cần, không bị lỗi text tự do.
+  4. *Động cơ Sinh Lịch trình Tối ưu:* Tiếp nhận 8 tiêu chí khảo sát -> Lựa chọn địa điểm theo cụm quận nhằm giảm thiểu thời gian di chuyển -> Phân bổ ngân sách hợp lý theo ngày.
+  5. *Logic AI Đổi địa điểm thông minh (Smart Swap):* API `POST /api/v1/ai/swap` phân tích lý do đổi điểm của người dùng và đề xuất 2-3 địa điểm thay thế tương đương cùng khu vực và chi phí.
+  6. *YÊU CẦU TỰ TÍCH HỢP & TEST E2E:*
+     * Tự kết nối API sinh lịch trình vào `TripForm.jsx`.
+     * Tự kết nối API Smart Swap vào `TimelineItem.jsx` (modal đổi địa điểm).
+     * Tự kiểm thử luồng sinh lịch trình và đổi điểm trực tiếp trên giao diện cho đến khi dữ liệu trả về mượt mà.
+* **Tiêu chí hoàn thành (DoD):** Gemini trả về 100% chuẩn JSON; thời gian phản hồi AI trung bình dưới 3-5 giây; lịch trình gợi ý logic, hợp lý về địa lý TP.HCM.
 
 ---
 
-### 6. ĐÀNG MINH HẠO — BACKEND DEVELOPER (ROUTING, TRANSIT & ADAPTIVE LOGIC)
+### 6. ĐÀNG MINH HẠO — BACKEND DEVELOPER (ROUTING, TRANSIT & ADAPTIVE)
 * **Họ và tên:** **Đàng Minh Hạo**
-* **Mã số sinh viên (MSSV):** `....................................................`
-* **Vai trò chuyên môn:** Backend Developer — Thuật toán Tuyến đường, Cước xe & Động cơ Thích ứng
+* **Vai trò chuyên môn:** Backend Developer — Kỹ sư Thuật toán Tuyến đường, Cước xe & Động cơ Thích ứng
 * **Thư mục & File sở hữu chính:**
-  * `server/app/utils/transit_calculator.py` (Thuật toán Haversine tính khoảng cách & ước tính cước Grab/XanhSM/Be)
-  * `server/app/services/contingency_service.py` (Động cơ thích ứng: Kịch bản Trời mưa Sài Gòn & Giờ cao điểm TP.HCM)
-  * `server/app/services/calendar_service.py` & `endpoints/calendar.py` (API xuất file lịch quốc tế `.ICS` và đồng bộ Google Calendar)
-  * `server/app/schemas/calendar.py` (Schema dữ liệu lịch và kịch bản)
-* **Nhiệm vụ cụ thể & Yêu cầu Tự tích hợp Frontend:**
-  1. *Tính toán Cước xe Di chuyển (Transit Fare Calculator):* Xây dựng công thức ước tính cước theo cự ly thực tế cho 3 hãng xe công nghệ phổ biến nhất Sài Gòn: **Grab (Bike/Car)**, **Xanh SM (Bike/Taxi điện)**, **Be (Bike/Car)**.
-  2. *Kịch bản Thích ứng Thông minh:*
-     * *Trời mưa Sài Gòn:* Tự động lọc chuyển các điểm ngoài trời sang điểm trong nhà có mái che, đổi phương tiện sang xe có mái che.
-     * *Giờ cao điểm TP.HCM (17h - 19h):* Tự động cộng thêm +20 phút đệm kẹt xe, ưu tiên các điểm lân cận trong cùng một quận.
-  3. *Xuất lịch trình chuẩn quốc tế .ICS:* Tạo file iCalendar tương thích Google Calendar, Apple Calendar, có nhắc hẹn trước 30 phút.
-  4. **YÊU CẦU TỰ TÍCH HỢP & TEST:** **Hạo chịu trách nhiệm kết nối trực tiếp bảng giá cước xe vào Modal Gọi xe (`RidePickerModal.jsx`) và Sổ chi tiêu (`ExpenseTrackerView.jsx`); tự test các nút kịch bản thời tiết trên Frontend (`TripPage.jsx`).**
-* **Tiêu chuẩn nghiệm thu (Definition of Done - DoD):**
-  - [x] Tính khoảng cách địa lý sai số < 5% so với Google Maps.
-  - [x] Cước ước tính 3 hãng xe sát thực tế đường sá TP.HCM.
-  - [x] Bật nút Trời mưa / Giờ cao điểm hệ thống tự thích ứng lịch trình tức thì.
-  - [x] File `.ICS` tải về mở được ngay trên điện thoại iPhone / Android.
+  * `server/app/utils/transit_calculator.py` (Thuật toán Haversine & Biểu giá cước xe 3 hãng)
+  * `server/app/services/contingency_service.py` (Động cơ Kịch bản Thích ứng Trời mưa & Kẹt xe)
+  * `server/app/services/calendar_service.py` (Dịch vụ Calendar .ICS & REST API Google Calendar)
+  * `server/app/schemas/calendar.py` (Pydantic Schema cho Calendar)
+  * `server/app/api/v1/endpoints/calendar.py` (API xuất lịch)
+  * `client/src/components/common/RidePickerModal.jsx` *(Hợp tác Danh)*
+* **Nhiệm vụ cụ thể:**
+  1. *Thuật toán Tuyến đường (Haversine Formula):* Tính toán cự ly đường chim bay và ước lượng khoảng cách đường bộ thực tế giữa các cặp tọa độ GPS chặng đi và chặng đến.
+  2. *Thuật toán Ước tính Cước xe 3 Hãng:*
+     * Grab: Biểu giá GrabBike & GrabCar theo km.
+     * Xanh SM: Biểu giá Xanh SM Bike & Xanh SM Taxi (xe điện VinFast).
+     * Be: Biểu giá BeBike & BeCar.
+     * Tạo deep-link mở ứng dụng tương ứng trên điện thoại.
+  3. *Động cơ Kịch bản Thích ứng (Adaptive Engine):*
+     * **Kịch bản Trời mưa Sài Gòn:** Tự động lọc thay thế các điểm ngoài trời thành điểm có mái che/bảo tàng/trung tâm thương mại; chuyển đổi phương thức di chuyển sang taxi có mái che.
+     * **Kịch bản Giờ cao điểm (17h00 - 19h00):** Tự động cộng thêm 15-30 phút thời gian đệm di chuyển và ưu tiên giữ các chặng trong cùng 1 quận để tránh kẹt xe.
+  4. *Đồng bộ Lịch trình (Calendar Integration):* Xuất file iCalendar `.ICS` chuẩn RFC 5545 cho phép nhập vào Google Calendar, Apple Calendar, Outlook kèm thông báo nhắc trước 30 phút; kết nối Google Calendar REST API đồng bộ sự kiện vào lịch cá nhân của người dùng.
+  5. *YÊU CẦU TỰ TÍCH HỢP & TEST E2E:*
+     * Kết nối cước xe vào `TransitConnector.jsx` và `RidePickerModal.jsx`.
+     * Tự động đẩy chi phí di chuyển các chặng vào `ExpenseTrackerView.jsx`.
+     * Tự test các nút Kịch bản Thích ứng và Đồng bộ Calendar trên giao diện Web.
+* **Tiêu chí hoàn thành (DoD):** Khoảng cách tính toán có sai số dưới 5%; cước ước tính sát thực tế; chuyển đổi kịch bản thích ứng linh hoạt; file `.ICS` nhập vào điện thoại hiển thị chuẩn xác.
 
 ---
 
 ### 7. ĐOÀN HẢI ĐĂNG — DEVOPS, QA LEAD & THUYẾT TRÌNH DỰ ÁN
 * **Họ và tên:** **Đoàn Hải Đăng**
-* **Mã số sinh viên (MSSV):** `....................................................`
-* **Vai trò chuyên môn:** Kỹ sư Vận hành Hạ tầng (DevOps), Lead Kiểm thử Chất lượng (QA) & Thuyết trình
+* **Vai trò chuyên môn:** DevOps Engineer, QA Lead & Diễn giả Thuyết trình Dự án
 * **Thư mục & File sở hữu chính:**
-  * `docker-compose.yml`, `Dockerfile` (Đóng gói container chuẩn hóa môi trường toàn nhóm)
-  * `CHAY-DEMO.bat`, `run_all.bat`, `run_frontend.bat`, `run_backend.bat` (Bộ script khởi chạy 1-click tiện lợi)
-  * `server/tests/` (Bộ kịch bản kiểm thử tự động toàn diện bằng `pytest` và `httpx`)
-  * `docs/08-testing.md`, `docs/09-deploy.md`, `docs/13-demo-qa.md`, `docs/14-checklist.md` (Tài liệu kiểm thử & báo cáo)
+  * `docker-compose.yml` (Điều phối chạy toàn bộ hệ sinh thái Web)
+  * `client/Dockerfile` & `server/Dockerfile` (Multi-stage build Docker images)
+  * `.github/workflows/ci.yml` (Pipeline CI/CD GitHub Actions tự động hóa)
+  * `server/app/tests/conftest.py` (Cấu hình Pytest Fixtures, Mock TestClient)
+  * `server/app/tests/test_auth.py` (Kiểm thử tự động Auth Service)
+  * `server/app/tests/test_trips.py` (Kiểm thử tự động CRUD Chuyến đi)
+  * `server/app/tests/test_places.py` (Kiểm thử tự động Cache & Dữ liệu Địa điểm)
+  * `server/app/tests/test_ai.py` (Kiểm thử tự động Gemini Structured Schema)
+  * `server/app/tests/test_transit.py` (Kiểm thử tự động Cước xe & Haversine)
+  * `server/app/tests/test_calendar.py` (Kiểm thử tự động Cú pháp iCalendar .ICS)
+  * `CHAY-DEMO.bat`, `run_all.bat`, `run_frontend.bat`, `run_backend.bat` (Hệ thống script 1-Click Execution)
 * **Nhiệm vụ cụ thể:**
-  1. *Đóng gói & Triển khai Cloud:* Viết Dockerfile tối ưu; cấu hình CI/CD tự động build; triển khai web lên Vercel (Frontend), Render (Backend), Supabase (Database).
-  2. *Bộ Kiểm thử Tự động (Automated Testing Suite):* Viết test cases bao phủ các chức năng cốt lõi (Auth, Trips, Gemini Mock, Haversine, Rate Limiting), kiểm thử các trường hợp mất mạng hoặc dữ liệu biên.
-  
-* **Tiêu chuẩn nghiệm thu (Definition of Done - DoD):**
-  - [x] Hệ thống khởi động trơn tru 1-click qua `CHAY-DEMO.bat`.
-  - [x] Bộ test suite `pytest` đạt độ bao phủ > 80%, tất cả test cases đều PASS xanh lá.
-  - [x] Đường link website chạy trực tuyến ổn định 24/7 trên Internet.
-  - [x] Slide thuyết trình và Video demo Full HD sẵn sàng 100% cho buổi bảo vệ đồ án.
+  1. *Hạ tầng Docker Hóa & Triển khai Cloud (DevOps):* Viết `client/Dockerfile` (multi-stage build) và `server/Dockerfile` (Python Uvicorn); viết `docker-compose.yml` cho phép chạy trọn gói cả hệ sinh thái (Frontend + Backend + PostgreSQL) với đúng 1 câu lệnh `docker compose up`; triển khai hệ thống lên Cloud (Frontend: Vercel, Backend: Render, Database: Supabase).
+  2. *Đường ống CI/CD Tự động hóa (`.github/workflows/ci.yml`):* Thiết lập GitHub Actions tự động kích hoạt khi có Pull Request: Kiểm tra format code, build bundle Frontend và chạy bộ kiểm thử Backend.
+  3. *Xây dựng Bộ Mã nguồn Kiểm thử Tự động (Pytest Test Suite):* Viết trọn bộ test cases bao phủ toàn bộ các mô-đun nghiệp vụ trong thư mục `server/app/tests/`; đảm bảo test suite chạy vượt qua 100% với báo cáo độ bao phủ mã nguồn (Coverage Report).
+  4. *Hoàn thiện Báo cáo Kỹ thuật & Tài liệu Đồ án:* Soạn thảo và chuẩn hóa Báo cáo Kỹ thuật Đồ án (Word/PDF) theo quy chuẩn hình thức của Khoa CNTT - ĐHKHTN.
+  5. *Thiết kế Slide Thuyết trình & Video Demo:* Biên tập bộ Slide thuyết trình chuyên nghiệp bằng Tiếng Anh (hoặc Song ngữ); soạn kịch bản thuyết trình và phân bổ câu hỏi phản biện (Q&A) với Giảng viên; quay và dựng Video Demo Full HD (3-5 phút) thuyết minh rõ ràng các tính năng độc đáo của đồ án.
+* **Tiêu chí hoàn thành (DoD):** Docker compose chạy mượt mà; CI/CD pipeline xanh 100%; bộ test cases Pytest pass toàn bộ; Báo cáo, Slide và Video demo đạt chuẩn xuất sắc.
 
 ---
 
