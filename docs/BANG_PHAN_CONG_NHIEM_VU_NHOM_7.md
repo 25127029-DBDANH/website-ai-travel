@@ -11,10 +11,10 @@
 | STT | Thành viên | Vai trò / Chức danh | Mảng phụ trách chính | Sản phẩm bàn giao cốt lõi (Deliverables) |
 | :---: | :--- | :--- | :--- | :--- |
 | **1** | **Diệp Bảo Danh** *(Trưởng nhóm - 25127029)* | **Frontend Lead & System Architect** | Khung 1 Bản đồ Leaflet, Khung 2 Timeline 3 tầng, Chế độ Đi thực tế (Companion Mode), Tích hợp gọi xe 3 app (Grab / Xanh SM / Be) | Source code Map/Timeline/Live View, Điều phối Git & Kiến trúc tổng thể |
-| **2** | **Phạm Gia Hưng** | **Frontend Developer & UI/UX Specialist** | Tab 3 Sổ chi tiêu & Di chuyển, Tab 4 Tổng kết chuyến đi, Xuất Thẻ kỷ niệm Story Card Canvas, Tối ưu Responsive Mobile | Source code ExpenseTracker, TripSummary, StoryCard, Giao diện Mobile |
+| **2** | **Phạm Gia Hưng** | **Frontend Developer & UI/UX Specialist** | Tab 3 Sổ chi tiêu & Di chuyển, Tab 4 Tổng kết chuyến đi, Xuất Thẻ kỷ niệm Story Card Canvas, Form khảo sát 8 tiêu chí, Tối ưu Responsive Mobile | Source code ExpenseTracker, TripSummary, StoryCard, Giao diện Mobile |
 | **3** | **Đỗ Nguyễn An Khang** | **Backend Lead & Authentication Service** | Kiến trúc RESTful API, Xác thực JWT & Google OAuth 2.0, Bộ API quản lý chuyến đi (CRUD Trip), Chia sẻ chuyến đi công khai | Mô-đun Auth, Trip API Controller, Tự tích hợp và test trực tiếp với Frontend |
 | **4** | **Ngô Tấn Đạt** | **Database & Data Engineer** | Thiết kế CSDL PostgreSQL, Bộ đệm địa điểm Cache (TTL 7 ngày), Seed data 30+ địa điểm TP.HCM, Tích hợp Google Places API | Schema SQL, Database Migrations, Script Seed Data, Tự tích hợp dữ liệu với Frontend |
-| **5** | **Lê Hữu Lam** | **AI Engine & Prompt Engineer** | Tích hợp Google Gemini API, Prompt Structured JSON, Khung đàm thoại 4 bước, Logic AI Đổi địa điểm thông minh (Smart Swap) | Mô-đun Gemini Service, Bộ Prompt Template, Tự tích hợp và test trực tiếp với Frontend |
+| **5** | **Lê Hữu Lam** | **AI Engine & Prompt Engineer** | Tích hợp Google Gemini API, Prompt Structured JSON, Động cơ sinh lịch trình tối ưu, Logic AI Đổi địa điểm thông minh (Smart Swap) | Mô-đun Gemini Service, Bộ Prompt Template, Tự tích hợp và test trực tiếp với Frontend |
 | **6** | **Đàng Minh Hạo** | **Backend Developer — Routing & Adaptive** | Thuật toán tính cước xe Grab/XanhSM/Be theo cự ly, Động cơ thích ứng (Kịch bản Trời mưa Sài Gòn & Giờ cao điểm), Xuất lịch .ICS | Mô-đun Transit Calculator, Adaptive Engine, ICS Calendar Exporter, Tự tích hợp FE |
 | **7** | **Đoàn Hải Đăng** | **DevOps, QA Lead & Thuyết trình Dự án** | Docker hóa môi trường, Deploy Cloud (Vercel/Render/Supabase), Bộ test cases & QA pytest, Báo cáo kỹ thuật Word/PDF, Slide & Video Demo | Link Web Live 24/7, Báo cáo hoàn chỉnh, Bộ Slide thuyết trình, Video clip demo |
 
@@ -39,7 +39,7 @@
   1. **Tab 3 (Sổ chi tiêu so với ngân sách):** Hiển thị chi tiết tiền vé tham quan, bữa ăn và **từng chặng xe di chuyển**; tính năng bấm sửa cước xe trực tiếp (*Inline fare editing*); bộ lọc danh mục và biểu đồ tiến độ ngân sách.
   2. **Tab 4 (Giao diện Tổng kết chuyến đi - Trip Summary):** Báo cáo 4 chỉ số KPI quan trọng, cơ cấu chi tiêu 3 nhóm (Hoạt động - Ăn uống - Di chuyển), lịch sử lộ trình từng ngày kèm album ảnh check-in thực tế.
   3. **Xuất Thẻ kỷ niệm (Story Card Canvas):** Lập trình sinh ảnh đồ họa tổng kết chuyến đi (tỷ lệ 9:16 Story / 1:1 Square) cho phép người dùng bấm tải ảnh về máy để chia sẻ mạng xã hội.
-  4. **Form khảo sát 8 tiêu chí & Khung Chatbot đàm thoại 4 bước:** Xây dựng giao diện thu thập nhu cầu du khách tại trang chủ `/`.
+  4. **Form khảo sát 8 tiêu chí chuyên sâu:** Xây dựng giao diện thu thập nhu cầu du khách (số ngày, quận ưu tiên, ngân sách, sở thích, người đi cùng, phương tiện, nhịp độ, ghi chú) tại trang chủ `/` kết nối trực tiếp với AI.
   5. **Tối ưu Responsive di động (Mobile First):** Tinh chỉnh CSS/Tailwind đảm bảo toàn bộ ứng dụng hiển thị hoàn hảo, không bị tràn ngang hay vỡ khung khi du khách thao tác trên điện thoại thông minh ngoài trời.
 * **Tiêu chí hoàn thành (DoD):** Sổ chi tiêu tính toán tiền chính xác; giao diện tổng kết đẹp mắt, tạo cảm xúc; ứng dụng responsive mượt mà trên iPhone/Android.
 
@@ -77,7 +77,7 @@
 ---
 
 ### 5. LÊ HỮU LAM — AI ENGINE & PROMPT SPECIALIST (GEMINI INTEGRATION)
-* **Vị trí cốt lõi:** Tích hợp Google Gemini AI, Kỹ thuật Prompt & Khung đàm thoại.
+* **Vị trí cốt lõi:** Tích hợp Google Gemini AI, Kỹ thuật Prompt & Tối ưu hóa Lịch trình Du lịch TP.HCM.
 * **Nhiệm vụ cụ thể:**
   1. Tích hợp SDK Google Gemini API (`gemini-2.5-flash`): Quản lý an toàn API Key, xử lý Rate Limiting, Retry Logic và Fallback dữ liệu khi mất kết nối mạng.
   2. **Kỹ thuật Prompt Engineering chuyên sâu:**
@@ -85,10 +85,10 @@
      * Cung cấp các ví dụ mẫu (Few-shot learning) về các thói quen sinh hoạt và lịch trình chuẩn tại Sài Gòn.
   3. **Triển khai Gemini Structured Output / Function Calling:**
      * Ràng buộc chặt chẽ Schema JSON đầu ra của Gemini, đảm bảo 100% kết quả trả về là JSON hợp lệ theo đúng cấu trúc giao diện Frontend yêu cầu, không bao giờ bị lỗi format text.
-  4. **Luồng đàm thoại thông minh 4 bước (Multi-turn Chat):** Khảo sát thời gian & nhóm người đi -> Tìm hiểu mức ngân sách -> Khảo sát gu ẩm thực & sở thích cốt lõi -> Đề xuất lịch trình mẫu và chủ động hỏi gợi ý điều chỉnh.
+  4. **Thuật toán AI Phân tích Sở thích & Tối ưu Lịch trình:** Tiếp nhận 8 tiêu chí từ Form khảo sát -> Kết hợp dữ liệu địa điểm bản địa -> Tự động sinh lịch trình chi tiết đa ngày cân đối chi phí và phân bổ thời gian di chuyển.
   5. **Logic AI Đổi địa điểm thông minh (Smart Swap):** Xây dựng hàm prompt nhận lý do muốn đổi điểm từ người dùng và tự động tìm 3-4 địa điểm thay thế tương đương cùng khu vực và chi phí.
-  6. **YÊU CẦU TỰ TÍCH HỢP & TEST:** **Lam chịu trách nhiệm kết nối trực tiếp API Gemini vào Khung Chat (ChatPanel.jsx) và SwapModal.jsx, tự test đàm thoại thời gian thực cho tới khi phản hồi AI hoàn hảo.**
-* **Tiêu chí hoàn thành (DoD):** Gemini sinh lịch trình 100% chuẩn JSON; thời gian phản hồi AI trung bình dưới 3-5 giây; câu trả lời tiếng Việt tự nhiên, am hiểu địa phương.
+  6. **YÊU CẦU TỰ TÍCH HỢP & TEST:** **Lam chịu trách nhiệm kết nối trực tiếp API Gemini vào TripForm và SwapModal.jsx, tự test sinh lịch trình và đổi điểm thông minh cho tới khi dữ liệu trả về hoàn hảo không lỗi.**
+* **Tiêu chí hoàn thành (DoD):** Gemini sinh lịch trình 100% chuẩn JSON; thời gian phản hồi AI trung bình dưới 3-5 giây; gợi ý địa điểm phong phú, am hiểu văn hóa TP.HCM.
 
 ---
 

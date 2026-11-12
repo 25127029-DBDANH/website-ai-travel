@@ -5,21 +5,21 @@
 
 ## 1. YÊU CẦU 1: BẮT BUỘC ĐĂNG NHẬP ĐỂ SỬ DỤNG TIỆN ÍCH
 ### 1.1. Mục tiêu
-Đảm bảo mọi tiện ích thông minh (Chat AI, lập kế hoạch, tương tác bản đồ, xem timeline chi tiết, chia sẻ lịch trình, đồng bộ Google Calendar) đều gắn liền với danh tính người dùng cụ thể. Khách vãng lai (Guest) chỉ xem trang giới thiệu (Landing/Hero Page) và phải đăng nhập/đăng ký để bắt đầu trải nghiệm. Mục đích cốt lõi: AI nhận diện người dùng, ghi nhớ sở thích, tích lũy lịch sử trò chuyện và các chuyến đi cũ để cá nhân hóa chuẩn xác.
+Đảm bảo mọi tiện ích thông minh (Lập kế hoạch bằng AI, tương tác bản đồ, xem timeline chi tiết, chế độ đi thực tế Companion, quản lý sổ chi tiêu, chia sẻ lịch trình, đồng bộ Google Calendar) đều gắn liền với danh tính người dùng cụ thể. Khách vãng lai (Guest) chỉ xem trang giới thiệu (Landing Page) và phải đăng nhập/đăng ký để bắt đầu trải nghiệm. Mục đích cốt lõi: AI nhận diện người dùng, ghi nhớ sở thích, tích lũy lịch sử chuyến đi cũ để cá nhân hóa chuẩn xác.
 
 ### 1.2. Người dùng & Luồng thao tác
-- **Khách (Guest):** Mở website chỉ thấy Landing Page giới thiệu tính năng, review mẫu và nút bấm kêu gọi hành động (CTA) **[Đăng nhập / Đăng ký]**. Không có ô nhập chat hay form tạo lịch trình ở chế độ khách.
+- **Khách (Guest):** Mở website chỉ thấy Landing Page giới thiệu tính năng, review mẫu và nút bấm kêu gọi hành động (CTA) **[Đăng nhập / Đăng ký]**. Không có form tạo lịch trình ở chế độ khách.
 - **Phương thức xác thực:**
   - Đăng nhập bằng tài khoản nội bộ: Username / Password.
   - Đăng nhập một chạm: Google Sign-In (OAuth 2.0).
   - Có tính năng Quên mật khẩu / Đặt lại mật khẩu qua email xác nhận.
 - **Hệ thống xử lý:**
-  - Mọi API nghiệp vụ (`/api/trips/*`, `/api/chat/*`, `/api/places/*`, `/api/calendar/*`) yêu cầu header `Authorization: Bearer <JWT>`. Nếu thiếu hoặc token không hợp lệ, trả về mã lỗi `401 Unauthorized`.
+  - Mọi API nghiệp vụ (`/api/trips/*`, `/api/places/*`, `/api/calendar/*`, `/api/transit/*`) yêu cầu header `Authorization: Bearer <JWT>`. Nếu thiếu hoặc token không hợp lệ, trả về mã lỗi `401 Unauthorized`.
   - Không còn sử dụng cơ chế định danh ẩn danh khách qua `x-session-id` cho các tiện ích lập lịch trình.
 
 ### 1.3. Đầu vào & Đầu ra
 - **Đầu vào:** Thông tin đăng nhập (`username`, `password`) hoặc `google_id_token`.
-- **Đầu ra:** `token` (JWT), `user` profile (ID, tên hiển thị, email), điều hướng thẳng tới màn hình chào đón và bảng nhập yêu cầu.
+- **Đầu ra:** `token` (JWT), `user` profile (ID, tên hiển thị, email), điều hướng thẳng tới màn hình chào đón và form nhập yêu cầu 8 tiêu chí.
 
 ### 1.4. Trường hợp lỗi
 - Nhập sai mật khẩu: Báo lỗi chung *"Tên đăng nhập hoặc mật khẩu không chính xác"* (tránh lộ thông tin tài khoản).
@@ -27,7 +27,7 @@
 
 ### 1.5. Tiêu chí hoàn thành (DoD)
 - Khách không thể truy cập bất kỳ route hoặc API tạo lịch trình nào.
-- 100% chuyến đi và lịch sử chat gắn chặt với `user_id` trong database.
+- 100% chuyến đi và lịch sử sở thích du lịch gắn chặt với `user_id` trong database.
 
 ---
 
@@ -45,40 +45,42 @@ Thiết lập quy trình thu thập thông tin du lịch toàn diện tại TP.H
 7. **Nhịp độ chuyến đi (Pace):** Thư thả (Relaxed - ít điểm, nghỉ ngơi nhiều), Cân bằng (Moderate), Dày đặc (Packed/Fast-paced - khám phá tối đa).
 8. **Ghi chú đặc biệt (Special notes):** Ăn chay, kiêng cay, không đi bộ xa, tránh nơi đông người, có trẻ em...
 
-### 2.3. Luồng đàm thoại 4 bước (Interactive Planning Flow)
-1. **Bước 1 (Submit Form):** Người dùng nhập form 8 tiêu chí và gửi.
-2. **Bước 2 (AI Suggestion):** AI phân tích và đưa ra **gợi ý định hướng cụ thể** (Concept & Highlights), ví dụ:
-   - *"Với 2 ngày tại Quận 1 và Quận 3 cho nhóm bạn thích ẩm thực, tôi đề xuất: Ngày 1 tập trung văn hóa và ẩm thực di sản (Bảo tàng Chứng tích Chiến tranh, Phở Pasteur, Cà phê chung cư Nguyễn Huệ); Ngày 2 trải nghiệm Chợ Bến Thành và phố ẩm thực đêm Tân Định. Bạn có đồng ý với định hướng này không?"*
-   - Kèm 2 nút bấm: `[Đồng ý & Tạo lịch trình chi tiết]` và `[Cần chỉnh sửa lại]`.
-3. **Bước 3 (User Confirmation):** Người dùng bấm **"Đồng ý"** (hoặc gửi phản hồi tinh chỉnh).
-4. **Bước 4 (Detailed Itinerary Generation):** AI kích hoạt tạo lịch trình chi tiết theo từng khung giờ (08:30 - 11:30, 12:00 - 13:30...), kết hợp dữ liệu Google Places, bản đồ và tính toán cước di chuyển.
+### 2.3. Quy trình Khởi tạo & Tương tác Lịch trình Thông minh
+1. **Bước 1 (Submit Form 8 tiêu chí):** Người dùng nhập form 8 tiêu chí trên giao diện chính và gửi.
+2. **Bước 2 (AI Phân tích & Gợi ý Concept):** AI phân tích sở thích, ngân sách và đưa ra tóm tắt định hướng (Concept, điểm nhấn ẩm thực/di sản).
+3. **Bước 3 (Người dùng Xác nhận):** Người dùng bấm duyệt xác nhận hoặc tinh chỉnh nhanh tiêu chí.
+4. **Bước 4 (Sinh Lịch trình Chi tiết & Đưa vào Dashboard 4 Chế độ):** AI kích hoạt tạo lịch trình chi tiết theo từng khung giờ (08:30 - 11:30, 12:00 - 13:30...), kết hợp dữ liệu Google Places, hiển thị trực quan lên 4 Chế độ làm việc (Lịch trình Timeline, Đi thực tế, Sổ chi tiêu, Tổng kết) thông qua giao diện tương tác trực tiếp (Direct UI Manipulation).
 
-### 2.4. Xử lý Đổi địa điểm (Swap Place)
-- Trên mỗi thẻ địa điểm trong lịch trình có nút **[🔄 Đổi địa điểm này]**.
+### 2.4. Xử lý Đổi địa điểm Thông minh (AI Smart Swap)
+- Trên mỗi thẻ địa điểm trong Lịch trình Khung 2 có nút **[🔄 Đổi địa điểm]**.
 - Khi bấm nút:
   - Hệ thống gửi yêu cầu đổi địa điểm tới AI.
-  - AI tìm kiếm trong cùng khu vực/quận và đưa ra **2 - 3 lựa chọn thay thế tương đương** cùng loại hình và ngân sách (kèm ảnh, rating, lý do thay thế).
+  - AI tìm kiếm trong cùng khu vực/quận và đưa ra **2 - 3 lựa chọn thay thế tương đương** cùng loại hình và ngân sách (kèm ảnh, rating, lý do thay thế) trong cửa sổ Modal trực quan.
   - Người dùng bấm chọn 1 phương án -> AI tự động cập nhật lại lịch trình, tính lại lộ trình di chuyển và ngân sách tổng thể.
+  - *Lưu ý logic:* Khi một chặng đã hoàn tất check-in (`visited === true`), nút Đổi địa điểm được **khóa hoàn toàn** để đảm bảo tính logic thực tế.
 
 ### 2.5. Tiêu chí hoàn thành (DoD)
 - Form nhập đầy đủ 8 trường thông tin đặc thù TP.HCM.
-- AI tuân thủ luồng gợi ý định hướng trước khi bung lịch trình chi tiết.
-- Đổi địa điểm thành công với 2-3 gợi ý cụ thể, không làm gãy cấu trúc lịch trình.
+- AI sinh lịch trình chi tiết đúng cấu trúc và đưa thẳng vào Dashboard 4 chế độ.
+- Đổi địa điểm thành công với 2-3 gợi ý trực quan qua Modal, không làm gãy cấu trúc lịch trình.
 
 ---
 
-## 3. YÊU CẦU 3: BẢN ĐỒ TƯƠNG TÁC GỬI KÈM TRONG CUỘC TRÒ CHUYỆN / LỊCH TRÌNH
+## 3. YÊU CẦU 3: BẢN ĐỒ TƯƠNG TÁC KHUNG 1 SONG SONG LỊCH TRÌNH KHUNG 2
 ### 3.1. Mục tiêu
-Trực quan hóa không gian địa lý, hiển thị chính xác vị trí các điểm đến tại TP.HCM trên bản đồ số, nhúng bản đồ trực tiếp vào khung chat và màn hình lịch trình.
+Trực quan hóa không gian địa lý, hiển thị chính xác vị trí các điểm đến tại TP.HCM trên bản đồ số tương tác (Leaflet/OpenStreetMap), hiển thị song song đồng thời với Lịch trình Timeline mà không cần cuộn trang hay chuyển qua lại.
 
 ### 3.2. Chức năng cụ thể
-- **Khám phá trên bản đồ:** Người dùng có thể click vào từng điểm trên bản đồ để xem Pop-up thông tin: Tên quán/địa danh, địa chỉ thật, đánh giá sao, hình ảnh và khung giờ mở cửa.
-- **Bản đồ gửi kèm trong cuộc trò chuyện (In-chat Map Card):** Khi AI phản hồi gợi ý hoặc cập nhật lịch trình, AI gửi kèm một khối bản đồ thu nhỏ (Mini Map Card) hiển thị các Marker được đánh số thứ tự (1, 2, 3...) kết nối bằng đường nối lộ trình di chuyển.
+- **Bố cục 2 Khung hình Song song:**
+  - *Khung 1 (Bên trái):* Bản đồ Leaflet toàn cảnh hiển thị các Marker được đánh số thứ tự (1, 2, 3...) kết nối bằng đường polyline thể hiện lộ trình di chuyển trong ngày.
+  - *Khung 2 (Bên phải):* Lịch trình Timeline chi tiết theo cấu trúc thẻ 3 tầng khoa học.
+- **Tương tác trên bản đồ:** Người dùng có thể click vào từng Marker để xem Pop-up thông tin: Tên quán/địa danh, địa chỉ thật, đánh giá sao, hình ảnh và khung giờ mở cửa.
+- **Cập nhật trạng thái Ghé thăm thời gian thực:** Khi người dùng hoàn thành check-in một điểm, Marker trên bản đồ tự động chuyển từ số thứ tự thành **dấu tích xanh `✓`**.
 - **Đồng bộ hai chiều (Bi-directional Sync):** Click vào thẻ địa điểm trên Timeline thì bản đồ tự động Pan/Zoom tới Marker tương ứng; ngược lại, click vào Marker trên bản đồ thì Timeline tự cuộn đến đúng thẻ.
 
 ### 3.3. Tiêu chí hoàn thành (DoD)
-- 100% địa điểm trong lịch trình có tọa độ (lat, lng) hiển thị chính xác trên Google Maps.
-- Khung chat hiển thị được bản đồ lộ trình trực quan.
+- 100% địa điểm trong lịch trình có tọa độ (lat, lng) hiển thị chính xác trên bản đồ.
+- Bản đồ tương tác mượt mà, đổi pin sang dấu tích xanh `✓` khi đã check-in.
 
 ---
 

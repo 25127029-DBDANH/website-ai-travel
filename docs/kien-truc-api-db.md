@@ -2,16 +2,16 @@
 
 ## 3.1. Mô hình Danh tính & Bảo mật Mới
 - Không còn hỗ trợ chế độ Khách thao tác trên các tiện ích tạo chuyến.
-- Mọi request tạo chuyến, chat, xem bản đồ, đồng bộ lịch bắt buộc phải có header:
+- Mọi request tạo chuyến, xem bản đồ, đồng bộ lịch bắt buộc phải có header:
   `Authorization: Bearer <JWT>`
 - Token JWT chứa `sub: user_id` và được dependency `get_current_user` của FastAPI xác thực tính toàn vẹn.
 
-## 3.2. Bảng Danh sách API Bổ sung theo 7 Yêu cầu mới
+## 3.2. Bảng Danh sách API Bổ sung theo Kiến trúc v2 Hoàn thiện
 
-| Method | Endpoint | Chức năng mới | Input | Output |
+| Method | Endpoint | Chức năng | Input | Output |
 |---|---|---|---|---|
-| `POST` | `/api/trips` | Tạo chuyến đi với form 8 trường | `{ days, districts, budget, preferences, group_size, transport, pace, notes }` | `{ trip_id, status: 'draft' }` |
-| `POST` | `/api/trips/:id/chat` | Đàm thoại 4 bước & Đổi địa điểm | `{ message, action: 'suggest' \| 'confirm' \| 'swap' }` | `{ reply, step, quick_replies, map_card, updated_itinerary }` |
+| `POST` | `/api/trips` | Tạo chuyến đi với form 8 trường | `{ days, districts, budget, preferences, group_size, transport, pace, notes }` | `{ trip_id, status: 'draft', itinerary: [...] }` |
+| `POST` | `/api/trips/:id/swap` | Đổi địa điểm thông minh (AI Smart Swap) | `{ stop_id, reason?: string }` | `{ alternatives: [...], updated_itinerary }` |
 | `POST` | `/api/trips/:id/contingency` | Kích hoạt phương án dự phòng thời tiết/kẹt xe | `{ reason: 'rain' \| 'traffic' \| 'closed' \| 'budget' }` | `{ backup_plan, updated_itinerary, message }` |
 | `POST` | `/api/trips/:id/review` | Yêu cầu AI chấm điểm & đánh giá lịch trình | Không | `{ score, strengths, warnings, insider_tips }` |
 | `POST` | `/api/trips/:id/calendar` | Đẩy lịch trình lên Google Calendar | `{ start_date }` | `{ success: true, calendar_link, synced_events }` |

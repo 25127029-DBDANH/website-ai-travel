@@ -1,4 +1,5 @@
-# 🗺️ USER FLOW: HCMC AI TRAVEL PLANNER (7 YÊU CẦU MỚI)
+# 🗺️ USER FLOW: HCMC AI TRAVEL PLANNER (SÀI GÒN GUIDE)
+## QUY TRÌNH TRẢI NGHIỆM NGƯỜI DÙNG KHÉP KÍN 6 GIAI ĐOẠN
 
 ---
 
@@ -20,82 +21,90 @@ flowchart TD
 
     %% Người dùng mới
     CheckReturning -- Người dùng mới --> WelcomeNew[Lời chào thành viên mới]
-    WelcomeNew --> EmptyForm[Bảng nhập yêu cầu 8 trường trống]
+    WelcomeNew --> EmptyForm[Form nhập yêu cầu 8 tiêu chí chuẩn]
 
     %% Người dùng cũ
     CheckReturning -- Người dùng cũ quay lại --> WelcomeBack["Chào mừng trở lại!"\nHiển thị lịch sử cũ]
     WelcomeBack --> PreFilledForm[Form 8 trường ĐIỀN SẴN sở thích cũ]
 
-    %% Luồng tạo lịch trình 4 bước
+    %% Luồng AI tạo lịch trình
     EmptyForm --> FillForm[Nhập/Chỉnh sửa 8 tiêu chí TP.HCM]
     PreFilledForm --> FillForm
-    FillForm --> SubmitForm[Bấm 'Lên kế hoạch với AI']
+    FillForm --> SubmitForm[Bấm 'Tạo lịch trình AI Sài Gòn ngay']
 
-    SubmitForm --> Step2AI[BƯỚC 2: AI đưa GỢI Ý ĐỊNH HƯỚNG CỤ THỂ\nConcept, Điểm nhấn, Phân bổ khu vực]
-    Step2AI --> UserReviewChoice{Người dùng đồng ý?}
+    SubmitForm --> AIEngine[AI Engine phân tích sở thích & ngân sách\nTruy vấn Places Data + Tọa độ + Cước xe 3 hãng]
+    AIEngine --> MainDashboard[Chuyển hướng vào Dashboard 4 Chế Độ Tương Tác]
 
-    UserReviewChoice -- Cần chỉnh lại --> AdjustRequest[Gõ yêu cầu chỉnh sửa trong Chat]
-    AdjustRequest --> Step2AI
+    %% 4 Chế độ làm việc
+    MainDashboard --> Tab1[TAB 1: LỊCH TRÌNH TIMELINE\nKhung 1 Bản đồ Leaflet song song Khung 2 Timeline 3 tầng]
+    MainDashboard --> Tab2[TAB 2: ĐI THỰC TẾ COMPANION\nHero chỉ chặng, Chỉ đường, Đặt xe Grab/Xanh/Be, Check-in]
+    MainDashboard --> Tab3[TAB 3: SỔ CHI TIÊU & DI CHUYỂN\nVé, Ẩm thực & Cước xe từng chặng, Sửa tiền inline]
+    MainDashboard --> Tab4[TAB 4: TỔNG KẾT CHUYẾN ĐI\n4 KPIs, Cơ cấu tiền, Album ảnh, Xuất Story Card Canvas]
 
-    UserReviewChoice -- Đồng ý --> Step4Detailed[BƯỚC 4: AI sinh LỊCH TRÌNH CHI TIẾT\nTimeline từng giờ + Bản đồ + Cước Grab Haversine]
+    %% Tương tác Tab 1
+    Tab1 --> ActionAccept[Bấm 'Accept' -> Chốt điểm tham quan]
+    Tab1 --> ActionSwap{Muốn đổi địa điểm?}
+    ActionSwap -- Có --> ClickSwap[Bấm 'Đổi địa điểm' -> Mở Modal Smart Swap]
+    ClickSwap --> SelectSwap[Chọn 1 trong 3-4 điểm thay thế tương đương]
+    SelectSwap --> Tab1
 
-    %% Tương tác sau khi có lịch trình
-    Step4Detailed --> MainWorkspace[Màn hình Workspace Lịch trình + Chat + Bản đồ]
+    Tab1 --> ActionContingency{Thời tiết mưa / Kẹt xe?}
+    ActionContingency -- Có --> ClickContingency[Bấm 'Trời mưa Sài Gòn' / 'Giờ cao điểm']
+    ClickContingency --> AIAdapt[AI tự động đổi sang điểm có mái che / cộng đệm +20p]
+    AIAdapt --> Tab1
 
-    MainWorkspace --> ActionSwap{Người dùng muốn đổi điểm?}
-    ActionSwap -- Có --> ClickSwap[Bấm 'Đổi địa điểm này']
-    ClickSwap --> AISwapOptions[AI đưa 2-3 địa điểm thay thế tương đương]
-    AISwapOptions --> SelectOption[Người dùng chọn 1 phương án]
-    SelectOption --> Step4Detailed
+    %% Tương tác Tab 2
+    Tab2 --> ActionRide[Bấm 'Đặt xe di chuyển' -> Chọn Grab / Xanh SM / Be mở app]
+    Tab2 --> ActionCheckin[Bấm 'Chụp ảnh Check-in' -> Đánh dấu ✓ hoàn thành chặng]
+    ActionCheckin --> SyncVisited[Bản đồ Khung 1 đổi pin thành tích xanh ✓ & Khóa nút đổi điểm]
+    SyncVisited --> Tab2
+    Tab2 --> ActionFinish[Bấm 'Hoàn thành chuyến đi']
+    ActionFinish --> Tab4
 
-    ActionSwap -- Không --> ActionContingency{Gặp sự cố / Trời mưa?}
-    ActionContingency -- Có --> ClickContingency[Bấm 'Trời mưa' / 'Kẹt xe' / 'Đổi chỗ']
-    ClickContingency --> AIContingency[AI kích hoạt Kịch bản dự phòng\nThay điểm trong nhà, né kẹt xe]
-    AIContingency --> Step4Detailed
-
-    ActionContingency -- Không --> ActionReview{Xem đánh giá AI?}
-    ActionReview -- Có --> ClickReview[Bấm 'AI Đánh giá lịch trình']
-    ClickReview --> ShowReview[AI chấm điểm & đưa Insider Tips bản địa]
-    ShowReview --> MainWorkspace
-
-    ActionReview -- Không --> ActionCalendar{Đồng bộ Google Calendar?}
-    ActionCalendar -- Có --> ClickCalendar[Bấm 'Đồng bộ Google Calendar']
-    ClickCalendar --> OAuthCalendar{Đã cấp quyền Calendar?}
-    OAuthCalendar -- Chưa --> GrantPerm[Cấp quyền Google Calendar Scope]
-    GrantPerm --> PushCalendar[Tạo sự kiện chi tiết lên Google Calendar]
-    OAuthCalendar -- Rồi --> PushCalendar
-    PushCalendar --> CalendarSuccess[Thông báo đồng bộ thành công + Link xem Calendar]
-    CalendarSuccess --> MainWorkspace
-
-    ActionCalendar -- Không --> ActionShare[Bấm 'Chia sẻ' -> Lấy link chỉ xem /s/:token]
+    %% Tương tác Tab 3 & Tab 4
+    Tab3 --> ActionEditFare[Nhấp số tiền cước xe -> Tự điền cước thực chi lưu vào sổ]
+    Tab4 --> ActionExportCard[Bấm 'Xuất Thẻ ảnh kỷ niệm' -> Tải ảnh Story Card 9:16]
+    Tab1 --> ActionCalendar[Bấm 'Đồng bộ Google Calendar' hoặc tải file .ICS]
+    Tab1 --> ActionShare[Bấm 'Chia sẻ' -> Tạo liên kết công khai /s/:token]
 ```
 
 ---
 
-## 2. MÔ TẢ CHI TIẾT TỪNG GIAI ĐOẠN
+## 2. MÔ TẢ CHI TIẾT TỪNG GIAI ĐOẠN TRẢI NGHIỆM
 
-### Giai đoạn 1: Tiếp cận & Xác thực (Authentication Gate)
-- **Khách truy cập:** Chỉ thấy giao diện giới thiệu (Hero banner, tính năng nổi bật, phản hồi mẫu). Mọi thao tác tạo lịch trình đều kích hoạt modal yêu cầu đăng nhập.
-- **Xác thực:** Người dùng chọn đăng nhập bằng tài khoản hoặc Google. Sau khi có JWT, ứng dụng tự động kiểm tra số lượng chuyến đi cũ.
+### Giai đoạn 1: Tiếp cận & Xác thực Danh tính (Authentication Gate)
+- **Khách truy cập:** Xem giao diện giới thiệu Landing Page (Hero 3D, danh mục điểm đến, review). Khách đăng nhập qua tài khoản hoặc Google OAuth 2.0.
+- **Xác thực an toàn:** Hệ thống cấp phát JWT Token và nạp thông tin người dùng.
 
-### Giai đoạn 2: Tiếp nhận yêu cầu (8 tiêu chí TP.HCM)
-- **Người dùng mới:** Tiếp nhận form trống, có placeholder hướng dẫn rõ ràng.
-- **Người dùng cũ:** Hệ thống tự động nạp từ CSDL các thông tin quen thuộc (Quận yêu thích, phương tiện hay đi, nhịp độ chuyến đi, số người) vào form. Người dùng chỉ cần duyệt nhanh.
+### Giai đoạn 2: Khảo sát Nhu cầu Du lịch (8 Tiêu chí Đặc thù TP.HCM)
+- Người dùng tương tác trực tiếp với **Form khảo sát thông minh**:
+  1. Số ngày (1 - 14 ngày)
+  2. Khu vực / Quận ưu tiên tại TP.HCM
+  3. Ngân sách dự trù (VND)
+  4. Sở thích cốt lõi (ẩm thực đường phố, di tích lịch sử, cafe specialty, mua sắm...)
+  5. Đối tượng đi cùng (Solo, Cặp đôi, Nhóm bạn, Gia đình)
+  6. Phương tiện di chuyển ưu tiên
+  7. Nhịp độ chuyến đi (Thong thả, Cân bằng, Năng động)
+  8. Ghi chú cá nhân đặc biệt.
+- **Người dùng cũ:** Hệ thống tự động điền sẵn (pre-fill) các sở thích quen thuộc từ chuyến trước.
 
-### Giai đoạn 3: Luồng tương tác AI 4 bước
-- Thay vì sinh ngay lịch trình 100% chi tiết dễ gây sai lệch ý muốn, AI trước tiên đưa ra **bản tóm tắt định hướng (Trip Concept)** để người dùng xác nhận.
-- Khi người dùng đồng ý, AI mới tiến hành truy vấn Google Places và ghép nối lộ trình chi tiết.
+### Giai đoạn 3: AI Engine Tối ưu hóa & Đưa vào Dashboard
+- Người dùng bấm *"Tạo lịch trình AI Sài Gòn ngay"*, AI Engine (Google Gemini 2.5 Flash) kết hợp thuật toán Haversine và cơ sở dữ liệu địa điểm để tính toán lộ trình tối ưu nhất.
+- Hệ thống điều hướng tức thì vào **Màn hình Chuyến đi (`/trip/:id`)** với **4 Chế độ Trải nghiệm** trực quan mà không cần đàm thoại qua khung lịch trình gõ chữ.
 
-### Giai đoạn 4: Vận hành & Dự phòng thông minh
-- Khung nhìn chia đôi (Split-View): Bên trái là đàm thoại AI có nhúng bản đồ nhỏ; bên phải là Timeline dọc và Google Maps toàn cảnh.
-- Xử lý đổi địa điểm mượt mà với 2-3 gợi ý cụ thể.
-- Kịch bản thời tiết (mưa/kẹt xe) giúp thay đổi lộ trình tức thì chỉ bằng một thao tác chạm.
+### Giai đoạn 4: Tinh chỉnh Lịch trình Trực quan (Tab 1: Lịch trình Timeline)
+- **Bố cục 2 Khung hình Song song:**
+  - *Khung 1 (Bản đồ tương tác):* Bản đồ Leaflet vẽ lộ trình các chặng [1, 2, 3, 4] trong ngày.
+  - *Khung 2 (Lịch trình 3 tầng):* Hiển thị thời gian biểu, tên địa điểm không bao giờ bị đè chữ, nút *Accept* chốt điểm, và nút *Đổi địa điểm (AI Smart Swap)* mở Modal chọn 3-4 điểm thay thế.
+- **Kịch bản thích ứng:** Bấm nút *[Trời mưa Sài Gòn]* hoặc *[Giờ cao điểm]* để AI tự động chuyển các điểm ngoài trời sang điểm trong nhà có mái che hoặc cộng thời gian đệm kẹt xe.
 
-### Giai đoạn 5: Đóng gói & Lan tỏa giá trị (Calendar & Share)
-- Đưa toàn bộ các chặng đi vào Google Calendar hoặc tải file `.ICS` để nhận thông báo nhắc nhở tự động trên điện thoại.
-- Yêu cầu AI chấm điểm chuyên gia và xuất link chia sẻ cho bạn bè cùng xem.
+### Giai đoạn 5: Đồng hành Thực địa Ngoài đường (Tab 2: Chế độ Đi thực tế Companion)
+- **Thẻ Hero:** Chỉ đường đến chặng kế tiếp, khoảng cách và thời lượng.
+- **Gọi xe công nghệ 3 hãng:** Bấm nút mở Modal hiển thị cước ước tính và deep-link mở thẳng ứng dụng **Grab**, **Xanh SM** (xe điện VinFast), hoặc **Be**.
+- **Check-in chụp ảnh:** Du khách bấm chụp ảnh tại điểm đến -> Chặng chuyển sang trạng thái `[✓ Đã hoàn thành]`, Bản đồ Khung 1 tự động đổi pin thành dấu tích xanh `✓`, và nút đổi điểm bị khóa logic.
 
-### Giai đoạn 6: Trải nghiệm Thực tế, Quản lý Chi tiêu & Kỷ niệm (On-Trip Companion & Post-Trip Delight)
-- **Tab 2 (Chế độ Đi thực tế Companion):** Du khách mở web khi đang đi ngoài đường. Thẻ Hero tự động chỉ điểm đến tiếp theo kèm khoảng cách. Bấm nút *Đặt xe di chuyển* để chọn giữa 3 hãng **Grab / Xanh SM / Be**, mở thẳng app với giá cước ước tính. Bấm *Check-in* chụp ảnh lưu niệm -> chặng chuyển thành `[✓ Đã hoàn thành]`, bản đồ đổi sang pin `✓`.
-- **Tab 3 (Sổ chi tiêu & Di chuyển):** Đối chiếu thực chi vé tham quan, bữa ăn và từng chặng xe; cho phép du khách tự do nhấp sửa cước xe thực tế đã trả (inline editing).
-- **Tab 4 (Tổng kết chuyến đi):** Bấm nút *Hoàn thành chuyến đi*, hệ thống chuyển sang dashboard tổng kết 4 chỉ số KPI, cơ cấu 3 nhóm chi phí, album ảnh check-in thực tế và công cụ xuất **Thẻ ảnh kỷ niệm Story Card Canvas** sẵn sàng đăng mạng xã hội.
+### Giai đoạn 6: Quản lý Chi tiêu, Đóng gói Kỷ niệm & Lan tỏa (Tab 3 & Tab 4)
+- **Tab 3 (Sổ chi tiêu):** Quản lý chi phí vé, ẩm thực và **cước xe từng chặng**, cho phép khách tự do nhấp sửa cước xe thực chi trực tiếp (*inline editing*).
+- **Tab 4 (Tổng kết chuyến đi):** Thống kê 4 KPI, phân bổ 3 nhóm tiền, album ảnh check-in thực tế.
+- **Xuất Thẻ ảnh kỷ niệm (Story Card):** Tự động vẽ đồ họa Canvas tổng kết chuyến đi (tỷ lệ 9:16) để tải về máy chia sẻ Facebook/Instagram.
+- **Đồng bộ lịch:** Tải file `.ICS` hoặc đẩy lịch lên Google Calendar.

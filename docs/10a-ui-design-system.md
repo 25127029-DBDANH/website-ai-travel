@@ -9,7 +9,7 @@
 
 | Token | Light Mode | Dark Mode | Sử dụng |
 | --- | --- | --- | --- |
-| Primary | `#2563EB` (Blue 600) | `#60A5FA` (Blue 400) | Nút chính, link, focus ring, user chat bubble |
+| Primary | `#2563EB` (Blue 600) | `#60A5FA` (Blue 400) | Nút chính, link, focus ring, thẻ lịch trình active |
 | Accent | `#F97316` (Orange 500) | `#FB923C` (Orange 400) | CTA nổi bật ("Plan My Trip"), highlight giá tiền |
 | Background | `#FFFFFF` | `#111827` (Gray 900) | Nền trang |
 | Surface | `#F9FAFB` (Gray 50) | `#1F2937` (Gray 800) | Nền card, panel |
@@ -42,7 +42,7 @@
 | Heading H2 | Inter | 700 | 1.5rem (24px) | Tiêu đề section |
 | Heading H3 | Inter | 600 (Semi) | 1.25rem (20px) | Tiêu đề card |
 | Body | Inter | 400 (Regular) | 1rem (16px) | Nội dung, `line-height: 1.6` |
-| Chat message | Inter | 400 | 0.9375rem (15px) | Nhỏ hơn body, tight hơn trong chat |
+| Timeline desc | Inter | 400 | 0.875rem (14px) | Mô tả chi tiết địa điểm |
 | Caption / Label | Inter | 500 (Medium) | 0.75rem (12px) | Timestamp, label phụ |
 | Cost / Data | JetBrains Mono | 500 | 0.875rem (14px) | Giá tiền VND, rating |
 
@@ -56,7 +56,7 @@ Spacing scale (Tailwind default):
 
 Border radius:
   Card:          12px (rounded-xl)
-  Chat bubble:   18px (rounded-2xl)
+  Timeline card: 16px (rounded-2xl)
   Button:        8px  (rounded-lg)
   Input field:   8px  (rounded-lg)
   Tag/Chip:      20px (rounded-full)

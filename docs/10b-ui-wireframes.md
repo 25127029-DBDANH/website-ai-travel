@@ -14,7 +14,7 @@
 │                                                                        │
 │    ┌───────────────────────────┐    ┌───────────────────────────────┐  │
 │    │  🔐 Đăng nhập để sử dụng  │    │  ✨ 7 Tính năng Đột phá       │  │
-│    │  Trải nghiệm Chat AI,     │    │  • Lịch trình chuẩn từng giờ  │  │
+│    │  Trực quan 4 Chế độ,       │    │  • Lịch trình chuẩn từng giờ  │  │
 │    │  Lịch trình bản đồ,       │    │  • Đổi địa điểm linh hoạt     │  │
 │    │  Đồng bộ Google Calendar! │    │  • Dự phòng khi trời mưa      │  │
 │    │  [ 👉 Bắt đầu ngay ]      │    │  • Đồng bộ Google Calendar    │  │
@@ -58,26 +58,26 @@
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Màn hình 4: Workspace Lịch trình Chi tiết, Bản đồ & Google Calendar
-```
+## Màn hình 4: Dashboard 4 Chế Độ Trải Nghiệm (2 Khung hình Song song)
+`
 ┌────────────────────────────────────────────────────────────────────────┐
-│ 📍 HCMC Travel AI            [🌧️ Đổi điểm vì mưa] [⭐ AI Đánh giá] [📅 Calendar]│
+│ 🧭 Sài Gòn Guide — TP. Hồ Chí Minh            [🌧️ Trời mưa] [⚠️ Giờ cao điểm]│
+│ [Khám phá Sài Gòn 3 ngày]  ·  3 ngày  ·  5.000.000 đ                   │
+├────────────────────────────────────────────────────────────────────────┤
+│ 🔵 1. Lịch trình Timeline  🟢 2. Đi thực tế  🟠 3. Chi tiêu  🟣 4. Tổng kết │
 ├───────────────────────────────────┬────────────────────────────────────┤
-│ 💬 CHAT VỚI TRỢ LÝ AI             │ 📋 TIMELINE & BẢN ĐỒ TƯƠNG TÁC     │
-│                                   │                                    │
-│ 🤖 Lịch trình Day 1 của bạn đã sẵn│ ┌─ Google Maps tương tác ────────┐ │
-│    sàng! Dưới đây là bản đồ lộ    │ │ [1. Dinh Độc Lập] -> [2. Phở]  │ │
-│    trình tóm tắt:                 │ └────────────────────────────────┘ │
-│ ┌─ [In-chat Map Card] ──────────┐ │                                    │
-│ │ [Bản đồ mini 3 điểm chặng]    │ │ ● 08:30: 🏛️ Dinh Độc Lập         │
-│ └───────────────────────────────┘ │   ⭐ 4.6 · ₫40,000 · Q.1           │
-│                                   │   [🔄 Đổi địa điểm này]            │
-│ 👤 Swap quán ăn trưa sang món bún │                                    │
-│ 🤖 Dưới đây là 3 lựa chọn đổi:   │ ● 12:00: 🍜 Phở Hòa Pasteur        │
-│    1. Bún bò Gánh Q.1             │   ⭐ 4.4 · ₫75,000 · Q.3           │
-│    2. Bún mọc Thanh Mai Q.1       │   [🔄 Đổi địa điểm này]            │
-│    [Chọn số 1] [Chọn số 2]        │                                    │
-│                                   │ 💰 Ngân sách: ₫1.85M / ₫3M (62%)   │
-│ [ Nhập tin nhắn...           ▶ ]  │ [ 🔗 Chia sẻ ]  [ 📅 Đẩy lên Cal ] │
+│ 🗺️ KHUNG 1: BẢN ĐỒ TƯƠNG TÁC       │ 📋 KHUNG 2: LỊCH TRÌNH 3 TẦNG     │
+│ ┌─ Leaflet Maps (WGS84) ────────┐ │                                    │
+│ │ [✓ Dinh Độc Lập] -> [2. Phở]   │ │ ┌─ Chặng 1: 08:30 - 10:15 ─── ₫65k─┐
+│ │ (Marker đổi tích xanh khi đi)  │ │ │ Dinh Độc Lập (Quận 1) (100% width)│
+│ │                                │ │ │ Di tích lịch sử kiến trúc đặc sắc│
+│ │                                │ │ │ [✓ Đã hoàn tất] [Xem chi tiết]    │
+│ └────────────────────────────────┘ │ └──────────────────────────────────┘
+│                                   │ ┌─ Chặng 2: 12:00 - 13:30 ─── ₫95k─┐
+│                                   │ │ Phở Hoa Pasteur (Quận 3)         │
+│                                   │ │ Ẩm thực truyền thống lâu đời     │
+│                                   │ │ [Accept Chốt] [🔄 Đổi điểm]      │
+│                                   │ └──────────────────────────────────┘
+│ 💰 Ngân sách: ₫991,000 / ₫5,000,000│ [ 🔗 Chia sẻ ]  [ 📅 Đồng bộ Cal ] │
 └───────────────────────────────────┴────────────────────────────────────┘
-```
+`
