@@ -219,8 +219,7 @@ docker compose up --build
 * **Nhiệm vụ cụ thể:**
   1. *Đóng gói & Triển khai Cloud:* Viết Dockerfile tối ưu; cấu hình CI/CD tự động build; triển khai web lên Vercel (Frontend), Render (Backend), Supabase (Database).
   2. *Bộ Kiểm thử Tự động (Automated Testing Suite):* Viết test cases bao phủ các chức năng cốt lõi (Auth, Trips, Gemini Mock, Haversine, Rate Limiting), kiểm thử các trường hợp mất mạng hoặc dữ liệu biên.
-  3. *Báo cáo Đồ án & Hồ sơ Nộp bài:* Soạn thảo Báo cáo kỹ thuật (Word/PDF) theo cấu trúc chuẩn của Khoa CNTT - HCMUS; tổng hợp bảng đối chiếu WBS.
-  4. *Slide Thuyết trình & Video Demo Dự phòng:* Thiết kế slide trình diễn chuyên nghiệp bằng Tiếng Anh (hoặc Song ngữ Anh - Việt); quay và biên tập Video Demo Full HD (3 - 5 phút) có thuyết minh rõ ràng đề phòng sự cố mạng khi bảo vệ đồ án trước hội đồng.
+  
 * **Tiêu chuẩn nghiệm thu (Definition of Done - DoD):**
   - [x] Hệ thống khởi động trơn tru 1-click qua `CHAY-DEMO.bat`.
   - [x] Bộ test suite `pytest` đạt độ bao phủ > 80%, tất cả test cases đều PASS xanh lá.
