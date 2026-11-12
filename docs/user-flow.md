@@ -92,5 +92,10 @@ flowchart TD
 - Kịch bản thời tiết (mưa/kẹt xe) giúp thay đổi lộ trình tức thì chỉ bằng một thao tác chạm.
 
 ### Giai đoạn 5: Đóng gói & Lan tỏa giá trị (Calendar & Share)
-- Đưa toàn bộ các chặng đi vào Google Calendar để nhận thông báo nhắc nhở tự động trên điện thoại.
+- Đưa toàn bộ các chặng đi vào Google Calendar hoặc tải file `.ICS` để nhận thông báo nhắc nhở tự động trên điện thoại.
 - Yêu cầu AI chấm điểm chuyên gia và xuất link chia sẻ cho bạn bè cùng xem.
+
+### Giai đoạn 6: Trải nghiệm Thực tế, Quản lý Chi tiêu & Kỷ niệm (On-Trip Companion & Post-Trip Delight)
+- **Tab 2 (Chế độ Đi thực tế Companion):** Du khách mở web khi đang đi ngoài đường. Thẻ Hero tự động chỉ điểm đến tiếp theo kèm khoảng cách. Bấm nút *Đặt xe di chuyển* để chọn giữa 3 hãng **Grab / Xanh SM / Be**, mở thẳng app với giá cước ước tính. Bấm *Check-in* chụp ảnh lưu niệm -> chặng chuyển thành `[✓ Đã hoàn thành]`, bản đồ đổi sang pin `✓`.
+- **Tab 3 (Sổ chi tiêu & Di chuyển):** Đối chiếu thực chi vé tham quan, bữa ăn và từng chặng xe; cho phép du khách tự do nhấp sửa cước xe thực tế đã trả (inline editing).
+- **Tab 4 (Tổng kết chuyến đi):** Bấm nút *Hoàn thành chuyến đi*, hệ thống chuyển sang dashboard tổng kết 4 chỉ số KPI, cơ cấu 3 nhóm chi phí, album ảnh check-in thực tế và công cụ xuất **Thẻ ảnh kỷ niệm Story Card Canvas** sẵn sàng đăng mạng xã hội.

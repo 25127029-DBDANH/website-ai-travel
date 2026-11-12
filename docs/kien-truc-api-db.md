@@ -15,7 +15,12 @@
 | `POST` | `/api/trips/:id/contingency` | Kích hoạt phương án dự phòng thời tiết/kẹt xe | `{ reason: 'rain' \| 'traffic' \| 'closed' \| 'budget' }` | `{ backup_plan, updated_itinerary, message }` |
 | `POST` | `/api/trips/:id/review` | Yêu cầu AI chấm điểm & đánh giá lịch trình | Không | `{ score, strengths, warnings, insider_tips }` |
 | `POST` | `/api/trips/:id/calendar` | Đẩy lịch trình lên Google Calendar | `{ start_date }` | `{ success: true, calendar_link, synced_events }` |
+| `GET`  | `/api/trips/:id/export-ics` | Xuất file chuẩn lịch quốc tế `.ICS` | Không | File stream `.ics` |
 | `GET`  | `/api/me/previous-preferences` | Lấy sở thích cũ để điền sẵn vào form | Không | `{ has_history: true, preferences: {...} }` |
+| `PATCH`| `/api/trips/:id/stops/:stopId` | Cập nhật check-in chặng thực tế (`visited`, ảnh, note) | `{ visited: boolean, photo_url?: string, notes?: string }` | `{ stop_id, visited: true, updated_at }` |
+| `POST` | `/api/transit/fare-estimate` | Tính cước 3 hãng xe (Grab / Xanh SM / Be) theo tọa độ | `{ origin_coords, dest_coords }` | `{ grab: {...}, xanh_sm: {...}, be: {...} }` |
+| `PATCH`| `/api/trips/:id/expenses/:id` | Cập nhật số tiền thực chi (Inline fare editing) | `{ actual_amount: number }` | `{ expense_id, actual_amount, variance }` |
+| `GET`  | `/api/trips/:id/summary` | Lấy dữ liệu tổng kết chuyến đi (4 KPI, 3 nhóm tiền, ảnh) | Không | `{ kpis: {...}, breakdown: {...}, gallery: [...] }` |
 
 ## 3.3. Cập nhật Lược đồ Cơ sở Dữ liệu (Schema Updates)
 - Bảng `trips`:
