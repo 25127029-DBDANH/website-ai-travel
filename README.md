@@ -179,14 +179,14 @@ docker compose up --build
 * **Thư mục & File sở hữu chính:**
   * `server/app/db/schema.sql` (Lược đồ CSDL PostgreSQL)
   * `server/app/db/session.py` (Cấu hình SQLAlchemy Engine & SessionLocal)
-  * `server/app/db/hcmc_data.py` (Kho dữ liệu Seed 30+ địa điểm TP.HCM)
+  * `server/app/db/hcmc_data.py` (Kho dữ liệu Seed 70+ địa điểm TP.HCM)
   * `server/app/services/places_service.py` (Bộ đệm Cache TTL 7 ngày & Fallback Places API)
   * `server/app/api/v1/endpoints/places.py` (Bộ API địa điểm TP.HCM)
   * `client/src/components/itinerary/PlaceDetailModal.jsx` *(Tự tích hợp)*
 * **Nhiệm vụ cụ thể:**
   1. *Lược đồ CSDL Quan hệ:* Thiết kế các bảng `users`, `trips`, `trip_days`, `itinerary_items`, `expenses`, `places_cache` với ràng buộc khóa ngoại (Foreign Keys) và Indexes tăng tốc truy vấn.
   2. *Bộ đệm Địa điểm (Places Cache TTL 7 ngày):* Xây dựng cơ chế cache địa điểm trong bảng `places_cache`; tự động hoàn trả dữ liệu từ CSDL cục bộ; chỉ gọi Google Places API New khi cache miss hoặc dữ liệu quá hạn 7 ngày.
-  3. *Tập dữ liệu Mồi TP.HCM (`hcmc_data.py`):* Thu thập, làm sạch và chuẩn hóa hơn 30+ địa danh nổi tiếng Sài Gòn đầy đủ tọa độ GPS, mức giá, thời lượng tham quan, ảnh chất lượng cao.
+  3. *Tập dữ liệu Mồi TP.HCM (`hcmc_data.py`):* Thu thập, làm sạch và chuẩn hóa hơn 70+ địa danh nổi tiếng Sài Gòn đầy đủ tọa độ GPS, mức giá, thời lượng tham quan, ảnh chất lượng cao.
   4. *YÊU CẦU TỰ TÍCH HỢP & TEST E2E:*
      * Đảm bảo dữ liệu từ DB hiển thị đầy đủ trên Bản đồ Leaflet (`TripMap.jsx`).
      * Tự kết nối API chi tiết địa điểm vào `PlaceDetailModal.jsx` (ảnh, mô tả, giờ mở cửa).
@@ -331,7 +331,7 @@ website-ai-travel/
     ├── .env.example               # Mẫu biến môi trường (Database URL, Gemini API Key, JWT Secret)
     └── app/
         ├── core/                  # Cấu hình hệ thống, bảo mật bcrypt và JWT
-        ├── db/                    # Schema CSDL PostgreSQL, Session và Seed Data 30+ địa điểm TP.HCM
+        ├── db/                    # Schema CSDL PostgreSQL, Session và Seed Data 70+ địa điểm TP.HCM
         ├── schemas/               # Pydantic Schemas kiểm thực dữ liệu đầu vào/ra
         ├── services/              # Xử lý nghiệp vụ thông minh: Gemini AI, Cache địa điểm, Transit, Lịch .ICS
         ├── utils/                 # Thuật toán Haversine tính cự ly & cước 3 hãng xe
