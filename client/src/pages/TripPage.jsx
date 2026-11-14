@@ -11,6 +11,7 @@ import {
   Navigation,
   Share2,
   Sparkles,
+  Users,
   Wallet
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -170,7 +171,7 @@ export default function TripPage() {
       setBudget(res.budget_summary);
       setToast({
         message: enable
-          ? (lang === 'vi' ? '🚗 Đã bật Chế độ Giờ cao điểm: Khoanh vùng trong cùng 1 quận, tăng 20 phút đệm kẹt xe.' : '🚗 Rush Hour mode active.')
+          ? (lang === 'vi' ? '🚗 Tuyến đường chuyển sang màu cam, đã cộng 20 phút đệm kẹt xe.' : '🚗 Rush Hour mode active.')
           : (lang === 'vi' ? 'Đã tắt chế độ giờ cao điểm.' : 'Rush Hour mode disabled.'),
         tone: 'success'
       });
@@ -186,7 +187,7 @@ export default function TripPage() {
       setItems([...res.items]);
       setBudget(res.budget_summary);
       setToast({
-        message: lang === 'vi' ? '💰 AI đã tối ưu giảm 20% chi phí cho các điểm đến!' : '💰 Budget optimized by 20%!',
+        message: lang === 'vi' ? '💰 AI đã đổi sang Cơm Tấm Ba Ghiền (55.000 đ), giảm 40.000 đ chi phí thực tế!' : '💰 Budget optimized with local gem!',
         tone: 'success'
       });
     } catch (err) {
@@ -349,6 +350,10 @@ export default function TripPage() {
               <CalendarDays className="h-3.5 w-3.5 text-brand-600" />
               {t('common.days', { count: Number(trip.days) || 1 })}
             </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-extrabold text-brand-700 shadow-xs">
+              <Users className="h-3.5 w-3.5 text-brand-600" />
+              {Number(trip.member_count) > 1 ? `${trip.member_count} người` : '1 người (Solo)'}
+            </span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600 shadow-xs">
               <Wallet className="h-3.5 w-3.5 text-accent-500" />
               {formatVnd(trip.budget, lang)}
@@ -430,7 +435,7 @@ export default function TripPage() {
             className="ml-auto flex items-center gap-1.5 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 px-4 py-2 text-xs font-extrabold text-amber-900 hover:from-amber-100 hover:to-orange-100 transition-all shadow-xs active:scale-97"
           >
             <Camera className="h-3.5 w-3.5 text-amber-600" />
-            <span>{lang === 'vi' ? 'Xuất Thẻ ảnh Kỷ niệm' : 'Trip Story Card'}</span>
+            <span>{lang === 'vi' ? 'Photobook Kỷ niệm' : 'Trip Photobook'}</span>
             <Sparkles className="h-3 w-3 text-amber-500" />
           </button>
         </div>

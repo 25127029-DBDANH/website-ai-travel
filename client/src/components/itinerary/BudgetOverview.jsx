@@ -70,9 +70,16 @@ export default function BudgetOverview({ budget, tripBudget }) {
         </div>
 
         <div className="mt-2 flex flex-wrap items-end justify-between gap-x-3 gap-y-1 sm:mt-3">
-          <p className="font-display text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
-            {formatVnd(summary ? summary.total_estimated : totalBudget, lang)}
-          </p>
+          <div>
+            <p className="font-display text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
+              {formatVnd(summary ? summary.total_estimated : totalBudget, lang)}
+            </p>
+            {summary?.member_count > 1 && (
+              <p className="text-[10.5px] font-bold text-brand-700">
+                (~{formatVnd(summary.per_person_estimated || Math.round(summary.total_estimated / summary.member_count), lang)}/người · {summary.member_count} thành viên)
+              </p>
+            )}
+          </div>
           <p className="pb-0.5 text-[11px] font-semibold text-slate-500 sm:pb-1">
             {summary ? (
               <>

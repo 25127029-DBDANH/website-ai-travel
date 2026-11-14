@@ -31,6 +31,109 @@ import TransitConnector from './TransitConnector.jsx';
 
 const TripMap = lazy(() => import('./TripMap.jsx'));
 
+const NEARBY_RAIN_ALTERNATIVES = [
+  {
+    place_id: 'p-bao-tang-my-thuat',
+    place_name: 'Bảo tàng Mỹ thuật TP.HCM',
+    category: 'sightseeing',
+    description: 'Tòa dinh thự kiến trúc Pháp cổ tráng lệ với hành lang lát gạch hoa kiều diễm, 100% trong nhà có mái che.',
+    address: '97A Phó Đức Chính, Phường Nguyễn Thái Bình, Quận 1',
+    district: 'Quận 1',
+    latitude: 10.7698,
+    longitude: 106.6995,
+    estimated_cost: 30000,
+    editorial_score: 4.8,
+    is_indoor: true,
+    distance_note: 'Cách 450m · Trong nhà 100%, không lo mưa'
+  },
+  {
+    place_id: 'p-dinh-doc-lap-indoor',
+    place_name: 'Dinh Độc Lập (Khu trưng bày & Hầm chỉ huy)',
+    category: 'sightseeing',
+    description: 'Di tích lịch sử mái che mát rượi, khám phá phòng khánh tiết và hầm chỉ huy kiên cố.',
+    address: '135 Nam Kỳ Khởi Nghĩa, Phường Bến Thành, Quận 1',
+    district: 'Quận 1',
+    latitude: 10.7770,
+    longitude: 106.6953,
+    estimated_cost: 65000,
+    editorial_score: 4.8,
+    is_indoor: true,
+    distance_note: 'Cách 600m · Có mái che rộng rãi'
+  },
+  {
+    place_id: 'p-saigon-centre-takashimaya',
+    place_name: 'TTTM Saigon Centre / Takashimaya',
+    category: 'shopping',
+    description: 'Tổ hợp mua sắm, ẩm thực và cafe máy lạnh hiện đại bậc nhất trung tâm Sài Gòn.',
+    address: '65 Lê Lợi, Phường Bến Nghé, Quận 1',
+    district: 'Quận 1',
+    latitude: 10.7733,
+    longitude: 106.7010,
+    estimated_cost: 80000,
+    editorial_score: 4.7,
+    is_indoor: true,
+    distance_note: 'Cách 500m · Máy lạnh, ẩm thực & ngắm mưa'
+  }
+];
+
+const NEARBY_RUSH_ALTERNATIVES = [
+  {
+    place_id: 'p-com-nieu-sg',
+    place_name: 'Nhà hàng Cơm Niêu Sài Gòn',
+    category: 'food',
+    description: 'Ẩm thực truyền thống Việt Nam với niêu cơm đập độc đáo, không gian ấm cúng sang trọng.',
+    address: '27 Tú Xương / Nguyễn Du, Quận 1',
+    district: 'Quận 1',
+    latitude: 10.7765,
+    longitude: 106.6980,
+    estimated_cost: 95000,
+    editorial_score: 4.6,
+    distance_note: 'Cách 500m · Đi bộ 6 phút, không kẹt xe'
+  },
+  {
+    place_id: 'p-quan-bui',
+    place_name: 'Quán Bụi — Hương Vị Đồng Quê',
+    category: 'food',
+    description: 'Món ngon ba miền chuẩn vị gia đình Sài Gòn, không gian cổ điển giữa trung tâm.',
+    address: '19 Ngô Văn Năm, Bến Nghé, Quận 1',
+    district: 'Quận 1',
+    latitude: 10.7810,
+    longitude: 106.7040,
+    estimated_cost: 90000,
+    editorial_score: 4.5,
+    distance_note: 'Cách 750m · Gần bờ sông'
+  },
+  {
+    place_id: 'p-bep-me-in',
+    place_name: 'Bếp Mẹ Ỉn — Đặc Sản Bánh Xèo',
+    category: 'food',
+    description: 'Bánh xèo giòn rụm và các món ăn chơi đường phố Sài Gòn nổi tiếng Michelin Bib Gourmand.',
+    address: '136 Lê Thánh Tôn, Bến Thành, Quận 1',
+    district: 'Quận 1',
+    latitude: 10.7730,
+    longitude: 106.6970,
+    estimated_cost: 85000,
+    editorial_score: 4.7,
+    distance_note: 'Cách 600m · Đi bộ 7 phút'
+  }
+];
+
+const BUDGET_REPLACEMENT = {
+  place_id: 'p-com-tam-ba-ghien',
+  place_name: 'Cơm Tấm Ba Ghiền',
+  category: 'food',
+  description: 'Quán cơm tấm sườn nướng than hoa trứ danh Sài Gòn đạt chứng nhận Michelin Bib Gourmand.',
+  address: '84 Đặng Văn Ngữ, Phường 10, Phú Nhuận / Q3',
+  district: 'Phú Nhuận',
+  latitude: 10.7925,
+  longitude: 106.6710,
+  estimated_cost: 55000,
+  editorial_score: 4.7,
+  is_indoor: true,
+  is_lunch: true
+};
+
+
 const ROUTE_EASE = [0.23, 1, 0.32, 1];
 
 const ROUTE_LINE = {
@@ -84,6 +187,9 @@ export default function ItineraryPanel({
   const [focusRequest, setFocusRequest] = useState(null);
   const [rainMode, setRainMode] = useState(false);
   const [trafficMode, setTrafficMode] = useState(false);
+  const [showRainModal, setShowRainModal] = useState(false);
+  const [showTrafficModal, setShowTrafficModal] = useState(false);
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [showChecklistModal, setShowChecklistModal] = useState(false);
   const [calendarSyncSuccess, setCalendarSyncSuccess] = useState(false);
@@ -136,6 +242,7 @@ export default function ItineraryPanel({
 
   const dayItems = itemsByDay.get(activeDay) || [];
   const dayCount = Number(trip?.days) || 1;
+  const memberCount = Number(trip?.member_count) || (trip?.companion === 'solo' ? 1 : 4);
 
   // Cập nhật selectedDetailPlace khi items thay đổi (ví dụ khi swap hoặc toggle accept)
   useEffect(() => {
@@ -157,21 +264,75 @@ export default function ItineraryPanel({
   );
 
   const dayTotalEstimated = useMemo(() => {
-    const acts = dayItems.reduce((acc, it) => acc + Number(it.estimated_cost || 0), 0);
-    const trans = dayItems.reduce((acc, it) => acc + Number(it.transit_info?.estimated_fare_vnd || 0), 0);
+    const acts = dayItems.reduce((acc, it) => acc + Number(it.estimated_cost || 0), 0) * memberCount;
+    const trans = dayItems.reduce((acc, it) => {
+      const fare = Number(it.transit_info?.estimated_fare_vnd || 0);
+      return it.transit_info?.mode === 'grab_bike' ? acc + fare * memberCount : acc + fare;
+    }, 0);
     return acts + trans;
-  }, [dayItems]);
+  }, [dayItems, memberCount]);
 
   const handleToggleRainMode = () => {
-    const next = !rainMode;
-    setRainMode(next);
-    if (onToggleRain) onToggleRain(activeDay, next);
+    if (rainMode) {
+      setRainMode(false);
+      if (onToggleRain) onToggleRain(activeDay, false);
+    } else {
+      setShowRainModal(true);
+    }
+  };
+
+  const handleKeepOriginalRain = () => {
+    setShowRainModal(false);
+    setRainMode(true);
+    if (onToggleRain) onToggleRain(activeDay, true);
+  };
+
+  const handleSelectRainAlternative = (alt) => {
+    setShowRainModal(false);
+    const targetOutdoor = dayItems.find((it) => !it.is_indoor) || dayItems[0];
+    if (targetOutdoor && onSwap) {
+      onSwap(targetOutdoor, alt);
+    }
+    setRainMode(true);
+    if (onToggleRain) onToggleRain(activeDay, true);
   };
 
   const handleToggleTrafficMode = () => {
-    const next = !trafficMode;
-    setTrafficMode(next);
-    if (onToggleTraffic) onToggleTraffic(activeDay, next);
+    if (trafficMode) {
+      setTrafficMode(false);
+      if (onToggleTraffic) onToggleTraffic(activeDay, false);
+    } else {
+      setShowTrafficModal(true);
+    }
+  };
+
+  const handleKeepOriginalTraffic = () => {
+    setShowTrafficModal(false);
+    setTrafficMode(true);
+    if (onToggleTraffic) onToggleTraffic(activeDay, true);
+  };
+
+  const handleSelectRushAlternative = (alt) => {
+    setShowTrafficModal(false);
+    const target = dayItems.find((it) => it.order_index >= 3) || dayItems[dayItems.length - 1];
+    if (target && onSwap) {
+      onSwap(target, alt);
+    }
+  };
+
+  const handleOpenBudgetOptimizer = () => {
+    setShowBudgetModal(true);
+  };
+
+  const handleConfirmBudgetOptimization = () => {
+    setShowBudgetModal(false);
+    const target = dayItems.find((it) => it.estimated_cost >= 80000) || dayItems[2];
+    if (target && onSwap) {
+      onSwap(target, BUDGET_REPLACEMENT);
+    }
+    if (onOptimizeBudget) {
+      onOptimizeBudget();
+    }
   };
 
   const handleTriggerIcsDownload = () => {
@@ -322,7 +483,7 @@ export default function ItineraryPanel({
               {onOptimizeBudget && (
                 <button
                   type="button"
-                  onClick={onOptimizeBudget}
+                  onClick={handleOpenBudgetOptimizer}
                   className="inline-flex items-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50/50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100 active:scale-98"
                   title="AI rà soát và giảm 20% chi phí các hoạt động"
                 >
@@ -359,6 +520,7 @@ export default function ItineraryPanel({
                   activeDay={activeDay}
                   focusRequest={focusRequest}
                   onOpenDetail={(stop) => setSelectedDetailPlace(stop)}
+                  trafficMode={trafficMode}
                   isPanelMode={true}
                   className="h-full w-full"
                 />
@@ -434,7 +596,7 @@ export default function ItineraryPanel({
                           id={`stop-${item.day_number}-${item.order_index}`}
                           className="scroll-mt-3"
                         >
-                          {index > 0 && <TransitConnector transit={item.transit_info} />}
+                          {index > 0 && <TransitConnector transit={item.transit_info} memberCount={memberCount} />}
                           <motion.div
                             className="relative sm:pl-12"
                             variants={ROUTE_STOP}
@@ -445,8 +607,10 @@ export default function ItineraryPanel({
                             <span className="absolute left-[13px] top-4 z-10 hidden h-3 w-3 rounded-full border-2 border-white bg-brand-600 shadow-sm sm:block" />
                             <TimelineItem
                               item={item}
+                              memberCount={memberCount}
                               onSwap={onSwap}
                               onToggleAccept={onToggleAccept}
+                              onToggleVisited={onToggleVisited}
                               onOpenDetail={(it) => setSelectedDetailPlace(it)}
                               onLocate={handleLocate}
                               swapping={swappingKey === key}
@@ -465,9 +629,16 @@ export default function ItineraryPanel({
                 <span className="font-semibold text-slate-600">
                   {lang === 'vi' ? `Chi tiêu dự kiến Ngày ${activeDay}:` : `Estimated for Day ${activeDay}:`}
                 </span>
-                <span className="font-mono font-extrabold text-brand-700">
-                  {formatVnd(dayTotalEstimated, lang)}
-                </span>
+                <div className="text-right">
+                  <span className="font-mono font-extrabold text-brand-700">
+                    {formatVnd(dayTotalEstimated, lang)}
+                  </span>
+                  {memberCount > 1 && (
+                    <span className="block text-[10px] font-bold text-slate-500">
+                      ~{formatVnd(Math.round(dayTotalEstimated / memberCount), lang)}/người ({memberCount} thành viên)
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -488,6 +659,297 @@ export default function ItineraryPanel({
           swapping={Boolean(swappingKey)}
         />
       )}
+
+      
+      {/* MODAL KỊCH BẢN TRỜI MƯA SÀI GÒN */}
+      {showRainModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl animate-scale-up">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="grid h-8 w-8 place-items-center rounded-xl bg-sky-100 text-sky-700">
+                  <CloudRain className="h-4 w-4" />
+                </span>
+                <div>
+                  <h3 className="font-display text-base font-extrabold text-slate-900">
+                    {lang === 'vi' ? 'Kịch bản Trời mưa Sài Gòn' : 'Saigon Rain Contingency'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {lang === 'vi' ? 'Cảnh báo mưa to & Đề xuất đổi sang điểm trong nhà có mái che' : 'Heavy rain warning & indoor alternatives'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRainModal(false)}
+                className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3.5">
+              {/* Phân tích chặng ngoài trời bị ảnh hưởng */}
+              <div className="rounded-2xl border border-sky-200 bg-sky-50/80 p-3.5 text-xs text-sky-950">
+                <div className="font-extrabold flex items-center gap-1.5 text-sky-900">
+                  <span>🌧️</span>
+                  <span>{lang === 'vi' ? 'Dự báo mưa rào lớn tại TP.HCM (kéo dài 45–60 phút):' : 'Heavy rain forecasted:'}</span>
+                </div>
+                {dayItems.some((it) => !it.is_indoor) ? (
+                  <div className="mt-1.5 flex items-center gap-1.5 text-[11.5px] font-semibold text-slate-700">
+                    <span className="text-slate-500">{lang === 'vi' ? 'Chặng ngoài trời bị ảnh hưởng:' : 'Outdoor stop:'}</span>
+                    <strong className="text-sky-900 font-extrabold">
+                      {dayItems.find((it) => !it.is_indoor)?.place_name} ({dayItems.find((it) => !it.is_indoor)?.district})
+                    </strong>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-[11px] text-sky-800">
+                    {lang === 'vi' ? 'Lộ trình hiện tại đã khá an toàn, nhưng đường phố sẽ trơn ướt.' : 'Current stops are indoors, roads will be slippery.'}
+                  </p>
+                )}
+                <p className="mt-1 text-[11px] text-sky-800">
+                  {lang === 'vi'
+                    ? '⚠️ Tham quan ngoài trời khi mưa dễ bị ướt, trơn trượt và cản trở chụp ảnh. AI khuyến nghị đổi sang điểm trong nhà có mái che.'
+                    : '⚠️ Visiting outdoor places during rain may get wet and slippery. Recommended to swap to indoor spots.'}
+                </p>
+              </div>
+
+              {/* LỰA CHỌN 1: ĐỀ XUẤT ĐỔI ĐỊA ĐIỂM TRONG NHÀ */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-sky-900 flex items-center gap-1">
+                    <Sparkles className="h-3.5 w-3.5 text-sky-600" />
+                    {lang === 'vi' ? 'Lựa chọn 1 (Khuyên dùng): Đổi sang điểm trong nhà né mưa' : 'Option 1 (Recommended): Covered indoor spots'}
+                  </span>
+                  <span className="text-[10px] font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200">
+                    100% mái che
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {NEARBY_RAIN_ALTERNATIVES.map((alt) => (
+                    <button
+                      key={alt.place_id}
+                      type="button"
+                      onClick={() => handleSelectRainAlternative(alt)}
+                      className="w-full flex items-center justify-between p-2.5 rounded-2xl border border-slate-200 bg-white hover:border-sky-400 hover:bg-sky-50/60 transition-all text-left group shadow-2xs"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <div className="font-extrabold text-xs text-slate-900 group-hover:text-sky-950 flex items-center gap-1.5">
+                          <span>{alt.place_name}</span>
+                          <span className="text-[10px] font-bold text-amber-600">★ {alt.editorial_score}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 truncate mt-0.5">{alt.address} · <strong className="text-sky-700">{alt.distance_note}</strong></p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <span className="text-xs font-black text-slate-900">{formatVnd(alt.estimated_cost, lang)}</span>
+                        <span className="block text-[10px] font-extrabold text-sky-600 group-hover:underline">Đổi điểm này ➔</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* LỰA CHỌN 2: VẪN ĐI ĐIỂM CŨ */}
+              <div className="pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={handleKeepOriginalRain}
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl border-2 border-sky-400 bg-sky-600 py-3 text-xs font-black text-white shadow-md hover:bg-sky-700 transition-all active:scale-98"
+                >
+                  <CloudRain className="h-4 w-4" />
+                  <span>{lang === 'vi' ? 'Vẫn đi điểm cũ (Chấp nhận trời mưa · Chuẩn bị ô dù & đi GrabCar)' : 'Keep Original Stop (Accept Rain · Umbrella & GrabCar)'}</span>
+                </button>
+                <p className="text-center text-[10.5px] text-slate-500 mt-1.5">
+                  {lang === 'vi'
+                    ? 'Lịch trình giữ nguyên điểm cũ, hệ thống tự động đổi phương tiện sang xe ô tô GrabCar có mái che để đưa đón né ướt.'
+                    : 'Keeps stops, automatically switches transit to sheltered GrabCar.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL KỊCH BẢN GIỜ CAO ĐIỂM (17:00 - 19:00) */}
+      {showTrafficModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl animate-scale-up">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="grid h-8 w-8 place-items-center rounded-xl bg-amber-100 text-amber-700">
+                  <AlertTriangle className="h-4 w-4" />
+                </span>
+                <div>
+                  <h3 className="font-display text-base font-extrabold text-slate-900">
+                    {lang === 'vi' ? 'Kịch bản Giờ cao điểm (17h - 19h)' : 'Rush-Hour Scenario (17:00 - 19:00)'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {lang === 'vi' ? 'Cảnh báo kẹt xe & Gợi ý điểm đến gần để né ùn tắc' : 'Traffic jam warning & nearby alternatives'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTrafficModal(false)}
+                className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3.5">
+              {/* Phân tích chặng di chuyển */}
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-3.5 text-xs text-amber-950">
+                <div className="font-extrabold flex items-center gap-1.5 text-amber-900">
+                  <span>🚗</span>
+                  <span>{lang === 'vi' ? 'Phát hiện lộ trình có nguy cơ kẹt xe nghiêm trọng:' : 'High risk traffic jam detected:'}</span>
+                </div>
+                <div className="mt-1.5 flex items-center gap-2 text-[11.5px] font-semibold text-slate-700">
+                  <span className="font-bold text-slate-900">{dayItems[1]?.place_name || 'Phố đi bộ Nguyễn Huệ (Q1)'}</span>
+                  <span className="text-amber-600 font-bold">➔</span>
+                  <span className="font-bold text-slate-900">{dayItems[2]?.place_name || 'Phở Hòa Pasteur (Q3)'}</span>
+                </div>
+                <p className="mt-1 text-[11px] text-amber-800">
+                  {lang === 'vi'
+                    ? '⚠️ Tuyến đường liên quận vào khung giờ 17h–19h thường xuyên ùn tắc kéo dài (+20 đến 30 phút đệm kẹt xe).'
+                    : '⚠️ Peak hour traffic will add +20 to 30 mins delay between these districts.'}
+                </p>
+              </div>
+
+              {/* LỰA CHỌN 1: ĐỀ XUẤT CỦA AI */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1">
+                    <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                    {lang === 'vi' ? 'Lựa chọn 1 (Khuyên dùng): Đổi sang điểm gần để né kẹt xe' : 'Option 1 (Recommended): Nearby spots to avoid traffic'}
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    &lt; 800m · Cùng quận
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {NEARBY_RUSH_ALTERNATIVES.map((alt) => (
+                    <button
+                      key={alt.place_id}
+                      type="button"
+                      onClick={() => handleSelectRushAlternative(alt)}
+                      className="w-full flex items-center justify-between p-2.5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-400 hover:bg-emerald-50/60 transition-all text-left group shadow-2xs"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <div className="font-extrabold text-xs text-slate-900 group-hover:text-emerald-900 flex items-center gap-1.5">
+                          <span>{alt.place_name}</span>
+                          <span className="text-[10px] font-bold text-amber-600">★ {alt.editorial_score}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 truncate mt-0.5">{alt.address} · <strong className="text-emerald-700">{alt.distance_note}</strong></p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <span className="text-xs font-black text-slate-900">{formatVnd(alt.estimated_cost, lang)}</span>
+                        <span className="block text-[10px] font-extrabold text-emerald-600 group-hover:underline">Chọn điểm này ➔</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* LỰA CHỌN 2: VẪN ĐI ĐIỂM CŨ */}
+              <div className="pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={handleKeepOriginalTraffic}
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl border-2 border-amber-400 bg-amber-500 py-3 text-xs font-black text-white shadow-md hover:bg-amber-600 transition-all active:scale-98"
+                >
+                  <span>🚗</span>
+                  <span>{lang === 'vi' ? 'Vẫn đi điểm cũ (Chấp nhận kẹt xe · Đổi màu cam)' : 'Keep Original Route (Accept Traffic · Orange Line)'}</span>
+                </button>
+                <p className="text-center text-[10.5px] text-slate-500 mt-1.5">
+                  {lang === 'vi' ? 'Hệ thống sẽ cộng thêm 20 phút đệm kẹt xe và đổi tuyến đường sang màu cam trên bản đồ.' : 'Will add +20 mins buffer and highlight orange route on map.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL AI GIẢM 20% CHI PHÍ THỰC TẾ (REAL BUDGET OPTIMIZATION) */}
+      {showBudgetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="w-full max-w-md overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl animate-scale-up">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-100 text-emerald-700">
+                  <Zap className="h-4 w-4" />
+                </span>
+                <div>
+                  <h3 className="font-display text-base font-extrabold text-slate-900">
+                    {lang === 'vi' ? 'AI Tối ưu hóa Ngân sách (-20%)' : 'AI Budget Optimizer (-20%)'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {lang === 'vi' ? 'Hoán đổi sang quán đặc sản bình dân theo giá niêm yết thật' : 'Swap to budget Michelin Bib Gourmand gems'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBudgetModal(false)}
+                className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3.5">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                {lang === 'vi'
+                  ? 'Thay vì giảm giá ảo trên ứng dụng, AI đã rà soát lịch trình và đề xuất hoán đổi điểm ăn uống đắt nhất sang một quán ăn đặc sản Sài Gòn bình dân nức tiếng:'
+                  : 'Instead of fake discounts, AI swaps the most expensive food stop to an authentic local budget favorite:'}
+              </p>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 font-semibold">{lang === 'vi' ? 'Điểm hiện tại:' : 'Current stop:'}</span>
+                  <span className="font-extrabold text-slate-900 line-through">Phở Hòa Pasteur (95.000 đ)</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-slate-200/80 pt-2 text-emerald-800">
+                  <span className="font-bold flex items-center gap-1">
+                    <Sparkles className="h-3 w-3 text-emerald-600" />
+                    {lang === 'vi' ? 'Đổi sang quán bình dân:' : 'Swap to budget gem:'}
+                  </span>
+                  <span className="font-black text-emerald-900">Cơm Tấm Ba Ghiền (55.000 đ)</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-dashed border-emerald-300 pt-1.5 text-xs font-black text-emerald-700">
+                  <span>{lang === 'vi' ? 'Tiết kiệm thực tế:' : 'Real savings:'}</span>
+                  <span>-40.000 đ (~20% chi phí ngày)</span>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-amber-50 border border-amber-200 p-2.5 text-[11px] text-amber-900">
+                💡 <strong>Cam kết chất lượng:</strong> Quán thay thế vẫn đạt chuẩn ẩm thực Sài Gòn (Michelin Bib Gourmand, đánh giá 4.7★).
+              </div>
+
+              <div className="mt-5 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={handleConfirmBudgetOptimization}
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 py-3 text-xs font-black text-white shadow-md shadow-emerald-200 transition-all active:scale-98"
+                >
+                  <Zap className="h-4 w-4" />
+                  <span>{lang === 'vi' ? 'Đồng ý Hoán đổi (Giảm 40.000 đ thật)' : 'Apply Smart Swap (-40,000 đ)'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowBudgetModal(false)}
+                  className="w-full py-2 text-xs font-bold text-slate-500 hover:text-slate-800"
+                >
+                  {lang === 'vi' ? 'Giữ nguyên lịch trình cũ' : 'Keep original itinerary'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* MODAL ĐỒNG BỘ GOOGLE CALENDAR */}
       {showCalendarModal && (

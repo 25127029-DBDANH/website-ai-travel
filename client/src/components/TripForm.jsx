@@ -37,10 +37,8 @@ const PREFERENCE_CATEGORY = {
 const BUDGET_PRESETS = [2_000_000, 3_000_000, 5_000_000, 10_000_000];
 
 const COMPANIONS = [
-  { id: 'solo', labelVi: 'Một mình', labelEn: 'Solo', icon: User },
-  { id: 'couple', labelVi: 'Cặp đôi', labelEn: 'Couple', icon: Heart },
-  { id: 'friends', labelVi: 'Nhóm bạn', labelEn: 'Friends', icon: Users },
-  { id: 'family', labelVi: 'Gia đình', labelEn: 'Family', icon: Users }
+  { id: 'solo', labelVi: 'Đi một mình', labelEn: 'Solo (1 person)', icon: User },
+  { id: 'group', labelVi: 'Đi theo nhóm', labelEn: 'Group travel', icon: Users }
 ];
 
 const TRANSPORTS = [
@@ -56,6 +54,17 @@ const PLACES_PER_DAY_OPTIONS = [
   { count: 6, labelVi: '6 điểm', subVi: 'Tối đa, năng động' }
 ];
 
+const DISTRICT_SHORTCUTS = [
+  { id: 'q1', name: 'Quận 1', icon: '⭐', highlight: 'Trung tâm' },
+  { id: 'q3', name: 'Quận 3', icon: '🏛️', highlight: 'Hồ Con Rùa' },
+  { id: 'q5', name: 'Quận 5', icon: '🏮', highlight: 'Chợ Lớn' },
+  { id: 'binh_thanh', name: 'Bình Thạnh', icon: '🏙️', highlight: 'Landmark 81' },
+  { id: 'q4', name: 'Quận 4', icon: '🍜', highlight: 'Phố ốc' },
+  { id: 'phu_nhuan', name: 'Phú Nhuận', icon: '☕', highlight: 'Phan Xích Long' },
+  { id: 'thu_duc', name: 'TP. Thủ Đức', icon: '🌉', highlight: 'Thảo Điền' },
+  { id: 'q7', name: 'Quận 7', icon: '✨', highlight: 'Phú Mỹ Hưng' }
+];
+
 export default function TripForm() {
   const { lang, t } = useI18n();
   const navigate = useNavigate();
@@ -64,7 +73,8 @@ export default function TripForm() {
   const [days, setDays] = useState(3);
   const [placesPerDay, setPlacesPerDay] = useState(4);
   const [budget, setBudget] = useState(5_000_000);
-  const [companion, setCompanion] = useState('friends');
+  const [companion, setCompanion] = useState('group');
+  const [memberCount, setMemberCount] = useState(4);
   const [transportMode, setTransportMode] = useState('grab_bike');
   const [preferences, setPreferences] = useState(['food', 'culture']);
   const [error, setError] = useState('');
@@ -144,6 +154,7 @@ export default function TripForm() {
         days,
         places_per_day: placesPerDay,
         companion,
+        member_count: companion === 'solo' ? 1 : memberCount,
         transport_mode: transportMode,
         preferences
       });
@@ -194,6 +205,44 @@ export default function TripForm() {
               maxLength={200}
               className="input pl-10"
             />
+          </div>
+
+          {/* CHỌN NHANH QUẬN 1-CHẠM (QUICK DISTRICT PILLS) */}
+          <div className="mt-2.5">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11px] font-bold text-slate-600">
+                {lang === 'vi' ? 'Hoặc chạm chọn nhanh Quận ưu tiên khám phá:' : 'Or quick-select priority district:'}
+              </span>
+              <span className="text-[10px] font-extrabold text-brand-700 bg-brand-50 border border-brand-200 px-2 py-0.5 rounded-md">
+                {lang === 'vi' ? '1 chạm · Không cần gõ' : '1-Click quick select'}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {DISTRICT_SHORTCUTS.map((d) => {
+                const isSelected = startLocation.includes(d.name);
+                return (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => {
+                      setStartLocation(`${d.name}, TP. Hồ Chí Minh`);
+                      if (errorField === 'start') clearError();
+                    }}
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-xs font-bold transition-all border shadow-2xs active:scale-95',
+                      isSelected
+                        ? 'border-brand-600 bg-brand-600 text-white shadow-xs ring-2 ring-brand-200'
+                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-brand-300 hover:bg-white'
+                    )}
+                  >
+                    <span>{d.icon}</span>
+                    <span>{d.name}</span>
+                    {d.highlight && <span className="text-[10px] opacity-75 font-normal">({d.highlight})</span>}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -307,7 +356,14 @@ export default function TripForm() {
             ))}
           </div>
           <p className="mt-1 text-[10.5px] font-medium text-slate-500">
-            ≈ {formatVnd(budget, lang)} · {lang === 'vi' ? `Khoảng ${formatVnd(Math.round(budget / days), lang)}/ngày` : 'Per person'}
+            ≈ {formatVnd(budget, lang)} ·{' '}
+            {companion === 'group' && memberCount > 1
+              ? lang === 'vi'
+                ? `Tổng chi phí nhóm (Khoảng ${formatVnd(Math.round(budget / memberCount), lang)}/người)`
+                : `Group budget (${formatVnd(Math.round(budget / memberCount), lang)}/person)`
+              : lang === 'vi'
+              ? `Khoảng ${formatVnd(Math.round(budget / days), lang)}/ngày`
+              : 'Per person'}
           </p>
         </div>
 
@@ -317,7 +373,7 @@ export default function TripForm() {
             <label className="label">
               {lang === 'vi' ? 'Bạn đi cùng ai?' : 'Travel companions'}
             </label>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-2 gap-2">
               {COMPANIONS.map((item) => {
                 const Icon = item.icon;
                 const isSelected = companion === item.id;
@@ -325,20 +381,84 @@ export default function TripForm() {
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setCompanion(item.id)}
+                    onClick={() => {
+                      setCompanion(item.id);
+                      if (item.id === 'solo') setMemberCount(1);
+                      else if (memberCount === 1) setMemberCount(4);
+                    }}
                     className={cn(
-                      'flex items-center gap-2 rounded-xl border p-2 text-left text-xs font-bold transition-all',
+                      'flex items-center justify-center gap-2 rounded-xl border p-2.5 text-center text-xs font-bold transition-all',
                       isSelected
-                        ? 'border-brand-500 bg-brand-50 text-brand-700 ring-1 ring-brand-200'
+                        ? 'border-brand-500 bg-brand-50 text-brand-700 ring-1 ring-brand-200 shadow-2xs'
                         : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                     )}
                   >
-                    <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    <Icon className="h-4 w-4 shrink-0 text-brand-600" />
                     <span>{lang === 'vi' ? item.labelVi : item.labelEn}</span>
                   </button>
                 );
               })}
             </div>
+
+            {/* Nếu đi theo nhóm: Chọn số lượng thành viên */}
+            {companion === 'group' && (
+              <div className="mt-2.5 rounded-2xl border border-brand-200/80 bg-brand-50/50 p-3 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-brand-900">
+                    {lang === 'vi' ? 'Số thành viên nhóm:' : 'Group size:'}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setMemberCount((c) => Math.max(2, c - 1))}
+                      className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs hover:bg-slate-100 active:scale-95"
+                    >
+                      <Minus className="h-3 w-3" />
+                    </button>
+                    <span className="font-display text-sm font-extrabold text-brand-800 min-w-[3.2rem] text-center">
+                      {memberCount} {lang === 'vi' ? 'người' : 'pax'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setMemberCount((c) => Math.min(20, c + 1))}
+                      className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs hover:bg-slate-100 active:scale-95"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Phím tắt chọn nhanh */}
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] text-slate-500 font-semibold">Nhanh:</span>
+                  {[2, 3, 4, 5, 6, 8].map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setMemberCount(num)}
+                      className={cn(
+                        'rounded-lg border px-2 py-0.5 text-[10.5px] font-bold transition-all',
+                        memberCount === num
+                          ? 'border-brand-500 bg-brand-600 text-white'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300'
+                      )}
+                    >
+                      {num} {lang === 'vi' ? 'người' : 'p'}
+                    </button>
+                  ))}
+                </div>
+
+                <p className="mt-2 text-[10.5px] text-brand-800 leading-normal">
+                  {transportMode === 'grab_bike'
+                    ? (lang === 'vi'
+                        ? `💡 Đi nhóm ${memberCount} người: Chi phí ăn uống & vé tính theo từng người. Nếu bắt GrabBike, hệ thống tự động tính ${memberCount} xe GrabBike (${memberCount} tài xế) để đưa đón cả đoàn.`
+                        : `Group of ${memberCount}: Costs per person. ${memberCount} GrabBikes will be booked.`)
+                    : (lang === 'vi'
+                        ? `💡 Đi nhóm ${memberCount} người: Chi phí ăn uống & vé tính theo từng người. Xe GrabCar/Taxi dùng chung cả nhóm.`
+                        : `Group of ${memberCount}: Costs per person. Shared GrabCar.`)}
+                </p>
+              </div>
+            )}
           </div>
 
           <div>

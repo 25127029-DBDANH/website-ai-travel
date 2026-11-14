@@ -41,12 +41,12 @@ export const translations = {
     'hero.card.area5': 'District 5',
     'hero.gallery': 'Saigon in photos',
     'hero.galleryHint': 'Curated spots from our local catalog',
-    'stats.places.value': '30+',
+    'stats.places.value': '70+',
     'stats.places.label': 'curated local spots',
     'stats.budget.value': 'VND',
     'stats.budget.label': 'budget-aware planning',
-    'stats.chat.value': 'Chat',
-    'stats.chat.label': 'swap any stop instantly',
+    'stats.chat.value': '1-Click',
+    'stats.chat.label': 'swap stops & contingency',
 
     'how.eyebrow': 'How it works',
     'how.title': 'From a rough idea to a route you can follow.',
@@ -55,12 +55,12 @@ export const translations = {
     'how.step1.title': 'Tell us the basics',
     'how.step1.desc':
       'Pick your dates and budget, or just describe the trip in one sentence. Add what you love — food, cafés, history, shopping.',
-    'how.step2.title': 'Chat with your guide',
+    'how.step2.title': 'Smart AI Route Planning',
     'how.step2.desc':
-      'The guide asks one smart question, searches verified places and explains the route in plain language.',
+      'The system automatically arranges an optimal route, balancing travel time, budget and opening hours.',
     'how.step3.title': 'Get your day-by-day plan',
     'how.step3.desc':
-      'See times, costs, editorial scores, opening hours and transit between stops. Swap anything with a quick message.',
+      'See times, costs, editorial scores, opening hours and transit between stops. Swap anything with 1-click controls.',
 
     'features.eyebrow': 'Built for real trips',
     'features.title': 'Details that make the plan usable.',
@@ -70,12 +70,12 @@ export const translations = {
     'features.f2.title': 'Budget in VND',
     'features.f2.desc':
       'Activity costs and Grab rides are estimated up front, so the budget bar never surprises you.',
-    'features.f3.title': 'Adjust by chatting',
+    'features.f3.title': '1-Click Adaptive Scenarios',
     'features.f3.desc':
-      'Swap a lunch spot, add a coffee break or make the trip cheaper — just ask the guide.',
+      'Swap a lunch spot, activate rain mode, rush-hour buffer or save 20% budget with Michelin gems.',
     'features.f4.title': 'Beautiful on mobile',
     'features.f4.desc':
-      'A focused timeline and chat layout that works on the phone you will actually use in Saigon.',
+      'A focused split-panel timeline and map layout, responsive and fast on any device in Saigon.',
 
     'cta.title': 'Ready to see Saigon?',
     'cta.subtitle': 'Your first itinerary is a few taps away.',
@@ -412,12 +412,12 @@ export const translations = {
     'hero.card.area5': 'Quận 5',
     'hero.gallery': 'Sài Gòn qua ống kính',
     'hero.galleryHint': 'Địa điểm chọn lọc từ catalog địa phương',
-    'stats.places.value': '30+',
+    'stats.places.value': '70+',
     'stats.places.label': 'địa điểm địa phương được chọn lọc',
     'stats.budget.value': 'VND',
     'stats.budget.label': 'lên kế hoạch theo ngân sách',
-    'stats.chat.value': 'Chat',
-    'stats.chat.label': 'đổi điểm đến tức thì',
+    'stats.chat.value': '1-Chạm',
+    'stats.chat.label': 'đổi điểm & kịch bản thích ứng',
 
     'how.eyebrow': 'Cách hoạt động',
     'how.title': 'Từ một ý tưởng mơ hồ đến lộ trình có thể theo.',
@@ -426,12 +426,12 @@ export const translations = {
     'how.step1.title': 'Cho biết thông tin cơ bản',
     'how.step1.desc':
       'Chọn số ngày và ngân sách, hoặc chỉ mô tả chuyến đi bằng một câu. Thêm gu của bạn — ẩm thực, cà phê, lịch sử, mua sắm.',
-    'how.step2.title': 'Trò chuyện với trợ lý',
+    'how.step2.title': 'AI Tự động tối ưu lịch trình',
     'how.step2.desc':
-      'Trợ lý hỏi một câu thông minh, tìm địa điểm đã xác thực và giải thích lộ trình bằng ngôn ngữ đời thường.',
+      'Hệ thống tự động sắp xếp tuyến đường thông minh, cân đối thời gian di chuyển, ngân sách và khung giờ.',
     'how.step3.title': 'Nhận lịch trình từng ngày',
     'how.step3.desc':
-      'Xem giờ giấc, chi phí, điểm biên tập, giờ mở cửa và di chuyển giữa các điểm. Muốn đổi gì chỉ cần nhắn.',
+      'Xem giờ giấc, chi phí, điểm biên tập, giờ mở cửa và di chuyển giữa các điểm. Dễ dàng đổi điểm 1 chạm.',
 
     'features.eyebrow': 'Làm cho chuyến đi thật sự dùng được',
     'features.title': 'Những chi tiết khiến kế hoạch khả thi.',
@@ -441,12 +441,12 @@ export const translations = {
     'features.f2.title': 'Ngân sách bằng VND',
     'features.f2.desc':
       'Chi phí hoạt động và chuyến Grab được ước tính trước, để thanh ngân sách không làm bạn bất ngờ.',
-    'features.f3.title': 'Chỉnh sửa bằng cách chat',
+    'features.f3.title': 'Kịch bản thích ứng 1 chạm',
     'features.f3.desc':
-      'Đổi quán ăn trưa, thêm một buổi cà phê hoặc làm chuyến đi rẻ hơn — chỉ cần nhắn cho trợ lý.',
+      'Đổi điểm 1 chạm, kích hoạt kịch bản trời mưa, né kẹt xe giờ cao điểm hoặc AI giảm 20% chi phí.',
     'features.f4.title': 'Đẹp trên điện thoại',
     'features.f4.desc':
-      'Bố cục timeline và chat gọn gàng, dùng tốt trên chiếc điện thoại bạn sẽ mang theo ở Sài Gòn.',
+      'Bố cục 2 khung hình Timeline & Bản đồ trực quan, tối ưu hoàn hảo trên điện thoại khi dạo phố Sài Gòn.',
 
     'cta.title': 'Sẵn sàng khám phá Sài Gòn?',
     'cta.subtitle': 'Lịch trình đầu tiên chỉ cách vài thao tác.',

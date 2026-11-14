@@ -34,6 +34,7 @@ export default function TripSummaryView({
 
   const dayCount = Number(trip?.days) || 1;
   const initialBudget = Number(trip?.budget) || 5000000;
+  const memberCount = Number(trip?.member_count) || (trip?.companion === 'solo' ? 1 : 4);
 
   // Thống kê địa điểm đã đi
   const totalStops = items.length;
@@ -48,14 +49,15 @@ export default function TripSummaryView({
     let transportCost = 0;
 
     items.forEach((item) => {
-      const cost = Number(item.estimated_cost) || 0;
+      const cost = (Number(item.estimated_cost) || 0) * memberCount;
       if (item.category === 'food' || item.is_lunch) {
         diningCost += cost;
       } else {
         activitiesCost += cost;
       }
       if (item.transit_info?.estimated_fare_vnd) {
-        transportCost += Number(item.transit_info.estimated_fare_vnd);
+        const fare = Number(item.transit_info.estimated_fare_vnd);
+        transportCost += item.transit_info.mode === 'grab_bike' ? fare * memberCount : fare;
       }
     });
 
@@ -111,7 +113,7 @@ export default function TripSummaryView({
               className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-extrabold text-amber-900 shadow-xs hover:bg-amber-100"
             >
               <Camera className="h-4 w-4 text-amber-600" />
-              <span>{lang === 'vi' ? 'Xuất Thẻ ảnh Kỷ niệm (Story Card)' : 'Export Story Card'}</span>
+              <span>{lang === 'vi' ? 'Photobook Kỷ niệm' : 'Trip Photobook'}</span>
             </button>
           )}
 

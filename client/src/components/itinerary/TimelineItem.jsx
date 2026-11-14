@@ -22,10 +22,12 @@ import CategoryTile from '../CategoryTile.jsx';
 
 export default function TimelineItem({
   item,
+  memberCount = 1,
   onSwap,
   onToggleAccept,
   onOpenDetail,
   onLocate,
+  onToggleVisited,
   swapping = false,
   disabled = false
 }) {
@@ -132,14 +134,28 @@ export default function TimelineItem({
               )}
             </div>
 
-            {/* Chi phí hiển thị góc phải trên cùng (Rõ ràng, không bao giờ bị đè) */}
+            {/* Chi phí hiển thị góc phải trên cùng (Chi tiết đơn giá và tổng nhóm) */}
             <div className="shrink-0 text-right">
-              <span className={cn(
-                'inline-block font-display text-xs sm:text-sm font-extrabold',
-                isVisited ? 'text-emerald-900 font-black' : 'text-slate-900'
-              )}>
-                {item.estimated_cost > 0 ? formatVnd(item.estimated_cost, lang) : (lang === 'vi' ? 'Miễn phí' : 'Free')}
-              </span>
+              {item.estimated_cost > 0 ? (
+                <>
+                  <span className={cn(
+                    'block font-display text-xs sm:text-sm font-extrabold',
+                    isVisited ? 'text-emerald-900 font-black' : 'text-slate-900'
+                  )}>
+                    {formatVnd(item.estimated_cost, lang)}
+                    {memberCount > 1 && <span className="text-[10px] font-semibold text-slate-500">/người</span>}
+                  </span>
+                  {memberCount > 1 && (
+                    <span className="block text-[9.5px] font-bold text-slate-500">
+                      {lang === 'vi' ? `Tổng: ${formatVnd(item.estimated_cost * memberCount, lang)} (${memberCount} ng)` : `Total: ${formatVnd(item.estimated_cost * memberCount, lang)}`}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="inline-block font-display text-xs sm:text-sm font-extrabold text-emerald-700">
+                  {lang === 'vi' ? 'Miễn phí' : 'Free'}
+                </span>
+              )}
             </div>
           </div>
 
@@ -179,53 +195,55 @@ export default function TimelineItem({
             </div>
 
             <div className="flex items-center gap-1.5 ml-auto">
-              {/* NẾU ĐÃ HOÀN THÀNH: KHÔNG CHO PHÉP ĐỔI ĐỊA ĐIỂM (Logic thực tế chuẩn) */}
+              {/* NẾU ĐÃ HOÀN THÀNH: KHÓA THAO TÁC, HIỂN THỊ CHẶNG ĐÃ HOÀN TẤT */}
               {isVisited ? (
-                <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-100/80 px-3 py-1.5 text-xs font-extrabold text-emerald-900 shadow-xs">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                  <span>{lang === 'vi' ? 'Chặng đã hoàn tất ✓' : 'Stop completed ✓'}</span>
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-100/90 px-3 py-1.5 text-xs font-extrabold text-emerald-900 shadow-xs">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>{lang === 'vi' ? 'Chặng đã hoàn tất ✓' : 'Completed ✓'}</span>
+                  </span>
+                </div>
               ) : (
                 <>
-                  {/* NÚT 1: ACCEPT */}
+                  {/* NÚT 1: ACCEPT (CHỐT ĐIỂM) */}
                   <button
                     type="button"
                     onClick={handleAcceptClick}
                     className={cn(
-                      'inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-extrabold shadow-xs transition-all active:scale-95',
+                      'inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-extrabold shadow-xs transition-all active:scale-95',
                       isAccepted
                         ? 'border border-emerald-400 bg-emerald-600 text-white shadow-emerald-200 hover:bg-emerald-700'
                         : 'border border-slate-200 bg-white text-slate-700 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700'
                     )}
-                    title={isAccepted ? (lang === 'vi' ? 'Đã duyệt điểm này. Bấm để bỏ chọn.' : 'Accepted. Click to undo.') : (lang === 'vi' ? 'Chấp nhận và chốt điểm này vào lịch trình' : 'Accept this stop')}
+                    title={isAccepted ? (lang === 'vi' ? 'Đã chốt điểm này. Bấm để bỏ chọn.' : 'Accepted. Click to undo.') : (lang === 'vi' ? 'Chấp nhận và chốt điểm này vào lịch trình' : 'Accept this stop')}
                   >
                     {isAccepted ? (
                       <>
                         <CheckCircle2 className="h-3.5 w-3.5" />
-                        <span>{lang === 'vi' ? 'Đã duyệt ✓' : 'Accepted'}</span>
+                        <span>{lang === 'vi' ? 'Đã chốt ✓' : 'Accepted'}</span>
                       </>
                     ) : (
                       <>
                         <Check className="h-3.5 w-3.5 text-slate-500 group-hover:text-emerald-600" />
-                        <span>{lang === 'vi' ? 'Accept' : 'Accept'}</span>
+                        <span>{lang === 'vi' ? 'Chốt điểm' : 'Accept'}</span>
                       </>
                     )}
                   </button>
 
-                  {/* NÚT 2: ĐỔI ĐỊA ĐIỂM */}
+                  {/* NÚT 2: ĐỔI ĐỊA ĐIỂM (SWAP) */}
                   <button
                     type="button"
                     onClick={handleOpenSwapModal}
                     disabled={disabled || swapping}
-                    className="inline-flex items-center gap-1 rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-extrabold text-amber-900 shadow-xs transition-all hover:bg-amber-100 hover:border-amber-400 active:scale-95 disabled:opacity-50"
-                    title={lang === 'vi' ? 'Đổi sang địa điểm tham quan khác' : 'Swap to another place'}
+                    className="inline-flex items-center gap-1 rounded-xl border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-extrabold text-amber-900 shadow-xs transition-all hover:bg-amber-100 hover:border-amber-400 active:scale-95 disabled:opacity-50"
+                    title={lang === 'vi' ? 'Đổi sang một địa điểm tương đương khác cùng quận' : 'Swap to another place'}
                   >
                     {swapping ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" />
                     ) : (
                       <RefreshCw className="h-3.5 w-3.5 text-amber-700" />
                     )}
-                    <span>{lang === 'vi' ? 'Đổi địa điểm' : 'Swap'}</span>
+                    <span>{lang === 'vi' ? 'Đổi điểm' : 'Swap'}</span>
                   </button>
                 </>
               )}

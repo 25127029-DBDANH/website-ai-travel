@@ -12,6 +12,7 @@ import {
   Plus,
   TrendingDown,
   TrendingUp,
+  Users,
   Utensils,
   Wallet,
   X
@@ -24,17 +25,24 @@ import { formatVnd } from '../../lib/format.js';
 export default function ExpenseTrackerView({ trip, items = [] }) {
   const { lang, t } = useI18n();
   const totalBudget = Number(trip?.budget) || 5000000;
+  const memberCount = Number(trip?.member_count) || (trip?.companion === 'solo' ? 1 : 4);
 
   // Khởi tạo danh sách chi tiêu ban đầu từ cả ĐIỂM ĐẾN VÀ CÁC CHẶNG DI CHUYỂN
   const [expenses, setExpenses] = useState(() => {
     const list = [];
     items.forEach((it, idx) => {
       // 1. Khoản chi cho địa điểm (vé tham quan / bữa ăn / cà phê)
+      const unitCost = Number(it.estimated_cost) || 0;
+      const totalPlaceCost = unitCost * memberCount;
+      const placeLabel = memberCount > 1 && unitCost > 0
+        ? `${it.place_name} (${formatVnd(unitCost, 'vi')}/người × ${memberCount} người)`
+        : `${it.place_name} (${lang === 'vi' ? 'Ngày' : 'Day'} ${it.day_number})`;
+
       list.push({
         id: `exp-place-${it.day_number}-${it.order_index}-${idx}`,
-        name: `${it.place_name} (${lang === 'vi' ? 'Ngày' : 'Day'} ${it.day_number})`,
-        planned: Number(it.estimated_cost) || 0,
-        actual: Number(it.estimated_cost) || 0,
+        name: placeLabel,
+        planned: totalPlaceCost,
+        actual: totalPlaceCost,
         category: it.is_lunch ? 'food' : (it.category || 'sightseeing'),
         dayNumber: it.day_number,
         isTransit: false
@@ -44,15 +52,23 @@ export default function ExpenseTrackerView({ trip, items = [] }) {
       if (it.transit_info) {
         const fare = Number(it.transit_info.estimated_fare_vnd) || 0;
         const isWalk = it.transit_info.mode === 'walk';
-        const modeLabel = isWalk
-          ? (lang === 'vi' ? 'Đi bộ' : 'Walk')
-          : (it.transit_info.mode === 'grab_car' ? 'GrabCar / Taxi Xanh SM' : 'GrabBike / beBike');
+        const isBike = it.transit_info.mode === 'grab_bike';
+        const transitCost = isBike && memberCount > 1 ? fare * memberCount : fare;
+        
+        let modeLabel = 'GrabBike';
+        if (isWalk) modeLabel = lang === 'vi' ? 'Đi bộ' : 'Walk';
+        else if (it.transit_info.mode === 'grab_car') modeLabel = 'GrabCar / Taxi';
+        else if (isBike && memberCount > 1) modeLabel = `${memberCount} xe GrabBike`;
+
+        const transitName = isBike && memberCount > 1
+          ? `🛵 Di chuyển chặng ${it.order_index}: đến ${it.place_name} (${formatVnd(fare, 'vi')}/xe × ${memberCount} xe GrabBike)`
+          : `🚗 Di chuyển chặng ${it.order_index}: đến ${it.place_name} (${modeLabel})`;
 
         list.push({
           id: `exp-transit-${it.day_number}-${it.order_index}-${idx}`,
-          name: `🚗 Di chuyển chặng ${it.order_index}: đến ${it.place_name} (${modeLabel})`,
-          planned: fare,
-          actual: fare,
+          name: transitName,
+          planned: transitCost,
+          actual: transitCost,
           category: 'transport',
           dayNumber: it.day_number,
           isTransit: true,
@@ -125,6 +141,17 @@ export default function ExpenseTrackerView({ trip, items = [] }) {
 
   return (
     <div className="space-y-5 animate-fade-in">
+      {memberCount > 1 && (
+        <div className="flex items-center gap-2 rounded-2xl border border-brand-200 bg-brand-50/70 p-3 text-xs font-semibold text-brand-900 shadow-2xs">
+          <Users className="h-4 w-4 shrink-0 text-brand-600" />
+          <span>
+            {lang === 'vi'
+              ? `Chuyến đi nhóm ${memberCount} người: Toàn bộ chi phí vé, ẩm thực và xe máy GrabBike đã được nhân theo ${memberCount} thành viên.`
+              : `Group of ${memberCount}: Costs and GrabBikes multiplied for ${memberCount} people.`}
+          </span>
+        </div>
+      )}
+
       {/* 4 THẺ TỔNG QUAN TÀI CHÍNH VÀ TIỀN DI CHUYỂN */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {/* Card 1: Ngân sách */}

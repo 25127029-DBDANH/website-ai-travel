@@ -160,45 +160,70 @@ export default function PlaceDetailModal({
 
         {/* Nội dung cuộn chi tiết */}
         <div className="scrollbar-thin flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+          {/* BANNER THÔNG BÁO KHÓA CHỨC NĂNG KHI ĐỊA ĐIỂM ĐÃ HOÀN THÀNH */}
+          {isVisited && (
+            <div className="rounded-2xl border-2 border-emerald-400 bg-emerald-50/90 p-3.5 text-emerald-950 shadow-xs animate-fade-in">
+              <div className="flex items-start gap-2.5">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-xs">
+                  <CheckCircle2 className="h-4 w-4" />
+                </span>
+                <div>
+                  <h4 className="font-display text-sm font-extrabold text-emerald-950">
+                    {lang === 'vi' ? '✓ ĐỊA ĐIỂM ĐÃ HOÀN THÀNH (ĐÃ CHECK-IN)' : '✓ COMPLETED STOP (CHECKED IN)'}
+                  </h4>
+                  <p className="mt-0.5 text-xs text-emerald-800 leading-relaxed">
+                    {lang === 'vi'
+                      ? 'Bạn đã hoàn tất ghé thăm điểm này trong hành trình thực tế. Các thao tác thay đổi lịch trình (đổi điểm, chốt điểm) đã được khóa để bảo toàn dữ liệu hành trình đã đi.'
+                      : 'You have visited this location. Route changes are locked (view-only mode).'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Trạng thái duyệt / Accept Badge */}
           <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3">
             <div className="flex items-center gap-2">
-              {isAccepted ? (
-                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-xs">
-                  <CheckCircle2 className="h-4 w-4" />
-                </span>
-              ) : (
-                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-slate-200 text-slate-600">
-                  <Clock className="h-4 w-4" />
-                </span>
-              )}
+              <span className={cn('flex h-7 w-7 items-center justify-center rounded-xl text-white shadow-xs', isVisited || isAccepted ? 'bg-emerald-600' : 'bg-slate-200 text-slate-600')}>
+                <CheckCircle2 className="h-4 w-4" />
+              </span>
               <div>
                 <p className="text-xs font-extrabold text-slate-900">
-                  {isAccepted
+                  {isVisited
+                    ? (lang === 'vi' ? 'Đã hoàn thành ghé thăm ✓' : 'Visited & Completed')
+                    : isAccepted
                     ? (lang === 'vi' ? 'Đã chốt vào lịch trình chính thức' : 'Accepted in Itinerary')
                     : (lang === 'vi' ? 'Điểm dự kiến (Chưa chốt)' : 'Tentative Stop')}
                 </p>
                 <p className="text-[11px] text-slate-500">
-                  {isAccepted
+                  {isVisited
+                    ? (lang === 'vi' ? 'Chặng này đã thực hiện xong, chỉ xem thông tin.' : 'Completed stop (view-only).')
+                    : isAccepted
                     ? (lang === 'vi' ? 'Điểm đến này đã được xác nhận sẵn sàng trải nghiệm.' : 'This stop is confirmed.')
                     : (lang === 'vi' ? 'Bạn có thể bấm Accept để chốt hoặc Đổi sang điểm khác.' : 'Click Accept to confirm or Swap.')}
                 </p>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => onToggleAccept && onToggleAccept(stop)}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-extrabold shadow-xs transition-all active:scale-97',
-                isAccepted
-                  ? 'border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
-              )}
-            >
-              <Check className="h-3.5 w-3.5" />
-              <span>{isAccepted ? (lang === 'vi' ? 'Đã duyệt ✓' : 'Accepted') : (lang === 'vi' ? 'Accept (Chốt điểm)' : 'Accept')}</span>
-            </button>
+            {!isVisited ? (
+              <button
+                type="button"
+                onClick={() => onToggleAccept && onToggleAccept(stop)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-extrabold shadow-xs transition-all active:scale-97',
+                  isAccepted
+                    ? 'border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                    : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                )}
+              >
+                <Check className="h-3.5 w-3.5" />
+                <span>{isAccepted ? (lang === 'vi' ? 'Đã duyệt ✓' : 'Accepted') : (lang === 'vi' ? 'Accept (Chốt điểm)' : 'Accept')}</span>
+              </button>
+            ) : (
+              <span className="rounded-xl border border-emerald-300 bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-900">
+                {lang === 'vi' ? 'Đã khóa thao tác' : 'Locked'}
+              </span>
+            )}
           </div>
 
           {/* Grid thông tin nhanh: Địa chỉ, giờ, chi phí */}
@@ -297,7 +322,8 @@ export default function PlaceDetailModal({
             </div>
           )}
 
-          {/* MỤC ĐỔI ĐỊA ĐIỂM (KHI LƯỚT ĐẾN CUỐI MODAL) */}
+          {/* MỤC ĐỔI ĐỊA ĐIỂM (CHỈ HIỂN THỊ KHI CHƯA HOÀN THÀNH) */}
+          {!isVisited && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
             <div className="flex items-center justify-between">
               <div>
@@ -396,62 +422,76 @@ export default function PlaceDetailModal({
               </div>
             )}
           </div>
+          )}
         </div>
 
         {/* Action bar dính dưới chân modal */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50/90 px-4 py-3 sm:px-6">
           <div className="flex flex-wrap items-center gap-2">
-            {/* Nút Accept */}
-            <button
-              type="button"
-              onClick={() => onToggleAccept && onToggleAccept(stop)}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-extrabold shadow-xs transition-all active:scale-97',
-                isAccepted
-                  ? 'border border-emerald-400 bg-emerald-600 text-white'
-                  : 'border border-slate-300 bg-white text-slate-800 hover:border-emerald-500 hover:text-emerald-700'
-              )}
-            >
-              <Check className="h-3.5 w-3.5" />
-              <span>{isAccepted ? (lang === 'vi' ? 'Đã duyệt ✓' : 'Accepted') : (lang === 'vi' ? 'Accept điểm này' : 'Accept stop')}</span>
-            </button>
+            {!isVisited ? (
+              <>
+                {/* Nút Accept */}
+                <button
+                  type="button"
+                  onClick={() => onToggleAccept && onToggleAccept(stop)}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-extrabold shadow-xs transition-all active:scale-97',
+                    isAccepted
+                      ? 'border border-emerald-400 bg-emerald-600 text-white'
+                      : 'border border-slate-300 bg-white text-slate-800 hover:border-emerald-500 hover:text-emerald-700'
+                  )}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  <span>{isAccepted ? (lang === 'vi' ? 'Đã duyệt ✓' : 'Accepted') : (lang === 'vi' ? 'Accept điểm này' : 'Accept stop')}</span>
+                </button>
 
-            {/* Nút Đổi địa điểm */}
-            <button
-              type="button"
-              onClick={() => setShowSwapList(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-extrabold text-amber-900 shadow-xs hover:bg-amber-100"
-            >
-              <RefreshCw className="h-3.5 w-3.5 text-amber-600" />
-              <span>{lang === 'vi' ? 'Đổi địa điểm' : 'Swap Place'}</span>
-            </button>
+                {/* Nút Đổi địa điểm */}
+                <button
+                  type="button"
+                  onClick={() => setShowSwapList(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-extrabold text-amber-900 shadow-xs hover:bg-amber-100"
+                >
+                  <RefreshCw className="h-3.5 w-3.5 text-amber-600" />
+                  <span>{lang === 'vi' ? 'Đổi địa điểm' : 'Swap Place'}</span>
+                </button>
+              </>
+            ) : (
+              <div className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-100 px-3.5 py-2 text-xs font-extrabold text-emerald-900 shadow-xs">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <span>{lang === 'vi' ? 'Chặng đã hoàn thành (Chỉ xem)' : 'Completed (View-only)'}</span>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Nút Đặt xe 3 lựa chọn (Grab / Xanh SM / Be) */}
-            <button
-              type="button"
-              onClick={() => setShowRideModal(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500 bg-emerald-600 px-3 py-2 text-xs font-extrabold text-white shadow-xs hover:bg-emerald-700 active:scale-97"
-              title="Đặt xe với 3 lựa chọn: Grab, Xanh SM hoặc Be"
-            >
-              <Bike className="h-3.5 w-3.5" />
-              <span>{lang === 'vi' ? 'Đặt xe (Grab/XanhSM/Be)' : 'Book Ride'}</span>
-            </button>
+            {!isVisited && (
+              <>
+                {/* Nút Đặt xe 3 lựa chọn (Grab / Xanh SM / Be) */}
+                <button
+                  type="button"
+                  onClick={() => setShowRideModal(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500 bg-emerald-600 px-3 py-2 text-xs font-extrabold text-white shadow-xs hover:bg-emerald-700 active:scale-97"
+                  title="Đặt xe với 3 lựa chọn: Grab, Xanh SM hoặc Be"
+                >
+                  <Bike className="h-3.5 w-3.5" />
+                  <span>{lang === 'vi' ? 'Đặt xe (Grab/XanhSM/Be)' : 'Book Ride'}</span>
+                </button>
 
-            {/* Nút Chụp ảnh check-in */}
-            {onOpenCheckin && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenCheckin(stop);
-                }}
-                className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100"
-              >
-                <Camera className="h-3.5 w-3.5 text-emerald-600" />
-                <span className="hidden sm:inline">{lang === 'vi' ? 'Check-in' : 'Photo'}</span>
-              </button>
+                {/* Nút Chụp ảnh check-in */}
+                {onOpenCheckin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenCheckin(stop);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100"
+                  >
+                    <Camera className="h-3.5 w-3.5 text-emerald-600" />
+                    <span className="hidden sm:inline">{lang === 'vi' ? 'Check-in' : 'Photo'}</span>
+                  </button>
+                )}
+              </>
             )}
 
             {/* Nút Đóng */}

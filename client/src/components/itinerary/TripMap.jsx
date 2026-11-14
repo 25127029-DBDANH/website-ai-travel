@@ -27,6 +27,7 @@ export default function TripMap({
   activeDay = 1,
   focusRequest = null,
   onOpenDetail,
+  trafficMode = false,
   isPanelMode = false,
   className
 }) {
@@ -161,12 +162,24 @@ export default function TripMap({
     if (points.length > 1) {
       polylineRef.current = L.polyline(
         points.map(({ latlng }) => latlng),
-        { className: 'route-draw', color: '#2563eb', weight: 4, opacity: 0.85, dashArray: '6, 8' }
+        {
+          className: trafficMode ? 'route-draw-traffic' : 'route-draw',
+          color: trafficMode ? '#ea580c' : '#2563eb',
+          weight: trafficMode ? 5 : 4,
+          opacity: 0.9,
+          dashArray: trafficMode ? '8, 6' : '6, 8'
+        }
       ).addTo(map);
+
+      if (trafficMode) {
+        polylineRef.current.bindPopup(
+          `<div style="font-size:12px;font-weight:700;color:#ea580c;padding:2px;">⚠️ Tuyến đường Giờ cao điểm (17h-19h)<br><span style="color:#64748b;font-weight:500;">Đã đệm thêm 20 phút kẹt xe vào lịch trình</span></div>`
+        );
+      }
     }
 
     map.fitBounds(bounds, { padding: [36, 36], maxZoom: 15 });
-  }, [points, activeDay, collapsed, hasPoints, reduced, lang, onOpenDetail]);
+  }, [points, activeDay, collapsed, hasPoints, reduced, lang, onOpenDetail, trafficMode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -261,15 +274,23 @@ export default function TripMap({
             {t('itinerary.map.empty')}
           </div>
         ) : (
-          <div
-            ref={containerRef}
-            role="region"
-            aria-label={t('itinerary.map.title')}
-            className={cn(
-              'w-full transition-all duration-300',
-              isPanelMode ? 'flex-1 min-h-[340px] h-full' : 'h-48 sm:h-60'
+          <div className="relative flex-1 w-full h-full">
+            {trafficMode && (
+              <div className="absolute top-2 left-2 z-[400] flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-500/95 px-2.5 py-1 text-[11px] font-black text-white shadow-md backdrop-blur-xs animate-pulse pointer-events-none">
+                <span>🚗</span>
+                <span>{lang === 'vi' ? 'Tuyến đường Giờ cao điểm (Màu cam · +20m kẹt xe)' : 'Rush Hour Route (+20m buffer)'}</span>
+              </div>
             )}
-          />
+            <div
+              ref={containerRef}
+              role="region"
+              aria-label={t('itinerary.map.title')}
+              className={cn(
+                'w-full transition-all duration-300',
+                isPanelMode ? 'flex-1 min-h-[340px] h-full' : 'h-48 sm:h-60'
+              )}
+            />
+          </div>
         ))}
     </section>
   );
