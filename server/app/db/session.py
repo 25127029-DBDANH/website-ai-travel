@@ -1,38 +1,42 @@
 """
 session.py — SQLAlchemy async session & connection pool configuration.
 Author  : Ngô Tấn Đạt (Member 3 — Places & Interactive Map)
+Modified: Đỗ Nguyễn An Khang — Added SQLite support for dev/demo
 """
 from __future__ import annotations
 
-import os
 from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase
+
+from app.core.config import settings
 
 # ---------------------------------------------------------------------------
-# Database URL
+# Database URL — from settings (.env)
 # ---------------------------------------------------------------------------
-# Reads DATABASE_URL from environment.  Fall back to a local dev default so
-# the app can start without a real .env during first-run exploration.
-# Example:  postgresql+asyncpg://user:password@localhost:5432/travel_db
-DATABASE_URL: str = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@localhost:5432/travel_db",
-)
-
+DATABASE_URL: str = settings.DATABASE_URL
 
 # ---------------------------------------------------------------------------
-# Engine (async)
+# Engine (async) — adapt parameters based on driver
 # ---------------------------------------------------------------------------
-engine = create_async_engine(
-    DATABASE_URL,
-    pool_size=10,           # number of persistent connections in the pool
-    max_overflow=20,        # extra connections beyond pool_size under load
-    pool_timeout=30,        # seconds to wait for a free connection
-    pool_recycle=1800,      # recycle connections every 30 min (avoids stale TCP)
-    echo=False,             # set True for SQL query logging during dev
-)
+_is_sqlite = DATABASE_URL.startswith("sqlite")
+
+_engine_kwargs: dict = {}
+if _is_sqlite:
+    _engine_kwargs = {
+        "echo": False,
+        "connect_args": {"check_same_thread": False},
+    }
+else:
+    _engine_kwargs = {
+        "pool_size": 10,
+        "max_overflow": 20,
+        "pool_timeout": 30,
+        "pool_recycle": 1800,
+        "echo": False,
+    }
+
+engine = create_async_engine(DATABASE_URL, **_engine_kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -45,14 +49,6 @@ AsyncSessionLocal = async_sessionmaker(
     autocommit=False,
     autoflush=False,
 )
-
-
-# ---------------------------------------------------------------------------
-# Declarative Base (shared by all ORM models)
-# ---------------------------------------------------------------------------
-class Base(DeclarativeBase):
-    """Base class that all SQLAlchemy ORM models inherit from."""
-    pass
 
 
 # ---------------------------------------------------------------------------

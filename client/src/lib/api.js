@@ -1,5 +1,9 @@
-// Browser-only data layer with rich HCMC catalog, detailed time slots, contingency scenarios, and Google Calendar sync.
-export const API_BASE = '';
+// Data layer with rich HCMC catalog, detailed time slots, contingency scenarios, Google Calendar sync,
+// and real backend API integration for Auth & Trip CRUD.
+// Author: Đỗ Nguyễn An Khang (Backend Lead & Auth Service) — API integration
+import { getAuthToken, clearAuthToken } from './auth.js';
+
+export const API_BASE = 'http://localhost:8000';
 
 export class ApiError extends Error {
   constructor(message, code = 'LOCAL_DATA', status = 0) {
@@ -8,6 +12,40 @@ export class ApiError extends Error {
     this.code = code;
     this.status = status;
   }
+}
+
+// ---------------------------------------------------------------------------
+// HTTP helper — calls real backend with JWT auth
+// ---------------------------------------------------------------------------
+async function request(method, path, body) {
+  const headers = { 'Content-Type': 'application/json' };
+  const token = getAuthToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers,
+      body: body != null ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new ApiError('Network error', 'NETWORK_ERROR', 0);
+  }
+
+  if (res.status === 401) {
+    clearAuthToken();
+    window.dispatchEvent(new Event('hcmc-auth-expired'));
+    const data = await res.json().catch(() => ({}));
+    throw new ApiError(data.detail || 'Unauthorized', data.detail || 'AUTH_TOKEN_EXPIRED', 401);
+  }
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new ApiError(data.detail || 'Request failed', data.detail || 'default', res.status);
+  }
+
+  return res.json();
 }
 
 const STORAGE_KEY = 'saigon-guide-local-data-v2';
@@ -1534,23 +1572,29 @@ export function downloadIcsFile(trip, items) {
 }
 
 export const api = {
-  register: async ({ email } = {}) => {
-    const user = { id: 'local-user', email: email || 'guest@example.com', name: 'Khách du lịch Sài Gòn' };
-    const state = readState();
-    state.user = user;
-    save(state);
-    return { user, token: 'local-session' };
+  // =====================================================================
+  // AUTH — calls real backend
+  // =====================================================================
+  register: async ({ username, password } = {}) => {
+    return request('POST', '/api/v1/auth/register', { username, password });
   },
-  login: async ({ email } = {}) => api.register({ email }),
-  loginWithGoogle: async () => api.register({ email: 'guest@example.com' }),
-  getMe: async () => ({ user: readState().user }),
+  login: async ({ username, password } = {}) => {
+    return request('POST', '/api/v1/auth/login', { username, password });
+  },
+  loginWithGoogle: async () => {
+    throw new ApiError('Google Sign-In is not available', 'GOOGLE_NOT_CONFIGURED', 0);
+  },
+  getMe: async () => {
+    return request('GET', '/api/v1/auth/me');
+  },
   changePassword: async () => ({ success: true }),
-  deleteAccount: async () => {
-    const state = readState();
-    state.user = null;
-    save(state);
-    return { success: true };
+  deleteAccount: async (payload) => {
+    return request('DELETE', '/api/v1/auth/me', payload);
   },
+
+  // =====================================================================
+  // SETTINGS — local only (no backend endpoint needed)
+  // =====================================================================
   getSettings: async () => ({ settings: readState().settings }),
   updateSettings: async (settings) => {
     const state = readState();
@@ -1559,125 +1603,76 @@ export const api = {
     return { settings: state.settings };
   },
 
+  // =====================================================================
+  // TRIPS — calls real backend
+  // =====================================================================
   createTrip: async (payload = {}) => {
-    const state = readState();
-    const id = nextId();
+    // Generate itinerary items locally (same as before) then send to backend
     const days = Math.min(14, Math.max(1, Number(payload.days) || 3));
     const placesPerDay = Math.min(6, Math.max(3, Number(payload.places_per_day) || 4));
     const seed = Math.floor(Math.random() * PLACES.length);
     const memberCount = Number(payload.member_count) || (payload.companion === 'solo' ? 1 : 4);
     const companion = payload.companion || (memberCount === 1 ? 'solo' : 'group');
     const items = makeItinerary(days, placesPerDay, seed, payload.start_location || '', payload.transport_mode || 'grab_bike');
-    
-    const trip = {
-      id,
-      title: `Khám phá Sài Gòn ${days} ngày`,
+
+    const body = {
+      title: payload.title || `Khám phá Sài Gòn ${days} ngày`,
       days,
-      places_per_day: placesPerDay,
       budget: Number(payload.budget) || 5000000,
+      places_per_day: placesPerDay,
       companion,
       member_count: memberCount,
       transport_mode: payload.transport_mode || 'grab_bike',
       start_time: payload.start_time || '08:00',
       end_time: payload.end_time || '21:30',
-      status: 'completed',
-      created_at: new Date().toISOString(),
       start_location: payload.start_location || 'Quận 1, TP. Hồ Chí Minh',
       preferences: payload.preferences || ['food', 'culture'],
-      cover_photo: items[0]?.photo_url || photo('independence-palace.jpg'),
-      cover_place_name: items[0]?.place_name || 'Dinh Độc Lập',
-      is_shared: false,
-      source: 'form'
+      itinerary_items: items,
     };
 
-    trip.total_estimated = summarize(trip, items).total_estimated;
-    trip.place_count = items.length;
-    state.trips[id] = { trip, items };
-    state.messages[id] = [];
-    save(state);
+    const trip = await request('POST', '/api/v1/trips/', body);
     return trip;
   },
 
-  listTrips: async () => ({
-    trips: Object.values(readState().trips)
-      .map(({ trip }) => trip)
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-  }),
+  listTrips: async () => {
+    return request('GET', '/api/v1/trips/me');
+  },
 
   getTrip: async (id) => {
-    const { trip, items } = record(id);
-    return { trip, itinerary_items: items, budget_summary: summarize(trip, items) };
+    return request('GET', `/api/v1/trips/${id}`);
   },
 
   updateTrip: async (id, updates) => {
-    const state = readState();
-    const item = state.trips[id];
-    if (!item) throw missing();
-    item.trip = { ...item.trip, ...updates };
-    save(state);
-    return item.trip;
+    return request('PUT', `/api/v1/trips/${id}`, updates);
   },
 
   deleteTrip: async (id) => {
-    const state = readState();
-    delete state.trips[id];
-    delete state.messages[id];
-    for (const [token, target] of Object.entries(state.shares)) {
-      if (target === id) delete state.shares[token];
-    }
-    save(state);
-    return { success: true };
+    return request('DELETE', `/api/v1/trips/${id}`);
   },
 
   duplicateTrip: async (id) => {
-    const source = record(id);
-    const state = readState();
-    const copyId = nextId();
-    const trip = {
-      ...source.trip,
-      id: copyId,
-      title: `${source.trip.title} (bản sao)`,
-      created_at: new Date().toISOString(),
-      is_shared: false
-    };
-    state.trips[copyId] = { trip, items: source.items.map((item) => ({ ...item })) };
-    state.messages[copyId] = [];
-    save(state);
-    return { id: copyId, trip };
+    return request('POST', `/api/v1/trips/${id}/clone`);
   },
 
   createShareLink: async (id) => {
-    record(id);
-    const state = readState();
-    const token = `share-${Math.random().toString(36).slice(2, 9)}`;
-    state.shares[token] = id;
-    state.trips[id].trip.is_shared = true;
-    save(state);
-    return { token, share_url: `${window.location.origin}/s/${token}` };
+    return request('POST', `/api/v1/trips/${id}/share`);
   },
 
-  revokeShareLink: async (id, token) => {
-    const state = readState();
-    const key = token || Object.keys(state.shares).find((val) => state.shares[val] === id);
-    if (key) delete state.shares[key];
-    if (state.trips[id]) state.trips[id].trip.is_shared = false;
-    save(state);
-    return { success: true };
+  revokeShareLink: async (id) => {
+    return request('DELETE', `/api/v1/trips/${id}/share`);
   },
 
   getSharedTrip: async (token) => {
-    const id = readState().shares[token];
-    if (!id) throw missing();
-    const { trip, items } = record(id);
-    return { trip, itinerary_items: items, budget_summary: summarize(trip, items) };
+    return request('GET', `/api/v1/trips/shared/${token}`);
   },
 
   cloneSharedTrip: async (token) => {
-    const id = readState().shares[token];
-    if (!id) throw missing();
-    return api.duplicateTrip(id);
+    return request('POST', `/api/v1/trips/shared/${token}/clone`);
   },
 
+  // =====================================================================
+  // LOCAL-ONLY operations (used by other team members' components)
+  // =====================================================================
   // Lấy danh sách địa điểm thay thế tương đương
   getAlternatives: (item) => {
     const sameCat = PLACES.filter(
