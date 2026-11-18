@@ -179,14 +179,20 @@ docker compose up --build
 * **Thư mục & File sở hữu chính:**
   * `server/app/db/schema.sql` (Lược đồ CSDL PostgreSQL)
   * `server/app/db/session.py` (Cấu hình SQLAlchemy Engine & SessionLocal)
-  * `server/app/db/hcmc_data.py` (Kho dữ liệu Seed 70+ địa điểm TP.HCM)
+  * `server/app/db/hcmc_data.py` (Kho dữ liệu Seed 320+ địa điểm TP.HCM — 40+ địa điểm/quận gồm tham quan, ăn uống, đồ uống/cafe)
   * `server/app/services/places_service.py` (Bộ đệm Cache TTL 7 ngày & Fallback Places API)
   * `server/app/api/v1/endpoints/places.py` (Bộ API địa điểm TP.HCM)
   * `client/src/components/itinerary/PlaceDetailModal.jsx` *(Tự tích hợp)*
 * **Nhiệm vụ cụ thể:**
   1. *Lược đồ CSDL Quan hệ:* Thiết kế các bảng `users`, `trips`, `trip_days`, `itinerary_items`, `expenses`, `places_cache` với ràng buộc khóa ngoại (Foreign Keys) và Indexes tăng tốc truy vấn.
   2. *Bộ đệm Địa điểm (Places Cache TTL 7 ngày):* Xây dựng cơ chế cache địa điểm trong bảng `places_cache`; tự động hoàn trả dữ liệu từ CSDL cục bộ; chỉ gọi Google Places API New khi cache miss hoặc dữ liệu quá hạn 7 ngày.
-  3. *Tập dữ liệu Mồi TP.HCM (`hcmc_data.py`):* Thu thập, làm sạch và chuẩn hóa hơn 70+ địa danh nổi tiếng Sài Gòn đầy đủ tọa độ GPS, mức giá, thời lượng tham quan, ảnh chất lượng cao.
+  3. *Tập dữ liệu Mồi TP.HCM (`hcmc_data.py`) chuẩn hóa quy mô lớn:*
+     * **Quy chuẩn định lượng bắt buộc:** Thu thập, làm sạch và chuẩn hóa tối thiểu **40+ địa điểm cho mỗi quận trọng điểm** (gồm 8 quận chính: Quận 1, Quận 3, Quận 5, Bình Thạnh, Quận 4, Phú Nhuận, TP. Thủ Đức, Quận 7 -> Tổng quy mô CSDL đạt tối thiểu **320+ địa điểm thực tế**).
+     * **Cơ cấu danh mục bắt buộc cho từng quận:** Mỗi quận bắt buộc phải có đầy đủ 3 nhóm thiết yếu:
+       - *Địa điểm tham quan, di tích lịch sử, bảo tàng, công viên văn hóa* (tối thiểu 10–15 điểm/quận).
+       - *Quán ăn, nhà hàng đặc sản, ẩm thực đường phố, quán ăn Michelin/Bib Gourmand* (tối thiểu 15–20 quán/quận).
+       - *Quán đồ uống, cà phê phong cách, trà sữa, quán rooftop nổi tiếng* (tối thiểu 10–15 quán/quận).
+     * **Bộ trường dữ liệu bắt buộc (100% chuẩn hóa):** Tên tiếng Việt & tiếng Anh, Địa chỉ chính xác, Quận, Tọa độ GPS (latitude, longitude), Phân loại danh mục (`attraction`, `culture`, `food`, `cafe`, `shopping`), Phân loại không gian (`is_indoor` phục vụ kịch bản né mưa), Giờ mở/đóng cửa (`open_time`, `close_time`), Mức giá vé/chi phí dự kiến (`entry_fee_vnd`), Điểm đánh giá (rating), Tags từ khóa và **bắt buộc phải có đường dẫn ảnh thật chất lượng cao (`photo_url`)** để hiển thị đồng bộ lên Bản đồ, Thẻ lịch trình, Modal chi tiết và Photobook kỷ niệm.
   4. *YÊU CẦU TỰ TÍCH HỢP & TEST E2E:*
      * Đảm bảo dữ liệu từ DB hiển thị đầy đủ trên Bản đồ Leaflet (`TripMap.jsx`).
      * Tự kết nối API chi tiết địa điểm vào `PlaceDetailModal.jsx` (ảnh, mô tả, giờ mở cửa).
@@ -331,7 +337,7 @@ website-ai-travel/
     ├── .env.example               # Mẫu biến môi trường (Database URL, Gemini API Key, JWT Secret)
     └── app/
         ├── core/                  # Cấu hình hệ thống, bảo mật bcrypt và JWT
-        ├── db/                    # Schema CSDL PostgreSQL, Session và Seed Data 70+ địa điểm TP.HCM
+        ├── db/                    # Schema CSDL PostgreSQL, Session và Seed Data 320+ địa điểm TP.HCM (40+ điểm/quận)
         ├── schemas/               # Pydantic Schemas kiểm thực dữ liệu đầu vào/ra
         ├── services/              # Xử lý nghiệp vụ thông minh: Gemini AI, Cache địa điểm, Transit, Lịch .ICS
         ├── utils/                 # Thuật toán Haversine tính cự ly & cước 3 hãng xe
