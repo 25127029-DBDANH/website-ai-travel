@@ -85,7 +85,7 @@ docker compose up --build
 | **Frontend: Form khảo sát 8 tiêu chí & Landing Page 3D** | `client/src/components/TripForm.jsx`, `LandingPage.jsx`, `components/landing/*` | **Phạm Gia Hưng** |
 | **Frontend: Quản lý Chuyến của tôi & Cài đặt Profile** | `client/src/pages/MyTripsPage.jsx`, `client/src/pages/SettingsPage.jsx` | **Phạm Gia Hưng** |
 | **Frontend: Hệ thống Đa ngôn ngữ Song ngữ Anh - Việt** | `client/src/i18n/I18nContext.jsx`, `client/src/i18n/translations.js` | **Phạm Gia Hưng** |
-| **Frontend: Tích hợp Đăng nhập, Google Sign-In & Auth State** | `client/src/components/AuthModal.jsx`, `context/AuthContext.jsx`, `lib/auth.js` | **Đỗ Nguyễn An Khang** *(Tự tích hợp)* |
+| **Frontend: Tích hợp Đăng nhập, Đăng ký Tài khoản & Auth State** | `client/src/components/AuthModal.jsx`, `context/AuthContext.jsx`, `lib/auth.js` | **Đỗ Nguyễn An Khang** *(Tự tích hợp)* |
 | **Frontend: Tích hợp Trang xem chuyến đi công khai** | `client/src/pages/SharedTripPage.jsx`, `client/src/components/ShareDialog.jsx` | **Đỗ Nguyễn An Khang** *(Tự tích hợp)* |
 | **Frontend: Tích hợp Modal Chi tiết địa điểm TP.HCM** | `client/src/components/itinerary/PlaceDetailModal.jsx` | **Ngô Tấn Đạt** *(Tự tích hợp)* |
 | **Frontend: Tích hợp Cước xe 3 hãng & Khối di chuyển chặng** | `client/src/components/itinerary/TransitConnector.jsx`, `RidePickerModal.jsx` | **Đàng Minh Hạo & Diệp Bảo Danh** |
@@ -157,12 +157,12 @@ docker compose up --build
   * `server/app/api/v1/api.py` (Router tổng hợp API v1)
   * `server/app/core/config.py`, `security.py`, `dependencies.py` (Cấu hình môi trường `.env`, mã hóa bcrypt, JWT Bearer)
   * `server/app/schemas/user.py`, `trip.py` (Pydantic models)
-  * `server/app/api/v1/endpoints/auth.py` (Đăng ký, đăng nhập mật khẩu, Google OAuth 2.0)
+  * `server/app/api/v1/endpoints/auth.py` (Đăng ký tài khoản, đăng nhập mật khẩu bcrypt + JWT; Google Sign-In để sau)
   * `server/app/api/v1/endpoints/trips.py` (CRUD chuyến đi, `GET /trips/me`, `POST /trips/{id}/clone`, `POST /share`)
   * `client/src/pages/SharedTripPage.jsx` *(Tự tích hợp)*
 * **Nhiệm vụ cụ thể:**
   1. *Khung dự án FastAPI:* Dựng cấu trúc mã nguồn Backend chuẩn RESTful; cấu hình CORS cho phép kết nối an toàn từ Frontend; thiết lập bắt lỗi ngoại lệ tập trung.
-  2. *Hệ thống Xác thực (Auth Service):* Mã hóa mật khẩu bằng `bcrypt`; cấp phát và xác thực JWT Bearer Token theo RFC 7519 trong Dependency `get_current_user`; tích hợp Google OAuth 2.0.
+  2. *Hệ thống Xác thực (Auth Service):* Mã hóa mật khẩu bằng `bcrypt`; cấp phát và xác thực JWT Bearer Token theo RFC 7519 trong Dependency `get_current_user`; cơ chế tạo tài khoản và đăng nhập trực tiếp (Google OAuth để sau).
   3. *Bộ API Quản lý Chuyến đi:* Lưu chuyến đi mới tạo từ AI; lấy dữ liệu chi tiết lịch trình; cập nhật trạng thái chặng (`visited`, ghi chú, ảnh); lấy danh sách chuyến đi của user; sao chép nhân bản chuyến đi; API chia sẻ link công khai ẩn thông tin nhạy cảm.
   4. *YÊU CẦU TỰ TÍCH HỢP & TEST E2E:*
      * Kết nối API đăng nhập/đăng ký vào `AuthModal.jsx` và `AuthContext.jsx`.
