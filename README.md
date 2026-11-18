@@ -350,7 +350,6 @@ website-ai-travel/
 
 Để đảm bảo quá trình phát triển không xảy ra xung đột mã nguồn:
 1. **Nhánh `main`:** Được bảo vệ (*Protected Branch*), chỉ chứa mã nguồn đã kiểm thử ổn định 100%.
-2. **Nhánh `dev`:** Nhánh tích hợp chung của toàn nhóm.
 3. **Nhánh tính năng cá nhân (*Feature Branches*):**
    * `feature/fe-companion-v2-full` — **Danh** & **Hưng** (Mã nguồn Frontend hoàn chỉnh)
    * `feature/be-auth-trip` — **Khang** (Backend Auth & CRUD Chuyến đi)
@@ -358,4 +357,4 @@ website-ai-travel/
    * `feature/ai-gemini-flow` — **Lam** (Gemini AI & Tối ưu lịch trình)
    * `feature/be-transit-adaptive` — **Hạo** (Routing cước 3 xe & Kịch bản thích ứng)
    * `feature/devops-docker-ci` — **Đăng** (Docker, Pytest & Triển khai Cloud)
-4. **Quy tắc Merge:** Mọi thành viên sau khi hoàn thành tính năng phải mở Pull Request (PR) vào nhánh `dev` và được Trưởng nhóm (Danh) phê duyệt sau khi đã test không xung đột.
+4. **Quy tắc Merge:** Mọi thành viên sau khi hoàn thành tính năng phải mở Pull Request (PR) vào nhánh `main` và được Trưởng nhóm (Danh) phê duyệt sau khi đã test không xung đột.

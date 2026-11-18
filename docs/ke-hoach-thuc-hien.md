@@ -121,7 +121,7 @@ Dưới đây là bảng phân định trách nhiệm chi tiết đến **từng
   * `client/src/lib/api.js` (Cấu trúc Gateway API trung tâm)
   * `client/server.py` & `CHAY-DEMO.bat`
 * **Nhiệm vụ cụ thể:**
-  1. *Quản trị Repository GitHub:* Thiết lập nhánh `main` (bảo vệ) và nhánh `dev`; phân chia nhánh tính năng (`feature/*`); xét duyệt Pull Request (Code Review); giải quyết xung đột mã nguồn (merge conflict).
+  1. *Quản trị Repository GitHub:* Quản lý nhánh `main` (nhánh chính thức có bảo vệ); phân chia nhánh tính năng (`feature/*`); xét duyệt Pull Request (Code Review); giải quyết xung đột mã nguồn (merge conflict).
   2. *Khung 1 (Bản đồ Leaflet tương tác):* Lập trình bản đồ tải nhanh bằng Leaflet/OpenStreetMap; vẽ marker số thứ tự [1, 2, 3, 4] phân biệt các chặng trong ngày; vẽ đường polyline nối tuyến; tự động cập nhật marker thành dấu tích xanh `✓` ngay khi chặng được check-in.
   3. *Khung 2 (Lịch trình Timeline 3 tầng chống đè chữ):* Xây dựng bố cục 3 tầng độc lập (Tầng 1: Giờ + Icon + Giá tiền góc phải; Tầng 2: Tên địa điểm 100% bề ngang không che chữ; Tầng 3: Nút Chốt điểm và Đổi điểm); đổi nền sang màu xanh ngọc nhẹ (`emerald-50`) và khóa toàn bộ thao tác chỉnh sửa đối với các điểm đã hoàn thành.
   4. *Tab 2 (Chế độ Đi thực tế thời gian thực):* Thẻ Hero hiển thị điểm đến tiếp theo; tích hợp định vị GPS chỉ đường Google Maps; nút bấm *"Hoàn thành chuyến đi"* chuyển trang mượt mà sang Tab 4 Tổng kết.
@@ -304,12 +304,11 @@ Nhóm áp dụng quy chuẩn phân nhánh chặt chẽ:
 1. **Repository chính thức:** `https://github.com/25127029-DBDANH/website-ai-travel`
 2. **Quy tắc phân nhánh (Git Branching Strategy):**
    * `main`: Nhánh sản phẩm chính thức, ổn định 100%, có bảo vệ (Protected Branch).
-   * `dev`: Nhánh tích hợp mã nguồn chung của toàn bộ 7 thành viên.
-   * Các nhánh tính năng cá nhân:
+      * Các nhánh tính năng cá nhân:
      * `feature/fe-companion-v2-full` (Danh & Hưng)
      * `feature/be-auth-trip` (Khang)
      * `feature/db-schema-seed` (Đạt)
      * `feature/ai-gemini-flow` (Lam)
      * `feature/be-transit-adaptive` (Hạo)
      * `feature/devops-docker-ci` (Đăng)
-3. **Quy trình duyệt mã nguồn (Code Review):** Mọi nhánh khi hoàn thành đều phải tạo Pull Request (PR) vào nhánh `dev` và phải được Trưởng nhóm (Danh) review và phê duyệt trước khi merge.
+3. **Quy trình duyệt mã nguồn (Code Review):** Mọi thành viên tạo nhánh tính năng `feature/*` từ `main`. Khi hoàn thành tính năng, tạo Pull Request (PR) trực tiếp vào nhánh `main`. Trưởng nhóm (Danh) sẽ review, chạy test kiểm tra không xung đột và phê duyệt merge vào `main`.
