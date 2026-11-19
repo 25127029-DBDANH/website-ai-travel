@@ -187,6 +187,7 @@ Dưới đây là bảng phân định trách nhiệm chi tiết đến **từng
 ### 4. NGÔ TẤN ĐẠT — DATABASE & DATA ENGINEER
 * **Vị trí cốt lõi:** Data Engineer — Thiết kế CSDL PostgreSQL, Chiến lược Cache & Dữ liệu Địa điểm TP.HCM.
 * **Các file code sở hữu chính:**
+  * `server/app/db/models.py` *(Bổ sung Model ORM `Place` tương thích SQLite & PostgreSQL)*
   * `server/app/db/schema.sql`
   * `server/app/db/session.py`
   * `server/app/db/hcmc_data.py`
@@ -194,7 +195,7 @@ Dưới đây là bảng phân định trách nhiệm chi tiết đến **từng
   * `server/app/api/v1/endpoints/places.py`
   * `client/src/components/itinerary/PlaceDetailModal.jsx` *(Tự tích hợp)*
 * **Nhiệm vụ cụ thể:**
-  1. *Lược đồ CSDL Quan hệ (PostgreSQL Schema):* Thiết kế các bảng `users`, `trips`, `trip_days`, `itinerary_items`, `expenses`, `places_cache` với ràng buộc toàn vẹn khóa ngoại (Foreign Keys) và Indexes tăng tốc truy vấn.
+  1. *Đồng bộ Kiến trúc CSDL theo chuẩn SQLAlchemy ORM (tương thích 100% SQLite local & PostgreSQL/Supabase):* Bổ sung model `Place(Base)` vào `server/app/db/models.py` để `Base.metadata.create_all` tự động tạo đủ 3 bảng (`users`, `trips`, `places`); chuyển câu truy vấn trong `places_service.py` từ raw SQL PostgreSQL (`ILIKE`, `ANY(tags)`) sang SQLAlchemy ORM (`select(Place).where(...)`); sửa phần nạp dữ liệu cuối file `hcmc_data.py` sang `session.add(Place(...))` kèm `photo_url`.
   2. *Bộ đệm Địa điểm (Places Cache TTL 7 ngày):* Xây dựng cơ chế cache địa điểm trong bảng `places_cache`; tự động hoàn trả dữ liệu từ CSDL cục bộ; chỉ gọi Google Places API New khi cache miss hoặc dữ liệu quá hạn 7 ngày.
   3. *Tập dữ liệu Mồi TP.HCM (`hcmc_data.py`) chuẩn hóa quy mô lớn:*
      * **Quy chuẩn định lượng bắt buộc:** Thu thập, làm sạch và chuẩn hóa tối thiểu **40+ địa điểm cho mỗi quận trọng điểm** (gồm 8 quận chính: Quận 1, Quận 3, Quận 5, Bình Thạnh, Quận 4, Phú Nhuận, TP. Thủ Đức, Quận 7 -> Tổng quy mô CSDL đạt tối thiểu **320+ địa điểm thực tế**).
@@ -208,7 +209,7 @@ Dưới đây là bảng phân định trách nhiệm chi tiết đến **từng
      * Đảm bảo dữ liệu từ DB hiển thị đầy đủ trên Bản đồ Leaflet (`TripMap.jsx`).
      * Tự kết nối API chi tiết địa điểm vào `PlaceDetailModal.jsx` (ảnh, mô tả, giờ mở cửa).
      * Tự test truy vấn dữ liệu địa điểm hiển thị chính xác trên giao diện Frontend.
-* **Tiêu chí hoàn thành (DoD):** CSDL triển khai hoàn tất trên PostgreSQL/Supabase; script seed nạp dữ liệu chạy 100% thành công; query địa điểm phản hồi dưới 30ms.
+* **Tiêu chí hoàn thành (DoD):** Đồng bộ 100% sang SQLAlchemy ORM chạy mượt trên cả SQLite (`travel.db`) lẫn PostgreSQL/Supabase; nạp đầy đủ dữ liệu mồi tối thiểu 40+ địa điểm/quận (320+ địa điểm toàn TP.HCM) gồm đủ 3 nhóm tham quan, ăn uống, đồ uống/cà phê; 100% có GPS, giờ mở/đóng cửa và ảnh `photo_url`; API `GET /places/search` phản hồi dưới 30ms.
 
 ---
 
