@@ -33,10 +33,12 @@ class TripCreate(BaseModel):
 class TripUpdate(BaseModel):
     title: str | None = None
     status: str | None = None
+    itinerary_items: list[dict[str, Any]] | None = None
 
 
 class TripItemUpdate(BaseModel):
     visited: bool | None = None
+    is_accepted: bool | None = None
     photo_url: str | None = None
     note: str | None = None
 
@@ -56,6 +58,16 @@ class TripOut(BaseModel):
     is_shared: bool = False
     cover_photo: str | None = None
     cover_place_name: str | None = None
+    places_per_day: int = 4
+    companion: str = "group"
+    member_count: int = 4
+    transport_mode: str = "grab_bike"
+    start_time: str = "08:00"
+    end_time: str = "21:30"
+    start_location: str = "Quận 1, TP. Hồ Chí Minh"
+    preferences: list[str] = Field(default_factory=list)
+    special_notes: str | None = None
+    source: str = "saved"
 
     model_config = {"from_attributes": True}
 

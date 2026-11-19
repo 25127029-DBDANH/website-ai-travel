@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "change-me-to-a-random-string"
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 10080  # 7 days
+    CORS_ORIGINS: str = (
+        "http://localhost:5173,http://localhost:3000,"
+        "http://127.0.0.1:5173,http://127.0.0.1:3000"
+    )
 
     GEMINI_API_KEY: str = ""
     GOOGLE_CLIENT_ID: str = ""

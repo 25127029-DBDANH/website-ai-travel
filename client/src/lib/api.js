@@ -3,7 +3,7 @@
 // Author: Đỗ Nguyễn An Khang (Backend Lead & Auth Service) — API integration
 import { getAuthToken, clearAuthToken } from './auth.js';
 
-export const API_BASE = 'http://localhost:8000';
+export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 
 export class ApiError extends Error {
   constructor(message, code = 'LOCAL_DATA', status = 0) {
@@ -1466,6 +1466,45 @@ function save(state) {
   return state;
 }
 
+function cacheBackendTrip(trip, items) {
+  if (!trip?.id) return null;
+  const state = readState();
+  const existing = state.trips?.[trip.id]?.trip || {};
+  const cachedTrip = { ...existing, ...trip };
+  state.trips = { ...state.trips, [trip.id]: { trip: cachedTrip, items: items || [] } };
+  save(state);
+  return { trip: cachedTrip, items: items || [] };
+}
+
+function cacheBackendItems(tripId, items, tripUpdates = {}) {
+  const state = readState();
+  const existing = state.trips?.[tripId]?.trip || { id: tripId };
+  const trip = { ...existing, ...tripUpdates };
+  state.trips = { ...state.trips, [tripId]: { trip, items } };
+  save(state);
+  return { items, budget_summary: budgetFor(trip, items) };
+}
+
+async function getBackendTrip(tripId) {
+  const data = await request('GET', `/api/v1/trips/${tripId}`);
+  cacheBackendTrip(data.trip, data.itinerary_items || []);
+  return data;
+}
+
+async function saveBackendItems(tripId, items) {
+  const trip = await request('PUT', `/api/v1/trips/${tripId}`, { itinerary_items: items });
+  return cacheBackendItems(tripId, items, trip);
+}
+
+async function updateBackendItem(tripId, dayNumber, orderIndex, updates) {
+  const result = await request(
+    'PATCH',
+    `/api/v1/trips/${tripId}/items/${dayNumber}/${orderIndex}`,
+    updates
+  );
+  return cacheBackendItems(tripId, result.items || []);
+}
+
 function missing() {
   return new ApiError('Không tìm thấy chuyến đi này.', 'NOT_FOUND', 404);
 }
@@ -1631,6 +1670,7 @@ export const api = {
     };
 
     const trip = await request('POST', '/api/v1/trips/', body);
+    cacheBackendTrip(trip, items);
     return trip;
   },
 
@@ -1638,12 +1678,15 @@ export const api = {
     return request('GET', '/api/v1/trips/me');
   },
 
-  getTrip: async (id) => {
-    return request('GET', `/api/v1/trips/${id}`);
-  },
+  getTrip: getBackendTrip,
 
   updateTrip: async (id, updates) => {
-    return request('PUT', `/api/v1/trips/${id}`, updates);
+    const trip = await request('PUT', `/api/v1/trips/${id}`, updates);
+    const state = readState();
+    if (state.trips?.[id]) {
+      cacheBackendTrip(trip, state.trips[id].items || []);
+    }
+    return trip;
   },
 
   deleteTrip: async (id) => {
@@ -1689,94 +1732,70 @@ export const api = {
 
   // Đổi địa điểm trực tiếp trên giao diện
   swapPlace: async (tripId, dayNumber, orderIndex, replacement) => {
-    const state = readState();
-    const entry = state.trips[tripId];
-    if (!entry) throw missing();
+    const data = await getBackendTrip(tripId);
+    const items = data.itinerary_items || [];
 
-    const targetIdx = entry.items.findIndex(
+    const targetIdx = items.findIndex(
       (it) => it.day_number === Number(dayNumber) && it.order_index === Number(orderIndex)
     );
-    if (targetIdx !== -1) {
-      const original = entry.items[targetIdx];
-      entry.items[targetIdx] = {
-        ...replacement,
-        day_number: original.day_number,
-        order_index: original.order_index,
-        time_slot: original.time_slot,
-        start_time: original.start_time,
-        end_time: original.end_time,
-        transit_info: original.transit_info,
-        visited: original.visited || false
-      };
-      const summary = summarize(entry.trip, entry.items);
-      entry.trip.total_estimated = summary.total_estimated;
-      save(state);
-      return { items: entry.items, budget_summary: summary };
-    }
-    return { items: entry.items, budget_summary: summarize(entry.trip, entry.items) };
+    if (targetIdx === -1) throw new ApiError('Trip item not found', 'TRIP_ITEM_NOT_FOUND', 404);
+
+    const original = items[targetIdx];
+    items[targetIdx] = {
+      ...replacement,
+      day_number: original.day_number,
+      order_index: original.order_index,
+      time_slot: original.time_slot,
+      start_time: original.start_time,
+      end_time: original.end_time,
+      transit_info: original.transit_info,
+      visited: original.visited || false,
+      is_accepted: original.is_accepted || false
+    };
+    return saveBackendItems(tripId, items);
   },
 
   // Đánh dấu đã ghé thăm (Check-in Companion)
   toggleVisited: async (tripId, dayNumber, orderIndex) => {
-    const state = readState();
-    const entry = state.trips[tripId];
-    if (!entry) throw missing();
-
-    const target = entry.items.find(
+    const data = await getBackendTrip(tripId);
+    const target = (data.itinerary_items || []).find(
       (it) => it.day_number === Number(dayNumber) && it.order_index === Number(orderIndex)
     );
-    if (target) {
-      target.visited = !target.visited;
-      save(state);
-      return { items: entry.items };
-    }
-    return { items: entry.items };
+    if (!target) throw new ApiError('Trip item not found', 'TRIP_ITEM_NOT_FOUND', 404);
+    return updateBackendItem(tripId, dayNumber, orderIndex, { visited: !target.visited });
   },
 
   // Chốt / Chấp nhận địa điểm trong lịch trình (Accept stop)
   toggleAcceptPlace: async (tripId, dayNumber, orderIndex) => {
-    const state = readState();
-    const entry = state.trips[tripId];
-    if (!entry) throw missing();
-
-    const target = entry.items.find(
+    const data = await getBackendTrip(tripId);
+    const target = (data.itinerary_items || []).find(
       (it) => it.day_number === Number(dayNumber) && it.order_index === Number(orderIndex)
     );
-    if (target) {
-      target.is_accepted = !target.is_accepted;
-      save(state);
-      return { items: entry.items };
-    }
-    return { items: entry.items };
+    if (!target) throw new ApiError('Trip item not found', 'TRIP_ITEM_NOT_FOUND', 404);
+    return updateBackendItem(tripId, dayNumber, orderIndex, { is_accepted: !target.is_accepted });
   },
 
   // Lưu ảnh và ghi chú check-in thực tế
   saveCheckin: async (tripId, dayNumber, orderIndex, { photoUrl, note } = {}) => {
-    const state = readState();
-    const entry = state.trips[tripId];
-    if (!entry) throw missing();
-
-    const target = entry.items.find(
+    const data = await getBackendTrip(tripId);
+    const target = (data.itinerary_items || []).find(
       (it) => it.day_number === Number(dayNumber) && it.order_index === Number(orderIndex)
     );
-    if (target) {
-      target.visited = true;
-      if (photoUrl) target.checkin_photo = photoUrl;
-      if (note) target.checkin_note = note;
-      target.checkin_time = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-      save(state);
-      return { items: entry.items };
-    }
-    return { items: entry.items };
+    if (!target) throw new ApiError('Trip item not found', 'TRIP_ITEM_NOT_FOUND', 404);
+    return updateBackendItem(tripId, dayNumber, orderIndex, {
+      visited: true,
+      ...(photoUrl ? { photo_url: photoUrl } : {}),
+      ...(note ? { note } : {})
+    });
   },
 
   // Áp dụng Kịch bản Trời mưa (Rain Mode) cho 1 ngày
   applyRainMode: async (tripId, dayNumber, enableRain) => {
-    const state = readState();
-    const entry = state.trips[tripId];
-    if (!entry) throw missing();
+    const data = await getBackendTrip(tripId);
+    const trip = data.trip;
+    let items = data.itinerary_items || [];
 
-    entry.items = entry.items.map((item) => {
+    items = items.map((item) => {
       if (item.day_number !== Number(dayNumber)) return item;
 
       if (enableRain) {
@@ -1797,7 +1816,7 @@ export const api = {
             ...item,
             transit_info: {
               ...item.transit_info,
-              mode: entry.trip.transport_mode || 'grab_bike',
+              mode: trip.transport_mode || 'grab_bike',
               is_rain_mode: false,
               estimated_fare_vnd: Math.round(item.transit_info.estimated_fare_vnd / 1.5)
             }
@@ -1807,22 +1826,18 @@ export const api = {
       return item;
     });
 
-    const summary = summarize(entry.trip, entry.items);
-    entry.trip.total_estimated = summary.total_estimated;
-    save(state);
-    return { items: entry.items, budget_summary: summary };
+    return saveBackendItems(tripId, items);
   },
 
   // Áp dụng Kịch bản Giờ cao điểm (Rush-Hour Mode) cho 1 ngày
   applyTrafficMode: async (tripId, dayNumber, enableTraffic) => {
-    const state = readState();
-    const entry = state.trips[tripId];
-    if (!entry) throw missing();
+    const data = await getBackendTrip(tripId);
+    let items = data.itinerary_items || [];
 
-    entry.items = entry.items.map((item) => {
+    items = items.map((item) => {
       if (item.day_number !== Number(dayNumber)) return item;
 
-      if (enableTraffic && item.transit_info) {
+      if (enableTraffic && item.transit_info && !item.transit_info.is_rush_hour) {
         // Tăng thêm 20 phút kẹt xe vào thời gian di chuyển
         return {
           ...item,
@@ -1833,22 +1848,29 @@ export const api = {
           }
         };
       }
+      if (!enableTraffic && item.transit_info?.is_rush_hour) {
+        return {
+          ...item,
+          transit_info: {
+            ...item.transit_info,
+            duration_min: Math.max(0, item.transit_info.duration_min - 20),
+            is_rush_hour: false
+          }
+        };
+      }
       return item;
     });
 
-    const summary = summarize(entry.trip, entry.items);
-    save(state);
-    return { items: entry.items, budget_summary: summary };
+    return saveBackendItems(tripId, items);
   },
 
   // Tinh chỉnh AI: Tối ưu tiết kiệm ngân sách 20% (Hoán đổi quán đặc sản bình dân thật sự)
   optimizeBudget: async (tripId) => {
-    const state = readState();
-    const entry = state.trips[tripId];
-    if (!entry) throw missing();
+    const data = await getBackendTrip(tripId);
+    const items = data.itinerary_items || [];
 
     // Tìm điểm ăn uống có chi phí cao nhất để đổi sang quán đặc sản Michelin bình dân
-    const expensiveFood = entry.items.find((it) => it.estimated_cost >= 80000 && it.category === 'food') || entry.items[2];
+    const expensiveFood = items.find((it) => it.estimated_cost >= 80000 && it.category === 'food') || items[2];
     if (expensiveFood) {
       expensiveFood.place_id = 'p-com-tam-ba-ghien';
       expensiveFood.place_name = 'Cơm Tấm Ba Ghiền';
@@ -1858,10 +1880,7 @@ export const api = {
       expensiveFood.district = 'Phú Nhuận';
     }
 
-    const summary = summarize(entry.trip, entry.items);
-    entry.trip.total_estimated = summary.total_estimated;
-    save(state);
-    return { items: entry.items, budget_summary: summary };
+    return saveBackendItems(tripId, items);
   },
 
   getMessages: async (id) => {

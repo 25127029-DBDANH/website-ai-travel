@@ -119,6 +119,16 @@ def _trip_out(trip: Trip, items: list[dict] | None = None) -> TripOut:
         is_shared=trip.share_token is not None,
         cover_photo=trip.cover_photo,
         cover_place_name=trip.cover_place_name,
+        places_per_day=trip.places_per_day,
+        companion=trip.companion,
+        member_count=trip.member_count,
+        transport_mode=trip.transport_mode,
+        start_time=trip.start_time,
+        end_time=trip.end_time,
+        start_location=trip.start_location,
+        preferences=_parse_prefs(trip),
+        special_notes=trip.special_notes,
+        source="saved",
     )
 
 
@@ -227,20 +237,9 @@ async def get_trip(
     trip_data = _trip_out(trip, items)
     # Add extra fields the frontend expects
     trip_dict = trip_data.model_dump()
-    trip_dict.update({
-        "places_per_day": trip.places_per_day,
-        "companion": trip.companion,
-        "member_count": trip.member_count,
-        "transport_mode": trip.transport_mode,
-        "start_time": trip.start_time,
-        "end_time": trip.end_time,
-        "start_location": trip.start_location,
-        "preferences": _parse_prefs(trip),
-        "source": "saved",
-    })
 
     return TripDetailOut(
-        trip=trip_data,
+        trip=TripOut(**trip_dict),
         itinerary_items=items,
         budget_summary=budget,
     )
@@ -261,6 +260,13 @@ async def update_trip(
         trip.title = payload.title
     if payload.status is not None:
         trip.status = payload.status
+    if payload.itinerary_items is not None:
+        trip.itinerary_json = json.dumps(payload.itinerary_items)
+        trip.place_count = len(payload.itinerary_items)
+        if payload.itinerary_items:
+            trip.cover_photo = payload.itinerary_items[0].get("photo_url") or trip.cover_photo
+            trip.cover_place_name = payload.itinerary_items[0].get("place_name") or trip.cover_place_name
+        trip.total_estimated = _compute_budget(trip, payload.itinerary_items).total_estimated
     trip.updated_at = datetime.now(timezone.utc)
     await db.flush()
     await db.refresh(trip)
@@ -291,6 +297,8 @@ async def update_trip_item(
     updates = payload.model_dump(exclude_unset=True)
     if "visited" in updates:
         item["visited"] = updates["visited"]
+    if "is_accepted" in updates:
+        item["is_accepted"] = updates["is_accepted"]
     if "photo_url" in updates:
         if updates["photo_url"] is not None:
             item["checkin_photo"] = updates["photo_url"]
@@ -417,6 +425,7 @@ async def get_shared_trip(token: str, db: AsyncSession = Depends(get_db)):
         "budget": 0,
         "total_estimated": 0,
         "place_count": len(public_items),
+        "special_notes": None,
     })
 
     return TripDetailOut(
