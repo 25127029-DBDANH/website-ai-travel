@@ -1,53 +1,62 @@
-"""AI response structure and itinerary grounding contract tests."""
+"""Structured AI schema tests that do not call Gemini."""
 
 from __future__ import annotations
 
 import pytest
-from httpx import AsyncClient
-
-from app.tests.conftest import create_trip
+from pydantic import ValidationError
 
 
-@pytest.mark.integration
-async def test_trip_chat_returns_a_structured_ai_response_without_live_credentials(
-    client: AsyncClient, trip_payload: dict[str, object], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("GEMINI_API_KEY", "")
-    trip = await create_trip(client, trip_payload)
+def _swap_option(place_id: str, place_name: str) -> dict[str, object]:
+    return {
+        "place_id": place_id,
+        "place_name": place_name,
+        "category": "culture",
+        "description": "An indoor cultural stop in central Ho Chi Minh City.",
+        "address": "District 1, Ho Chi Minh City",
+        "district": "Quận 1",
+        "latitude": 10.78,
+        "longitude": 106.69,
+        "estimated_cost": 50000,
+        "photo_url": "",
+        "editorial_score": 4.5,
+        "is_indoor": True,
+        "opening_hours": [],
+        "suggested_duration": 60,
+        "replacement_reason": "Similar indoor cultural experience nearby.",
+    }
 
-    response = await client.post(f"/api/trips/{trip['id']}/chat", json={"message": "Plan my trip"})
 
-    assert response.status_code == 200, response.text
-    payload = response.json()
-    assert payload.get("status") in {"asking", "generating", "completed", "failed"}
-    assert isinstance(payload.get("reply"), str)
-    assert isinstance(payload.get("quick_replies", []), list)
-    itinerary = payload.get("updated_itinerary") or []
-    for item in itinerary:
-        assert isinstance(item.get("place_name"), str) and item["place_name"].strip()
-        assert -90 <= float(item["latitude"]) <= 90
-        assert -180 <= float(item["longitude"]) <= 180
+def test_trip_concept_schema_rejects_days_outside_the_supported_range() -> None:
+    from app.schemas.ai import TripConceptRequest
+
+    payload = {
+        "start_location": "Quận 1, TP. Hồ Chí Minh",
+        "budget": 3_000_000,
+        "days": 15,
+        "districts": ["Quận 1"],
+        "places_per_day": 4,
+        "companion": "friends",
+        "member_count": 3,
+        "transport_mode": "grab_bike",
+        "preferences": ["food", "culture"],
+        "pace": "moderate",
+        "special_notes": "",
+    }
+
+    with pytest.raises(ValidationError):
+        TripConceptRequest.model_validate(payload)
 
 
-@pytest.mark.integration
-async def test_ai_swap_returns_alternatives_with_valid_coordinates(
-    client: AsyncClient, trip_payload: dict[str, object]
-) -> None:
-    trip = await create_trip(client, trip_payload)
-    response = await client.post(
-        "/api/v1/ai/swap",
-        json={
-            "trip_id": trip["id"],
-            "place_name": "Independence Palace",
-            "reason": "Prefer an indoor cultural place",
-        },
+def test_smart_swap_schema_accepts_two_alternatives_and_rejects_one() -> None:
+    from app.schemas.ai import SmartSwapResponse
+
+    valid = SmartSwapResponse(
+        alternatives=[
+            _swap_option("place-1", "Independence Palace"),
+            _swap_option("place-2", "War Remnants Museum"),
+        ]
     )
+    assert len(valid.alternatives) == 2
 
-    assert response.status_code == 200, response.text
-    alternatives = response.json().get("alternatives")
-    assert isinstance(alternatives, list)
-    assert 2 <= len(alternatives) <= 3
-    for place in alternatives:
-        assert place.get("name")
-        assert -90 <= float(place["latitude"]) <= 90
-        assert -180 <= float(place["longitude"]) <= 180
+    with pytest.raises(ValidationError):
+        SmartSwapResponse(alternatives=[_swap_option("place-1", "Independence Palace")])

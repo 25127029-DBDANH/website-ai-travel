@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib
 from collections.abc import AsyncIterator
 from typing import Any
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -18,16 +19,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import StaticPool
 
 
-@pytest.fixture
-def session_id() -> str:
-    return "qa-session-0001"
-
-
 @pytest_asyncio.fixture
 async def test_database() -> AsyncIterator[tuple[Any, async_sessionmaker[AsyncSession]]]:
     """Create a fresh SQLite database from all registered ORM models."""
-    from app.db import models  # noqa: F401  (register mapped classes on Base)
-    from app.db.session import Base
+    from app.db.models import Base
 
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
@@ -48,9 +43,9 @@ async def test_database() -> AsyncIterator[tuple[Any, async_sessionmaker[AsyncSe
 
 @pytest_asyncio.fixture
 async def client(
-    test_database: tuple[Any, async_sessionmaker[AsyncSession]], session_id: str
+    test_database: tuple[Any, async_sessionmaker[AsyncSession]],
 ) -> AsyncIterator[AsyncClient]:
-    """Run requests in-process with only the database dependency overridden."""
+    """Run requests in-process with an isolated SQLite database."""
     from app.db.session import get_db
 
     engine, session_factory = test_database
@@ -70,7 +65,6 @@ async def client(
     async with AsyncClient(
         transport=transport,
         base_url="http://test",
-        headers={"x-session-id": session_id},
     ) as test_client:
         try:
             yield test_client
@@ -78,9 +72,23 @@ async def client(
             application.dependency_overrides.pop(get_db, None)
 
 
+@pytest_asyncio.fixture
+async def authenticated_client(client: AsyncClient) -> AsyncIterator[AsyncClient]:
+    """Create one isolated account and attach its bearer token to API requests."""
+    username = f"qa_{uuid4().hex[:12]}"
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={"username": username, "password": "SaigonTrip!2026"},
+    )
+    assert response.status_code == 201, response.text
+    client.headers["Authorization"] = f"Bearer {response.json()['token']}"
+    yield client
+
+
 @pytest.fixture
 def trip_payload() -> dict[str, Any]:
     return {
+        "title": "QA Saigon weekend",
         "start_location": "Quận 1, TP. Hồ Chí Minh",
         "budget": 3_000_000,
         "days": 2,
@@ -93,9 +101,9 @@ async def create_trip(
     client: AsyncClient,
     payload: dict[str, Any],
     *,
-    session_id: str | None = None,
+    auth_token: str | None = None,
 ) -> dict[str, Any]:
-    headers = {"x-session-id": session_id} if session_id else None
-    response = await client.post("/api/trips", json=payload, headers=headers)
+    headers = {"Authorization": f"Bearer {auth_token}"} if auth_token else None
+    response = await client.post("/api/v1/trips/", json=payload, headers=headers)
     assert response.status_code == 201, response.text
     return response.json()

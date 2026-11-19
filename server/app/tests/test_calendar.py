@@ -13,11 +13,27 @@ from app.tests.conftest import create_trip
 
 @pytest.mark.integration
 async def test_export_ics_parses_and_contains_a_30_minute_reminder(
-    client: AsyncClient, trip_payload: dict[str, object]
+    authenticated_client: AsyncClient, trip_payload: dict[str, object]
 ) -> None:
-    trip = await create_trip(client, trip_payload)
-    response = await client.get(
-        f"/api/trips/{trip['id']}/export-ics", params={"start_date": date(2026, 12, 1).isoformat()}
+    payload = {
+        **trip_payload,
+        "itinerary_items": [
+            {
+                "day_number": 1,
+                "order_index": 0,
+                "place_name": "Independence Palace",
+                "address": "135 Nam Ky Khoi Nghia, District 1",
+                "latitude": 10.7769,
+                "longitude": 106.6953,
+                "start_time": "09:00",
+                "end_time": "10:00",
+            }
+        ],
+    }
+    trip = await create_trip(authenticated_client, payload)
+    response = await authenticated_client.get(
+        f"/api/v1/calendar/ics/{trip['id']}",
+        params={"start_date": date(2026, 12, 1).isoformat()},
     )
 
     assert response.status_code == 200, response.text
@@ -31,9 +47,9 @@ async def test_export_ics_parses_and_contains_a_30_minute_reminder(
 
 
 @pytest.mark.integration
-async def test_ics_export_rejects_an_unknown_trip(client: AsyncClient) -> None:
-    response = await client.get(
-        "/api/trips/00000000-0000-0000-0000-000000000000/export-ics",
+async def test_ics_export_rejects_an_unknown_trip(authenticated_client: AsyncClient) -> None:
+    response = await authenticated_client.get(
+        "/api/v1/calendar/ics/00000000-0000-0000-0000-000000000000",
         params={"start_date": "2026-12-01"},
     )
 
