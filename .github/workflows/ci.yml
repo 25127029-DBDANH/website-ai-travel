@@ -54,7 +54,8 @@ jobs:
       - name: Run tests with coverage
         env:
           JWT_SECRET: ci-only-not-a-secret
-          SECRET_KEY: ci-only-not-a-secret
+          JWT_ALGORITHM: HS256
+          JWT_EXPIRE_MINUTES: 10080
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/travel_ai_hcmc
           GEMINI_API_KEY: ""
           GOOGLE_PLACES_API_KEY: ""

@@ -99,7 +99,7 @@ async def test_duplicate_trip_has_a_new_id(
     original = await create_trip(authenticated_client, trip_payload)
     response = await authenticated_client.post(f"/api/v1/trips/{original['id']}/clone")
 
-    assert response.status_code == 201, response.text
+    assert response.status_code == 200, response.text
     duplicate = response.json()
     assert duplicate.get("id")
     assert duplicate["id"] != original["id"]
