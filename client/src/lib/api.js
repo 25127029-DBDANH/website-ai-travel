@@ -1,5 +1,7 @@
 // Browser-only data layer with rich HCMC catalog, detailed time slots, contingency scenarios, and Google Calendar sync.
 export const API_BASE = '';
+const AI_API_BASE = (import.meta.env.VITE_API_BASE || 'http://localhost:8000/api/v1').replace(/\/$/, '');
+const API_ORIGIN = AI_API_BASE.replace(/\/api\/v1$/, '');
 
 export class ApiError extends Error {
   constructor(message, code = 'LOCAL_DATA', status = 0) {
@@ -8,6 +10,26 @@ export class ApiError extends Error {
     this.code = code;
     this.status = status;
   }
+}
+
+async function postAiRequest(path, payload) {
+  let response;
+  try {
+    response = await fetch(`${AI_API_BASE}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  } catch {
+    throw new ApiError('Không thể kết nối máy chủ AI. Hãy kiểm tra backend đang chạy.', 'AI_UNAVAILABLE', 0);
+  }
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = typeof result.detail === 'string' ? result.detail : 'Yêu cầu AI không thành công.';
+    throw new ApiError(detail, 'AI_REQUEST_FAILED', response.status);
+  }
+  return result;
 }
 
 const STORAGE_KEY = 'saigon-guide-local-data-v2';
@@ -1559,6 +1581,10 @@ export const api = {
     return { settings: state.settings };
   },
 
+  suggestTripConcept: (payload) => postAiRequest('/ai/concept', payload),
+  generateAiItinerary: (payload) => postAiRequest('/ai/generate', payload),
+  suggestPlaceSwaps: (payload) => postAiRequest('/ai/swap', payload),
+
   createTrip: async (payload = {}) => {
     const state = readState();
     const id = nextId();
@@ -1567,7 +1593,9 @@ export const api = {
     const seed = Math.floor(Math.random() * PLACES.length);
     const memberCount = Number(payload.member_count) || (payload.companion === 'solo' ? 1 : 4);
     const companion = payload.companion || (memberCount === 1 ? 'solo' : 'group');
-    const items = makeItinerary(days, placesPerDay, seed, payload.start_location || '', payload.transport_mode || 'grab_bike');
+    const items = Array.isArray(payload.itinerary_items) && payload.itinerary_items.length
+      ? payload.itinerary_items
+      : makeItinerary(days, placesPerDay, seed, payload.start_location || '', payload.transport_mode || 'grab_bike');
     
     const trip = {
       id,
@@ -1578,6 +1606,9 @@ export const api = {
       companion,
       member_count: memberCount,
       transport_mode: payload.transport_mode || 'grab_bike',
+      districts: payload.districts || [],
+      pace: payload.pace || 'moderate',
+      special_notes: payload.special_notes || '',
       start_time: payload.start_time || '08:00',
       end_time: payload.end_time || '21:30',
       status: 'completed',
@@ -1906,6 +1937,7 @@ export const api = {
 export function assetUrl(value) {
   if (!value) return null;
   if (/^https?:\/\//i.test(value)) return value;
+  if (value.startsWith('/api/v1/')) return `${API_ORIGIN}${value}`;
   return value;
 }
 

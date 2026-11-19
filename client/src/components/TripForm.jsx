@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   Bike,
+  Bus,
   Car,
   Check,
   Footprints,
@@ -28,7 +29,7 @@ import { formatVnd } from '../lib/format.js';
 const PREFERENCE_CATEGORY = {
   food: 'food',
   culture: 'sightseeing',
-  cafe: 'cafe',
+  cafe: 'food',
   shopping: 'shopping',
   nature: 'nature',
   nightlife: 'entertainment'
@@ -37,21 +38,23 @@ const PREFERENCE_CATEGORY = {
 const BUDGET_PRESETS = [2_000_000, 3_000_000, 5_000_000, 10_000_000];
 
 const COMPANIONS = [
-  { id: 'solo', labelVi: 'Đi một mình', labelEn: 'Solo (1 person)', icon: User },
-  { id: 'group', labelVi: 'Đi theo nhóm', labelEn: 'Group travel', icon: Users }
+  { id: 'solo', labelVi: 'Đi một mình', labelEn: 'Solo', icon: User },
+  { id: 'couple', labelVi: 'Cặp đôi', labelEn: 'Couple', icon: Heart },
+  { id: 'friends', labelVi: 'Nhóm bạn', labelEn: 'Friends', icon: Users },
+  { id: 'family', labelVi: 'Gia đình', labelEn: 'Family', icon: Users }
 ];
 
 const TRANSPORTS = [
+  { id: 'walk', labelVi: 'Đi bộ', labelEn: 'Walking', icon: Footprints },
   { id: 'grab_bike', labelVi: 'GrabBike / Xe máy', labelEn: 'GrabBike / Motorbike', icon: Bike },
   { id: 'grab_car', labelVi: 'GrabCar / Taxi', labelEn: 'GrabCar / Taxi', icon: Car },
-  { id: 'public', labelVi: 'Xe buýt / Đi bộ', labelEn: 'Bus / Walking', icon: Footprints }
+  { id: 'public', labelVi: 'Xe buýt / Metro', labelEn: 'Bus / Metro', icon: Bus }
 ];
 
-const PLACES_PER_DAY_OPTIONS = [
-  { count: 3, labelVi: '3 điểm', subVi: 'Thong thả, chill' },
-  { count: 4, labelVi: '4 điểm', subVi: 'Chuẩn cân bằng ⭐' },
-  { count: 5, labelVi: '5 điểm', subVi: 'Khám phá nhiều' },
-  { count: 6, labelVi: '6 điểm', subVi: 'Tối đa, năng động' }
+const PACE_OPTIONS = [
+  { id: 'relaxed', count: 3, labelVi: 'Thư thả', labelEn: 'Relaxed', subVi: 'Ít điểm, nghỉ ngơi nhiều', subEn: 'Fewer stops and more rest' },
+  { id: 'moderate', count: 4, labelVi: 'Cân bằng', labelEn: 'Moderate', subVi: 'Nhịp độ vừa phải', subEn: 'A balanced pace' },
+  { id: 'packed', count: 6, labelVi: 'Dày đặc', labelEn: 'Packed', subVi: 'Khám phá tối đa', subEn: 'Fit in more exploration' }
 ];
 
 const DISTRICT_SHORTCUTS = [
@@ -61,7 +64,7 @@ const DISTRICT_SHORTCUTS = [
   { id: 'binh_thanh', name: 'Bình Thạnh', icon: '🏙️', highlight: 'Landmark 81' },
   { id: 'q4', name: 'Quận 4', icon: '🍜', highlight: 'Phố ốc' },
   { id: 'phu_nhuan', name: 'Phú Nhuận', icon: '☕', highlight: 'Phan Xích Long' },
-  { id: 'thu_duc', name: 'TP. Thủ Đức', icon: '🌉', highlight: 'Thảo Điền' },
+  { id: 'thu_duc', name: 'Thủ Đức', icon: '🌉', highlight: 'Thảo Điền' },
   { id: 'q7', name: 'Quận 7', icon: '✨', highlight: 'Phú Mỹ Hưng' }
 ];
 
@@ -70,16 +73,21 @@ export default function TripForm() {
   const navigate = useNavigate();
 
   const [startLocation, setStartLocation] = useState(() => t('form.startDefault'));
+  const [districts, setDistricts] = useState(['Quận 1']);
   const [days, setDays] = useState(3);
   const [placesPerDay, setPlacesPerDay] = useState(4);
+  const [pace, setPace] = useState('moderate');
   const [budget, setBudget] = useState(5_000_000);
-  const [companion, setCompanion] = useState('group');
+  const [companion, setCompanion] = useState('friends');
   const [memberCount, setMemberCount] = useState(4);
   const [transportMode, setTransportMode] = useState('grab_bike');
   const [preferences, setPreferences] = useState(['food', 'culture']);
+  const [specialNotes, setSpecialNotes] = useState('');
   const [error, setError] = useState('');
   const [errorField, setErrorField] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [concept, setConcept] = useState(null);
+  const [pendingTrip, setPendingTrip] = useState(null);
 
   const defaultStartRef = useRef(t('form.startDefault'));
   const startRef = useRef(null);
@@ -118,7 +126,7 @@ export default function TripForm() {
   };
 
   const changeDays = (delta) => {
-    setDays((current) => Math.min(7, Math.max(1, current + delta)));
+    setDays((current) => Math.min(14, Math.max(1, current + delta)));
     if (errorField === 'days') clearError();
   };
 
@@ -130,6 +138,14 @@ export default function TripForm() {
     const start = startLocation.trim();
     if (!start) {
       showError('start', t('form.validation.start'), startRef);
+      return;
+    }
+    if (districts.length === 0) {
+      setError(lang === 'vi' ? 'Hãy chọn ít nhất một quận ưu tiên.' : 'Choose at least one preferred district.');
+      return;
+    }
+    if (preferences.length === 0) {
+      setError(lang === 'vi' ? 'Hãy chọn ít nhất một sở thích.' : 'Choose at least one travel preference.');
       return;
     }
     if (days < 1 || days > 14) {
@@ -147,26 +163,54 @@ export default function TripForm() {
       return;
     }
 
+    const payload = {
+      start_location: start,
+      districts,
+      budget: Math.round(budget),
+      days,
+      places_per_day: placesPerDay,
+      pace,
+      companion,
+      member_count: companion === 'solo' ? 1 : memberCount,
+      transport_mode: transportMode,
+      preferences,
+      special_notes: specialNotes.trim()
+    };
+
     try {
+      setPendingTrip(payload);
+      setConcept(await api.suggestTripConcept(payload));
+    } catch (requestError) {
+      setError(requestError?.message || translateApiError(t, requestError));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleApproveConcept = async () => {
+    if (!pendingTrip || !concept || submitting) return;
+    setSubmitting(true);
+    clearError();
+
+    try {
+      const generated = await api.generateAiItinerary({
+        ...pendingTrip,
+        approved_concept: concept
+      });
       const trip = await api.createTrip({
-        start_location: start,
-        budget: Math.round(budget),
-        days,
-        places_per_day: placesPerDay,
-        companion,
-        member_count: companion === 'solo' ? 1 : memberCount,
-        transport_mode: transportMode,
-        preferences
+        ...pendingTrip,
+        itinerary_items: generated.itinerary_items
       });
       navigate(`/trip/${trip.id}`);
     } catch (requestError) {
-      setError(translateApiError(t, requestError));
+      setError(requestError?.message || translateApiError(t, requestError));
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
+    <>
     <form
       onSubmit={handleSubmit}
       className="overflow-hidden rounded-3xl border border-slate-200/90 bg-white/95 p-5 shadow-soft backdrop-blur sm:p-7"
@@ -211,23 +255,26 @@ export default function TripForm() {
           <div className="mt-2.5">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[11px] font-bold text-slate-600">
-                {lang === 'vi' ? 'Hoặc chạm chọn nhanh Quận ưu tiên khám phá:' : 'Or quick-select priority district:'}
+                {lang === 'vi' ? 'Chọn quận ưu tiên khám phá (có thể chọn nhiều):' : 'Preferred districts (choose one or more):'}
               </span>
               <span className="text-[10px] font-extrabold text-brand-700 bg-brand-50 border border-brand-200 px-2 py-0.5 rounded-md">
-                {lang === 'vi' ? '1 chạm · Không cần gõ' : '1-Click quick select'}
+                {districts.length} {lang === 'vi' ? 'quận đã chọn' : 'selected'}
               </span>
             </div>
 
             <div className="flex flex-wrap gap-1.5">
               {DISTRICT_SHORTCUTS.map((d) => {
-                const isSelected = startLocation.includes(d.name);
+                const isSelected = districts.includes(d.name);
                 return (
                   <button
                     key={d.id}
                     type="button"
                     onClick={() => {
-                      setStartLocation(`${d.name}, TP. Hồ Chí Minh`);
-                      if (errorField === 'start') clearError();
+                      setDistricts((current) => (
+                        current.includes(d.name)
+                          ? current.filter((district) => district !== d.name)
+                          : [...current, d.name]
+                      ));
                     }}
                     className={cn(
                       'inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-xs font-bold transition-all border shadow-2xs active:scale-95',
@@ -246,7 +293,7 @@ export default function TripForm() {
           </div>
         </div>
 
-        {/* Số ngày & Số địa điểm mỗi ngày (Yêu cầu mới) */}
+        {/* Số ngày và nhịp độ chuyến đi */}
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <span id="trip-days-label" className="label">{t('form.daysLabel')}</span>
@@ -270,7 +317,7 @@ export default function TripForm() {
               <button
                 type="button"
                 onClick={() => changeDays(1)}
-                disabled={days >= 7}
+                disabled={days >= 14}
                 aria-label={t('form.daysIncrease')}
                 className="grid h-9 w-9 place-items-center rounded-lg bg-brand-600 text-white shadow-sm transition-colors hover:bg-brand-700 disabled:opacity-40"
               >
@@ -278,36 +325,39 @@ export default function TripForm() {
               </button>
             </div>
             <p className="mt-1 text-[10.5px] font-medium text-slate-500">
-              {lang === 'vi' ? 'Khuyên dùng từ 1 đến 5 ngày tại TP.HCM' : 'Recommended 1 - 5 days in HCMC'}
+              {lang === 'vi' ? 'Từ 1 đến 14 ngày' : 'From 1 to 14 days'}
             </p>
           </div>
 
           <div>
             <label className="label">
-              {lang === 'vi' ? 'Số địa điểm muốn đi mỗi ngày' : 'Places to visit per day'}
+              {lang === 'vi' ? 'Nhịp độ chuyến đi' : 'Trip pace'}
             </label>
-            <div className="grid grid-cols-4 gap-1.5">
-              {PLACES_PER_DAY_OPTIONS.map((opt) => (
+            <div className="grid grid-cols-3 gap-1.5">
+              {PACE_OPTIONS.map((opt) => (
                 <button
-                  key={opt.count}
+                  key={opt.id}
                   type="button"
-                  onClick={() => setPlacesPerDay(opt.count)}
+                  onClick={() => {
+                    setPace(opt.id);
+                    setPlacesPerDay(opt.count);
+                  }}
                   className={cn(
                     'flex flex-col items-center justify-center rounded-xl border py-2 text-center transition-all',
-                    placesPerDay === opt.count
+                    pace === opt.id
                       ? 'border-brand-500 bg-brand-50 font-bold text-brand-700 ring-2 ring-brand-200'
                       : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                   )}
                 >
-                  <span className="text-xs font-extrabold">{opt.labelVi}</span>
-                  <span className="mt-0.5 text-[9px] text-slate-400">
-                    {opt.count === 4 ? 'Cân bằng' : opt.count === 3 ? 'Chill' : 'Nhiều'}
-                  </span>
+                  <span className="text-xs font-extrabold">{lang === 'vi' ? opt.labelVi : opt.labelEn}</span>
+                  <span className="mt-0.5 text-[9px] text-slate-400">{opt.count} {lang === 'vi' ? 'điểm/ngày' : 'stops/day'}</span>
                 </button>
               ))}
             </div>
             <p className="mt-1 text-[10.5px] font-medium text-slate-500">
-              {PLACES_PER_DAY_OPTIONS.find((o) => o.count === placesPerDay)?.subVi}
+              {lang === 'vi'
+                ? PACE_OPTIONS.find((option) => option.id === pace)?.subVi
+                : PACE_OPTIONS.find((option) => option.id === pace)?.subEn}
             </p>
           </div>
         </div>
@@ -357,7 +407,7 @@ export default function TripForm() {
           </div>
           <p className="mt-1 text-[10.5px] font-medium text-slate-500">
             ≈ {formatVnd(budget, lang)} ·{' '}
-            {companion === 'group' && memberCount > 1
+            {companion !== 'solo' && memberCount > 1
               ? lang === 'vi'
                 ? `Tổng chi phí nhóm (Khoảng ${formatVnd(Math.round(budget / memberCount), lang)}/người)`
                 : `Group budget (${formatVnd(Math.round(budget / memberCount), lang)}/person)`
@@ -384,7 +434,8 @@ export default function TripForm() {
                     onClick={() => {
                       setCompanion(item.id);
                       if (item.id === 'solo') setMemberCount(1);
-                      else if (memberCount === 1) setMemberCount(4);
+                      else if (item.id === 'couple') setMemberCount(2);
+                      else if (memberCount < 3) setMemberCount(4);
                     }}
                     className={cn(
                       'flex items-center justify-center gap-2 rounded-xl border p-2.5 text-center text-xs font-bold transition-all',
@@ -401,7 +452,7 @@ export default function TripForm() {
             </div>
 
             {/* Nếu đi theo nhóm: Chọn số lượng thành viên */}
-            {companion === 'group' && (
+            {(companion === 'friends' || companion === 'family') && (
               <div className="mt-2.5 rounded-2xl border border-brand-200/80 bg-brand-50/50 p-3 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-extrabold text-brand-900">
@@ -534,6 +585,25 @@ export default function TripForm() {
           </div>
         </div>
 
+        {/* Ghi chú đặc biệt */}
+        <div>
+          <label className="label" htmlFor="trip-special-notes">
+            {lang === 'vi' ? 'Ghi chú đặc biệt (không bắt buộc)' : 'Special notes (optional)'}
+          </label>
+          <textarea
+            id="trip-special-notes"
+            value={specialNotes}
+            onChange={(event) => setSpecialNotes(event.target.value)}
+            maxLength={500}
+            rows={3}
+            placeholder={lang === 'vi'
+              ? 'Ví dụ: ăn chay, kiêng cay, có trẻ nhỏ, hạn chế đi bộ xa...'
+              : 'For example: vegetarian, avoid spicy food, traveling with children, limit long walks...'}
+            className="input min-h-[82px] resize-y py-2.5"
+          />
+          <p className="mt-1 text-right text-[10px] font-medium text-slate-400">{specialNotes.length}/500</p>
+        </div>
+
         {error && (
           <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">
             {error}
@@ -560,5 +630,113 @@ export default function TripForm() {
         </button>
       </div>
     </form>
+    {concept && (
+      <div
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="trip-concept-title"
+      >
+        <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+          <div className="border-b border-slate-100 bg-brand-50/70 p-5 sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white px-2.5 py-1 text-[10px] font-bold text-brand-700">
+                  <Sparkles className="h-3 w-3" />
+                  {lang === 'vi' ? 'Đề xuất từ AI' : 'AI trip concept'}
+                </span>
+                <h3 id="trip-concept-title" className="mt-2 font-display text-xl font-extrabold text-slate-900">
+                  {lang === 'vi' ? 'Concept chuyến đi của bạn' : 'Your trip concept'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => { setConcept(null); setPendingTrip(null); clearError(); }}
+                className="rounded-full p-2 text-slate-500 hover:bg-white disabled:opacity-50"
+                aria-label={lang === 'vi' ? 'Đóng' : 'Close'}
+              >
+                ×
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-4 p-5 sm:p-6">
+            <p className="text-sm leading-relaxed text-slate-700">{concept.summary}</p>
+
+            {concept.highlights?.length > 0 && (
+              <section>
+                <h4 className="text-xs font-extrabold uppercase tracking-wide text-slate-500">
+                  {lang === 'vi' ? 'Điểm nổi bật' : 'Highlights'}
+                </h4>
+                <ul className="mt-2 space-y-1.5">
+                  {concept.highlights.map((highlight, index) => (
+                    <li key={`${highlight}-${index}`} className="flex gap-2 text-sm text-slate-700">
+                      <span className="text-brand-600">•</span>{highlight}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {concept.recommended_districts?.length > 0 && (
+              <section>
+                <h4 className="text-xs font-extrabold uppercase tracking-wide text-slate-500">
+                  {lang === 'vi' ? 'Quận dự kiến' : 'Recommended districts'}
+                </h4>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {concept.recommended_districts.map((district) => (
+                    <span key={district} className="rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-bold text-brand-800">
+                      {district}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
+              <h4 className="text-xs font-extrabold uppercase tracking-wide text-slate-500">
+                {lang === 'vi' ? 'Hướng đi tổng quát' : 'Route overview'}
+              </h4>
+              <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{concept.route_overview}</p>
+            </section>
+
+            {error && (
+              <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">
+                {error}
+              </p>
+            )}
+
+            <p className="text-sm font-bold text-slate-900">
+              {concept.confirmation_question || (lang === 'vi' ? 'Bạn có đồng ý với concept này không?' : 'Do you agree with this concept?')}
+            </p>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => { setConcept(null); setPendingTrip(null); clearError(); }}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {lang === 'vi' ? 'Quay lại chỉnh form' : 'Back to form'}
+              </button>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={handleApproveConcept}
+                className="btn-primary justify-center !py-2.5 text-xs font-extrabold disabled:opacity-60"
+              >
+                {submitting ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" />{lang === 'vi' ? 'Đang tạo lịch trình...' : 'Building itinerary...'}</>
+                ) : (
+                  <>{lang === 'vi' ? 'Đồng ý, tạo lịch trình' : 'Approve and build itinerary'}<ArrowRight className="h-4 w-4" /></>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
