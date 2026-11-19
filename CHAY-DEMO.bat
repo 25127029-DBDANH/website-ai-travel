@@ -1,24 +1,29 @@
 @echo off
 chcp 65001 > nul
 cd /d "%~dp0"
-title DEMO WEB DU LICH TP.HCM - NHOM 7 (SAI GON GUIDE)
+title DEMO - SAI GON GUIDE
 
 echo ============================================================
-echo   KHOI DONG WEB AI LAP KE HOACH DU LICH TP.HCM - NHOM 7
+echo   SAI GON GUIDE - LOCAL DEMO
 echo ============================================================
-echo.
-echo [1] Giai phong cong 5173 neu co tien trinh cu...
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5173 ^| findstr LISTENING') do taskkill /f /pid %%a >nul 2>&1
-
-echo [2] Dang khoi dong may chu may tinh va mo Google Chrome...
-echo     May tinh:      http://localhost:5173/trip/demo
-echo     (Vui long GIU cua so nay trong khi xem demo)
+echo Browser URL: http://localhost:5173/trip/demo
+echo This script will not terminate an existing process.
+echo Close this window to stop the demo server.
 echo ============================================================
 echo.
 
-cd client
-py server.py
-if %errorlevel% neq 0 (
-    python server.py
+where py > nul 2>&1
+if not errorlevel 1 (
+    py -3 client\server.py
+) else (
+    where python > nul 2>&1
+    if errorlevel 1 (
+        echo Python 3 was not found. Install Python 3 and run this file again.
+        pause
+        exit /b 1
+    )
+    python client\server.py
 )
+
+if errorlevel 1 echo Demo server exited. Check whether port 5173 is already in use.
 pause
