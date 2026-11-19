@@ -27,8 +27,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/travel_ai_hcmc
       FRONTEND_URL: http://localhost:5173
       JWT_SECRET: ${JWT_SECRET:-local-only-change-this-secret}
-      SECRET_KEY: ${SECRET_KEY:-local-only-change-this-secret}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-10080}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}

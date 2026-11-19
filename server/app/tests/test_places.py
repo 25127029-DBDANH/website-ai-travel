@@ -74,7 +74,7 @@ async def test_place_enrichment_falls_back_without_google_credentials(
 
     monkeypatch.setattr(places_service, "GOOGLE_PLACES_API_KEY", "")
 
-    result = await places_service._fetch_google_place_details("place-id")
+    result = await places_service._fetch_google_place_details(None, "place-id")
 
     assert result is None
 
