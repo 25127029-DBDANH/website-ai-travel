@@ -29,7 +29,7 @@ import { formatVnd } from '../lib/format.js';
 const PREFERENCE_CATEGORY = {
   food: 'food',
   culture: 'sightseeing',
-  cafe: 'food',
+  cafe: 'cafe',
   shopping: 'shopping',
   nature: 'nature',
   nightlife: 'entertainment'

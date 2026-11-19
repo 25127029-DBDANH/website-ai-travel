@@ -1,38 +1,59 @@
 """
 session.py — SQLAlchemy async session & connection pool configuration.
 Author  : Ngô Tấn Đạt (Member 3 — Places & Interactive Map)
+
+Supports both SQLite (local development with aiosqlite) and PostgreSQL
+(production/Supabase with asyncpg).
 """
 from __future__ import annotations
 
 import os
 from typing import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+
+from app.db.models import Base
 
 # ---------------------------------------------------------------------------
-# Database URL
+# Database URL & Dialect Detection
 # ---------------------------------------------------------------------------
-# Reads DATABASE_URL from environment.  Fall back to a local dev default so
-# the app can start without a real .env during first-run exploration.
-# Example:  postgresql+asyncpg://user:password@localhost:5432/travel_db
 DATABASE_URL: str = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@localhost:5432/travel_db",
+    "sqlite+aiosqlite:///./travel.db",
 )
 
+# Auto-convert synchronous or standard URLs to async driver schemes
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
+elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+asyncpg://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif DATABASE_URL.startswith("sqlite://") and not DATABASE_URL.startswith("sqlite+aiosqlite://"):
+    DATABASE_URL = DATABASE_URL.replace("sqlite://", "sqlite+aiosqlite://", 1)
 
 # ---------------------------------------------------------------------------
-# Engine (async)
+# Engine Configuration
 # ---------------------------------------------------------------------------
-engine = create_async_engine(
-    DATABASE_URL,
-    pool_size=10,           # number of persistent connections in the pool
-    max_overflow=20,        # extra connections beyond pool_size under load
-    pool_timeout=30,        # seconds to wait for a free connection
-    pool_recycle=1800,      # recycle connections every 30 min (avoids stale TCP)
-    echo=False,             # set True for SQL query logging during dev
-)
+IS_SQLITE = DATABASE_URL.startswith("sqlite")
+
+if IS_SQLITE:
+    engine = create_async_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        echo=False,
+    )
+else:
+    engine = create_async_engine(
+        DATABASE_URL,
+        pool_size=10,           # number of persistent connections in the pool
+        max_overflow=20,        # extra connections beyond pool_size under load
+        pool_timeout=30,        # seconds to wait for a free connection
+        pool_recycle=1800,      # recycle connections every 30 min (avoids stale TCP)
+        echo=False,             # set True for SQL query logging during dev
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -48,11 +69,15 @@ AsyncSessionLocal = async_sessionmaker(
 
 
 # ---------------------------------------------------------------------------
-# Declarative Base (shared by all ORM models)
+# Table initialization helper
 # ---------------------------------------------------------------------------
-class Base(DeclarativeBase):
-    """Base class that all SQLAlchemy ORM models inherit from."""
-    pass
+async def create_tables() -> None:
+    """
+    Create all tables defined in ORM models.
+    Safe to call on startup; does not drop or alter existing tables.
+    """
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 
 # ---------------------------------------------------------------------------

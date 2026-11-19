@@ -39,6 +39,15 @@ def _format_opening_hours(place: dict[str, Any]) -> list[str]:
     return [f"{str(opening)[:5]} - {str(closing)[:5]}"]
 
 
+def _normalize_district(district: str | None) -> str | None:
+    if not district:
+        return district
+    normalized = district.strip()
+    if normalized.casefold().startswith("tp. "):
+        normalized = normalized[4:].strip()
+    return normalized
+
+
 def _to_place_response(place: dict[str, Any]) -> PlaceResponse:
     """Translate the Places database shape into the itinerary UI shape."""
     raw_category = str(place.get("category") or "sightseeing")
@@ -77,7 +86,7 @@ async def _load_catalog(
     *,
     district: str | None = None,
 ) -> list[PlaceResponse]:
-    rows = await search_places(db, district=district, limit=100)
+    rows = await search_places(db, district=_normalize_district(district), limit=400)
     places = [
         normalized
         for normalized in (_to_place_response(row) for row in rows)

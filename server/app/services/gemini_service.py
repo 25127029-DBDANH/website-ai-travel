@@ -65,12 +65,19 @@ _TIME_SLOTS = (
 _PREFERENCE_CATEGORIES = {
     "food": "food",
     "culture": "sightseeing",
-    "cafe": "food",
+    "cafe": "cafe",
     "shopping": "shopping",
     "nature": "nature",
     "nightlife": "entertainment",
 }
 _RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
+
+
+def _normalize_district(district: str) -> str:
+    normalized = district.strip()
+    if normalized.casefold().startswith("tp. "):
+        normalized = normalized[4:].strip()
+    return normalized.casefold()
 
 
 class GeminiServiceError(RuntimeError):
@@ -446,7 +453,7 @@ class GeminiService:
             place
             for place in places
             if place.place_id != current.place_id
-            and place.district.casefold() == current.district.casefold()
+            and _normalize_district(place.district) == _normalize_district(current.district)
             and place.category == current.category
             and abs(place.estimated_cost - current.estimated_cost) <= tolerance
         ]
@@ -515,7 +522,7 @@ class GeminiService:
                 place is None
                 or place.place_id == current.place_id
                 or place.place_id in seen_place_ids
-                or place.district.casefold() != current.district.casefold()
+                or _normalize_district(place.district) != _normalize_district(current.district)
                 or place.category != current.category
                 or abs(place.estimated_cost - current.estimated_cost) > tolerance
             ):
