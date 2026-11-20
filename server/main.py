@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     application.state.gemini_service = GeminiService(
         api_key=os.getenv("GEMINI_API_KEY"),
-        model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+        model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
     )
     try:
         await create_tables()

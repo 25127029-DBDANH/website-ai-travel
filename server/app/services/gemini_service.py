@@ -123,7 +123,7 @@ class GeminiService:
         api_key: str | None = None,
         *,
         client: Any | None = None,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3.5-flash",
         max_attempts: int = 3,
         retry_base_seconds: float = 0.75,
         requests_per_minute: int = 15,
