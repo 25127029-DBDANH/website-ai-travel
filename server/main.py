@@ -1,5 +1,7 @@
-"""FastAPI application entry point for Sài Gòn Guide."""
-
+"""
+main.py — FastAPI application entry point for Sài Gòn Guide.
+Authors : Đỗ Nguyễn An Khang (Auth & Trips), Ngô Tấn Đạt (Places), Lê Hữu Lam (Gemini AI)
+"""
 from __future__ import annotations
 
 import logging
@@ -7,22 +9,27 @@ import os
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
+import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 
 load_dotenv()
 
-# Import database and API modules only after loading local environment settings.
 from app.api.v1.api import api_router  # noqa: E402
+from app.core.config import settings  # noqa: E402
 from app.db.models import Place  # noqa: E402
-from app.db.session import AsyncSessionLocal, create_tables  # noqa: E402
+from app.db.session import AsyncSessionLocal, create_tables, engine  # noqa: E402
 from app.services.gemini_service import GeminiService  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Lifespan — initialize Gemini service, ORM tables, and 327 HCMC places seed
+# ---------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     application.state.gemini_service = GeminiService(
@@ -46,34 +53,68 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         application.state.gemini_service = None
+        await engine.dispose()
 
 
+# ---------------------------------------------------------------------------
+# FastAPI app
+# ---------------------------------------------------------------------------
 app = FastAPI(
-    title="Sài Gòn Guide API",
-    description="AI travel planning API for Ho Chi Minh City.",
+    title="🧭 Sài Gòn Guide — AI Travel Planner API",
+    description="Backend API for the HCMC AI Travel Planner — CSC10014 Group 7",
     version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
     lifespan=lifespan,
 )
 
-allowed_origins = [
-    origin.strip()
-    for origin in os.getenv(
-        "FRONTEND_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173",
-    ).split(",")
-    if origin.strip()
-]
+# ---------------------------------------------------------------------------
+# CORS
+# ---------------------------------------------------------------------------
+_cors_raw = os.getenv("CORS_ORIGINS") or os.getenv("FRONTEND_ORIGINS") or settings.CORS_ORIGINS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=[origin.strip() for origin in _cors_raw.split(",") if origin.strip()],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-app.include_router(api_router, prefix="/api/v1")
+# ---------------------------------------------------------------------------
+# Router (already prefixed with /api/v1)
+# ---------------------------------------------------------------------------
+app.include_router(api_router)
+
+
+# ---------------------------------------------------------------------------
+# Global exception handler — return consistent JSON error responses
+# ---------------------------------------------------------------------------
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "INTERNAL_ERROR", "message": "An unexpected error occurred."},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Root & Health endpoints
+# ---------------------------------------------------------------------------
+@app.get("/")
+async def root():
+    return {"status": "ok", "app": "Sài Gòn Guide API", "version": "2.0.0"}
 
 
 @app.get("/health", tags=["Health"])
-async def health_check() -> dict[str, str]:
-    return {"status": "ok"}
+async def health_check():
+    return {
+        "status": "healthy",
+        "service": "Sài Gòn Guide API (FastAPI)",
+        "database": "SQLite / PostgreSQL Ready (SQLAlchemy ORM)",
+        "version": "2.0.0",
+    }
+
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

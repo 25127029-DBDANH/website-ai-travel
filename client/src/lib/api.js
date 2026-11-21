@@ -1,7 +1,12 @@
-// Browser-only data layer with rich HCMC catalog, detailed time slots, contingency scenarios, and Google Calendar sync.
-export const API_BASE = '';
-const AI_API_BASE = (import.meta.env.VITE_API_BASE || 'http://localhost:8000/api/v1').replace(/\/$/, '');
-const API_ORIGIN = AI_API_BASE.replace(/\/api\/v1$/, '');
+// Data layer with rich HCMC catalog, detailed time slots, contingency scenarios, Google Calendar sync,
+// and real backend API integration for Auth, Trip CRUD, and Gemini AI Planning.
+// Authors: Đỗ Nguyễn An Khang (Auth & Trip CRUD), Lê Hữu Lam (Gemini AI & Smart Swap)
+import { getAuthToken, clearAuthToken } from './auth.js';
+
+const RAW_API_BASE = (import.meta.env.VITE_API_BASE || 'http://localhost:8000').replace(/\/$/, '');
+const API_ORIGIN = RAW_API_BASE.replace(/\/api\/v1$/, '');
+export const API_BASE = API_ORIGIN;
+const AI_API_BASE = `${API_ORIGIN}/api/v1`;
 
 export class ApiError extends Error {
   constructor(message, code = 'LOCAL_DATA', status = 0) {
@@ -15,9 +20,12 @@ export class ApiError extends Error {
 async function postAiRequest(path, payload) {
   let response;
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    const token = getAuthToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     response = await fetch(`${AI_API_BASE}${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload)
     });
   } catch {
@@ -30,6 +38,40 @@ async function postAiRequest(path, payload) {
     throw new ApiError(detail, 'AI_REQUEST_FAILED', response.status);
   }
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// HTTP helper — calls real backend with JWT auth
+// ---------------------------------------------------------------------------
+async function request(method, path, body) {
+  const headers = { 'Content-Type': 'application/json' };
+  const token = getAuthToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers,
+      body: body != null ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new ApiError('Network error', 'NETWORK_ERROR', 0);
+  }
+
+  if (res.status === 401) {
+    clearAuthToken();
+    window.dispatchEvent(new Event('hcmc-auth-expired'));
+    const data = await res.json().catch(() => ({}));
+    throw new ApiError(data.detail || 'Unauthorized', data.detail || 'AUTH_TOKEN_EXPIRED', 401);
+  }
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new ApiError(data.detail || 'Request failed', data.detail || 'default', res.status);
+  }
+
+  return res.json();
 }
 
 const STORAGE_KEY = 'saigon-guide-local-data-v2';
@@ -1450,6 +1492,45 @@ function save(state) {
   return state;
 }
 
+function cacheBackendTrip(trip, items) {
+  if (!trip?.id) return null;
+  const state = readState();
+  const existing = state.trips?.[trip.id]?.trip || {};
+  const cachedTrip = { ...existing, ...trip };
+  state.trips = { ...state.trips, [trip.id]: { trip: cachedTrip, items: items || [] } };
+  save(state);
+  return { trip: cachedTrip, items: items || [] };
+}
+
+function cacheBackendItems(tripId, items, tripUpdates = {}) {
+  const state = readState();
+  const existing = state.trips?.[tripId]?.trip || { id: tripId };
+  const trip = { ...existing, ...tripUpdates };
+  state.trips = { ...state.trips, [tripId]: { trip, items } };
+  save(state);
+  return { items, budget_summary: budgetFor(trip, items) };
+}
+
+async function getBackendTrip(tripId) {
+  const data = await request('GET', `/api/v1/trips/${tripId}`);
+  cacheBackendTrip(data.trip, data.itinerary_items || []);
+  return data;
+}
+
+async function saveBackendItems(tripId, items) {
+  const trip = await request('PUT', `/api/v1/trips/${tripId}`, { itinerary_items: items });
+  return cacheBackendItems(tripId, items, trip);
+}
+
+async function updateBackendItem(tripId, dayNumber, orderIndex, updates) {
+  const result = await request(
+    'PATCH',
+    `/api/v1/trips/${tripId}/items/${dayNumber}/${orderIndex}`,
+    updates
+  );
+  return cacheBackendItems(tripId, result.items || []);
+}
+
 function missing() {
   return new ApiError('Không tìm thấy chuyến đi này.', 'NOT_FOUND', 404);
 }
@@ -1556,23 +1637,29 @@ export function downloadIcsFile(trip, items) {
 }
 
 export const api = {
-  register: async ({ email } = {}) => {
-    const user = { id: 'local-user', email: email || 'guest@example.com', name: 'Khách du lịch Sài Gòn' };
-    const state = readState();
-    state.user = user;
-    save(state);
-    return { user, token: 'local-session' };
+  // =====================================================================
+  // AUTH — calls real backend
+  // =====================================================================
+  register: async ({ username, password } = {}) => {
+    return request('POST', '/api/v1/auth/register', { username, password });
   },
-  login: async ({ email } = {}) => api.register({ email }),
-  loginWithGoogle: async () => api.register({ email: 'guest@example.com' }),
-  getMe: async () => ({ user: readState().user }),
+  login: async ({ username, password } = {}) => {
+    return request('POST', '/api/v1/auth/login', { username, password });
+  },
+  loginWithGoogle: async () => {
+    throw new ApiError('Google Sign-In is not available', 'GOOGLE_NOT_CONFIGURED', 0);
+  },
+  getMe: async () => {
+    return request('GET', '/api/v1/auth/me');
+  },
   changePassword: async () => ({ success: true }),
-  deleteAccount: async () => {
-    const state = readState();
-    state.user = null;
-    save(state);
-    return { success: true };
+  deleteAccount: async (payload) => {
+    return request('DELETE', '/api/v1/auth/me', payload);
   },
+
+  // =====================================================================
+  // SETTINGS — local only (no backend endpoint needed)
+  // =====================================================================
   getSettings: async () => ({ settings: readState().settings }),
   updateSettings: async (settings) => {
     const state = readState();
@@ -1581,13 +1668,17 @@ export const api = {
     return { settings: state.settings };
   },
 
+  // =====================================================================
+  // AI — calls Gemini AI backend (Concept, Generate, Smart Swap)
+  // =====================================================================
   suggestTripConcept: (payload) => postAiRequest('/ai/concept', payload),
   generateAiItinerary: (payload) => postAiRequest('/ai/generate', payload),
   suggestPlaceSwaps: (payload) => postAiRequest('/ai/swap', payload),
 
+  // =====================================================================
+  // TRIPS — calls real backend
+  // =====================================================================
   createTrip: async (payload = {}) => {
-    const state = readState();
-    const id = nextId();
     const days = Math.min(14, Math.max(1, Number(payload.days) || 3));
     const placesPerDay = Math.min(6, Math.max(3, Number(payload.places_per_day) || 4));
     const seed = Math.floor(Math.random() * PLACES.length);
@@ -1596,13 +1687,12 @@ export const api = {
     const items = Array.isArray(payload.itinerary_items) && payload.itinerary_items.length
       ? payload.itinerary_items
       : makeItinerary(days, placesPerDay, seed, payload.start_location || '', payload.transport_mode || 'grab_bike');
-    
-    const trip = {
-      id,
-      title: `Khám phá Sài Gòn ${days} ngày`,
+
+    const body = {
+      title: payload.title || `Khám phá Sài Gòn ${days} ngày`,
       days,
-      places_per_day: placesPerDay,
       budget: Number(payload.budget) || 5000000,
+      places_per_day: placesPerDay,
       companion,
       member_count: memberCount,
       transport_mode: payload.transport_mode || 'grab_bike',
@@ -1611,104 +1701,58 @@ export const api = {
       special_notes: payload.special_notes || '',
       start_time: payload.start_time || '08:00',
       end_time: payload.end_time || '21:30',
-      status: 'completed',
-      created_at: new Date().toISOString(),
       start_location: payload.start_location || 'Quận 1, TP. Hồ Chí Minh',
       preferences: payload.preferences || ['food', 'culture'],
-      cover_photo: items[0]?.photo_url || photo('independence-palace.jpg'),
-      cover_place_name: items[0]?.place_name || 'Dinh Độc Lập',
-      is_shared: false,
-      source: 'form'
+      itinerary_items: items,
     };
 
-    trip.total_estimated = summarize(trip, items).total_estimated;
-    trip.place_count = items.length;
-    state.trips[id] = { trip, items };
-    state.messages[id] = [];
-    save(state);
+    const trip = await request('POST', '/api/v1/trips/', body);
+    cacheBackendTrip(trip, items);
     return trip;
   },
 
-  listTrips: async () => ({
-    trips: Object.values(readState().trips)
-      .map(({ trip }) => trip)
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-  }),
-
-  getTrip: async (id) => {
-    const { trip, items } = record(id);
-    return { trip, itinerary_items: items, budget_summary: summarize(trip, items) };
+  listTrips: async () => {
+    return request('GET', '/api/v1/trips/me');
   },
 
+  getTrip: getBackendTrip,
+
   updateTrip: async (id, updates) => {
+    const trip = await request('PUT', `/api/v1/trips/${id}`, updates);
     const state = readState();
-    const item = state.trips[id];
-    if (!item) throw missing();
-    item.trip = { ...item.trip, ...updates };
-    save(state);
-    return item.trip;
+    if (state.trips?.[id]) {
+      cacheBackendTrip(trip, state.trips[id].items || []);
+    }
+    return trip;
   },
 
   deleteTrip: async (id) => {
-    const state = readState();
-    delete state.trips[id];
-    delete state.messages[id];
-    for (const [token, target] of Object.entries(state.shares)) {
-      if (target === id) delete state.shares[token];
-    }
-    save(state);
-    return { success: true };
+    return request('DELETE', `/api/v1/trips/${id}`);
   },
 
   duplicateTrip: async (id) => {
-    const source = record(id);
-    const state = readState();
-    const copyId = nextId();
-    const trip = {
-      ...source.trip,
-      id: copyId,
-      title: `${source.trip.title} (bản sao)`,
-      created_at: new Date().toISOString(),
-      is_shared: false
-    };
-    state.trips[copyId] = { trip, items: source.items.map((item) => ({ ...item })) };
-    state.messages[copyId] = [];
-    save(state);
-    return { id: copyId, trip };
+    return request('POST', `/api/v1/trips/${id}/clone`);
   },
 
   createShareLink: async (id) => {
-    record(id);
-    const state = readState();
-    const token = `share-${Math.random().toString(36).slice(2, 9)}`;
-    state.shares[token] = id;
-    state.trips[id].trip.is_shared = true;
-    save(state);
-    return { token, share_url: `${window.location.origin}/s/${token}` };
+    return request('POST', `/api/v1/trips/${id}/share`);
   },
 
-  revokeShareLink: async (id, token) => {
-    const state = readState();
-    const key = token || Object.keys(state.shares).find((val) => state.shares[val] === id);
-    if (key) delete state.shares[key];
-    if (state.trips[id]) state.trips[id].trip.is_shared = false;
-    save(state);
-    return { success: true };
+  revokeShareLink: async (id) => {
+    return request('DELETE', `/api/v1/trips/${id}/share`);
   },
 
   getSharedTrip: async (token) => {
-    const id = readState().shares[token];
-    if (!id) throw missing();
-    const { trip, items } = record(id);
-    return { trip, itinerary_items: items, budget_summary: summarize(trip, items) };
+    return request('GET', `/api/v1/trips/shared/${token}`);
   },
 
   cloneSharedTrip: async (token) => {
-    const id = readState().shares[token];
-    if (!id) throw missing();
-    return api.duplicateTrip(id);
+    return request('POST', `/api/v1/trips/shared/${token}/clone`);
   },
 
+  // =====================================================================
+  // LOCAL-ONLY operations (used by other team members' components)
+  // =====================================================================
   // Lấy danh sách địa điểm thay thế tương đương
   getAlternatives: (item) => {
     const sameCat = PLACES.filter(
@@ -1725,94 +1769,70 @@ export const api = {
 
   // Đổi địa điểm trực tiếp trên giao diện
   swapPlace: async (tripId, dayNumber, orderIndex, replacement) => {
-    const state = readState();
-    const entry = state.trips[tripId];
-    if (!entry) throw missing();
+    const data = await getBackendTrip(tripId);
+    const items = data.itinerary_items || [];
 
-    const targetIdx = entry.items.findIndex(
+    const targetIdx = items.findIndex(
       (it) => it.day_number === Number(dayNumber) && it.order_index === Number(orderIndex)
     );
-    if (targetIdx !== -1) {
-      const original = entry.items[targetIdx];
-      entry.items[targetIdx] = {
-        ...replacement,
-        day_number: original.day_number,
-        order_index: original.order_index,
-        time_slot: original.time_slot,
-        start_time: original.start_time,
-        end_time: original.end_time,
-        transit_info: original.transit_info,
-        visited: original.visited || false
-      };
-      const summary = summarize(entry.trip, entry.items);
-      entry.trip.total_estimated = summary.total_estimated;
-      save(state);
-      return { items: entry.items, budget_summary: summary };
-    }
-    return { items: entry.items, budget_summary: summarize(entry.trip, entry.items) };
+    if (targetIdx === -1) throw new ApiError('Trip item not found', 'TRIP_ITEM_NOT_FOUND', 404);
+
+    const original = items[targetIdx];
+    items[targetIdx] = {
+      ...replacement,
+      day_number: original.day_number,
+      order_index: original.order_index,
+      time_slot: original.time_slot,
+      start_time: original.start_time,
+      end_time: original.end_time,
+      transit_info: original.transit_info,
+      visited: original.visited || false,
+      is_accepted: original.is_accepted || false
+    };
+    return saveBackendItems(tripId, items);
   },
 
   // Đánh dấu đã ghé thăm (Check-in Companion)
   toggleVisited: async (tripId, dayNumber, orderIndex) => {
-    const state = readState();
-    const entry = state.trips[tripId];
-    if (!entry) throw missing();
-
-    const target = entry.items.find(
+    const data = await getBackendTrip(tripId);
+    const target = (data.itinerary_items || []).find(
       (it) => it.day_number === Number(dayNumber) && it.order_index === Number(orderIndex)
     );
-    if (target) {
-      target.visited = !target.visited;
-      save(state);
-      return { items: entry.items };
-    }
-    return { items: entry.items };
+    if (!target) throw new ApiError('Trip item not found', 'TRIP_ITEM_NOT_FOUND', 404);
+    return updateBackendItem(tripId, dayNumber, orderIndex, { visited: !target.visited });
   },
 
   // Chốt / Chấp nhận địa điểm trong lịch trình (Accept stop)
   toggleAcceptPlace: async (tripId, dayNumber, orderIndex) => {
-    const state = readState();
-    const entry = state.trips[tripId];
-    if (!entry) throw missing();
-
-    const target = entry.items.find(
+    const data = await getBackendTrip(tripId);
+    const target = (data.itinerary_items || []).find(
       (it) => it.day_number === Number(dayNumber) && it.order_index === Number(orderIndex)
     );
-    if (target) {
-      target.is_accepted = !target.is_accepted;
-      save(state);
-      return { items: entry.items };
-    }
-    return { items: entry.items };
+    if (!target) throw new ApiError('Trip item not found', 'TRIP_ITEM_NOT_FOUND', 404);
+    return updateBackendItem(tripId, dayNumber, orderIndex, { is_accepted: !target.is_accepted });
   },
 
   // Lưu ảnh và ghi chú check-in thực tế
   saveCheckin: async (tripId, dayNumber, orderIndex, { photoUrl, note } = {}) => {
-    const state = readState();
-    const entry = state.trips[tripId];
-    if (!entry) throw missing();
-
-    const target = entry.items.find(
+    const data = await getBackendTrip(tripId);
+    const target = (data.itinerary_items || []).find(
       (it) => it.day_number === Number(dayNumber) && it.order_index === Number(orderIndex)
     );
-    if (target) {
-      target.visited = true;
-      if (photoUrl) target.checkin_photo = photoUrl;
-      if (note) target.checkin_note = note;
-      target.checkin_time = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-      save(state);
-      return { items: entry.items };
-    }
-    return { items: entry.items };
+    if (!target) throw new ApiError('Trip item not found', 'TRIP_ITEM_NOT_FOUND', 404);
+    return updateBackendItem(tripId, dayNumber, orderIndex, {
+      visited: true,
+      ...(photoUrl ? { photo_url: photoUrl } : {}),
+      ...(note ? { note } : {})
+    });
   },
 
   // Áp dụng Kịch bản Trời mưa (Rain Mode) cho 1 ngày
   applyRainMode: async (tripId, dayNumber, enableRain) => {
-    const state = readState();
-    const entry = state.trips[tripId];
-    if (!entry) throw missing();
+    const data = await getBackendTrip(tripId);
+    const trip = data.trip;
+    let items = data.itinerary_items || [];
 
-    entry.items = entry.items.map((item) => {
+    items = items.map((item) => {
       if (item.day_number !== Number(dayNumber)) return item;
 
       if (enableRain) {
@@ -1833,7 +1853,7 @@ export const api = {
             ...item,
             transit_info: {
               ...item.transit_info,
-              mode: entry.trip.transport_mode || 'grab_bike',
+              mode: trip.transport_mode || 'grab_bike',
               is_rain_mode: false,
               estimated_fare_vnd: Math.round(item.transit_info.estimated_fare_vnd / 1.5)
             }
@@ -1843,22 +1863,18 @@ export const api = {
       return item;
     });
 
-    const summary = summarize(entry.trip, entry.items);
-    entry.trip.total_estimated = summary.total_estimated;
-    save(state);
-    return { items: entry.items, budget_summary: summary };
+    return saveBackendItems(tripId, items);
   },
 
   // Áp dụng Kịch bản Giờ cao điểm (Rush-Hour Mode) cho 1 ngày
   applyTrafficMode: async (tripId, dayNumber, enableTraffic) => {
-    const state = readState();
-    const entry = state.trips[tripId];
-    if (!entry) throw missing();
+    const data = await getBackendTrip(tripId);
+    let items = data.itinerary_items || [];
 
-    entry.items = entry.items.map((item) => {
+    items = items.map((item) => {
       if (item.day_number !== Number(dayNumber)) return item;
 
-      if (enableTraffic && item.transit_info) {
+      if (enableTraffic && item.transit_info && !item.transit_info.is_rush_hour) {
         // Tăng thêm 20 phút kẹt xe vào thời gian di chuyển
         return {
           ...item,
@@ -1869,22 +1885,29 @@ export const api = {
           }
         };
       }
+      if (!enableTraffic && item.transit_info?.is_rush_hour) {
+        return {
+          ...item,
+          transit_info: {
+            ...item.transit_info,
+            duration_min: Math.max(0, item.transit_info.duration_min - 20),
+            is_rush_hour: false
+          }
+        };
+      }
       return item;
     });
 
-    const summary = summarize(entry.trip, entry.items);
-    save(state);
-    return { items: entry.items, budget_summary: summary };
+    return saveBackendItems(tripId, items);
   },
 
   // Tinh chỉnh AI: Tối ưu tiết kiệm ngân sách 20% (Hoán đổi quán đặc sản bình dân thật sự)
   optimizeBudget: async (tripId) => {
-    const state = readState();
-    const entry = state.trips[tripId];
-    if (!entry) throw missing();
+    const data = await getBackendTrip(tripId);
+    const items = data.itinerary_items || [];
 
     // Tìm điểm ăn uống có chi phí cao nhất để đổi sang quán đặc sản Michelin bình dân
-    const expensiveFood = entry.items.find((it) => it.estimated_cost >= 80000 && it.category === 'food') || entry.items[2];
+    const expensiveFood = items.find((it) => it.estimated_cost >= 80000 && it.category === 'food') || items[2];
     if (expensiveFood) {
       expensiveFood.place_id = 'p-com-tam-ba-ghien';
       expensiveFood.place_name = 'Cơm Tấm Ba Ghiền';
@@ -1894,10 +1917,7 @@ export const api = {
       expensiveFood.district = 'Phú Nhuận';
     }
 
-    const summary = summarize(entry.trip, entry.items);
-    entry.trip.total_estimated = summary.total_estimated;
-    save(state);
-    return { items: entry.items, budget_summary: summary };
+    return saveBackendItems(tripId, items);
   },
 
   getMessages: async (id) => {

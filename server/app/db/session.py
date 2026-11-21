@@ -1,13 +1,12 @@
 """
 session.py — SQLAlchemy async session & connection pool configuration.
-Author  : Ngô Tấn Đạt (Member 3 — Places & Interactive Map)
+Authors : Ngô Tấn Đạt (Places), Đỗ Nguyễn An Khang (Auth & Trips)
 
 Supports both SQLite (local development with aiosqlite) and PostgreSQL
 (production/Supabase with asyncpg).
 """
 from __future__ import annotations
 
-import os
 from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
@@ -16,15 +15,13 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from app.core.config import settings
 from app.db.models import Base
 
 # ---------------------------------------------------------------------------
-# Database URL & Dialect Detection
+# Database URL & Dialect Detection (from settings / .env)
 # ---------------------------------------------------------------------------
-DATABASE_URL: str = os.getenv(
-    "DATABASE_URL",
-    "sqlite+aiosqlite:///./travel.db",
-)
+DATABASE_URL: str = settings.DATABASE_URL
 
 # Auto-convert synchronous or standard URLs to async driver schemes
 if DATABASE_URL.startswith("postgres://"):
@@ -48,11 +45,11 @@ if IS_SQLITE:
 else:
     engine = create_async_engine(
         DATABASE_URL,
-        pool_size=10,           # number of persistent connections in the pool
-        max_overflow=20,        # extra connections beyond pool_size under load
-        pool_timeout=30,        # seconds to wait for a free connection
-        pool_recycle=1800,      # recycle connections every 30 min (avoids stale TCP)
-        echo=False,             # set True for SQL query logging during dev
+        pool_size=10,
+        max_overflow=20,
+        pool_timeout=30,
+        pool_recycle=1800,
+        echo=False,
     )
 
 
@@ -84,15 +81,7 @@ async def create_tables() -> None:
 # FastAPI dependency: yields a DB session, ensures cleanup on error
 # ---------------------------------------------------------------------------
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """
-    FastAPI dependency that provides an async SQLAlchemy session.
-
-    Usage::
-
-        @router.get("/example")
-        async def example(db: AsyncSession = Depends(get_db)):
-            ...
-    """
+    """FastAPI dependency that provides an async SQLAlchemy session."""
     async with AsyncSessionLocal() as session:
         try:
             yield session

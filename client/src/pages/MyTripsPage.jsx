@@ -13,7 +13,8 @@ import {
   Wallet,
   X
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import Modal from '../components/Modal.jsx';
@@ -36,6 +37,7 @@ function TripCard({ trip, lang, t, menuOpen, onToggleMenu, onRename, onDuplicate
   const menuButtonRef = useRef(null);
   const menuRef = useRef(null);
   const menuTabCloseRef = useRef(false);
+  const [menuPosition, setMenuPosition] = useState(null);
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -43,6 +45,34 @@ function TripCard({ trip, lang, t, menuOpen, onToggleMenu, onRename, onDuplicate
     menuRef.current?.querySelector('[role="menuitem"]:not([disabled])')?.focus();
     return () => {
       if (!menuTabCloseRef.current) menuButtonRef.current?.focus();
+    };
+  }, [menuOpen]);
+
+  useLayoutEffect(() => {
+    if (!menuOpen) {
+      setMenuPosition(null);
+      return undefined;
+    }
+
+    const updatePosition = () => {
+      const button = menuButtonRef.current;
+      if (!button) return;
+      const rect = button.getBoundingClientRect();
+      const menuHeight = menuRef.current?.getBoundingClientRect().height || 176;
+      const menuWidth = 176;
+      const openAbove = window.innerHeight - rect.bottom < menuHeight + 8 && rect.top > menuHeight + 8;
+      setMenuPosition({
+        top: openAbove ? rect.top - menuHeight - 8 : rect.bottom + 8,
+        left: Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8))
+      });
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
     };
   }, [menuOpen]);
 
@@ -74,8 +104,8 @@ function TripCard({ trip, lang, t, menuOpen, onToggleMenu, onRename, onDuplicate
   };
 
   return (
-    <article className="group relative flex h-full flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-card ring-1 ring-slate-900/5 transition-[transform,border-color,box-shadow] duration-300 ease-out-strong hover:-translate-y-1 hover:border-brand-200 hover:shadow-lift">
-      <div className="relative h-32 shrink-0 overflow-hidden sm:h-36">
+    <article className="group relative flex h-full flex-col rounded-3xl border border-slate-200/80 bg-white shadow-card ring-1 ring-slate-900/5 transition-[transform,border-color,box-shadow] duration-300 ease-out-strong hover:-translate-y-1 hover:border-brand-200 hover:shadow-lift">
+      <div className="relative h-32 shrink-0 overflow-hidden rounded-t-3xl sm:h-36">
         {cover ? (
           <img
             src={cover}
@@ -97,7 +127,9 @@ function TripCard({ trip, lang, t, menuOpen, onToggleMenu, onRename, onDuplicate
           </span>
         ) : null}
 
-        <div className="absolute right-2.5 top-2.5 z-10">
+      </div>
+
+      <div className="absolute right-2.5 top-2.5 z-20">
           <button
             ref={menuButtonRef}
             type="button"
@@ -110,20 +142,23 @@ function TripCard({ trip, lang, t, menuOpen, onToggleMenu, onRename, onDuplicate
             <EllipsisVertical className="h-4 w-4" />
           </button>
 
-          {menuOpen ? (
-            <>
-              <button
-                type="button"
-                aria-label={t('common.close')}
-                onClick={onToggleMenu}
-                className="fixed inset-0 z-10 cursor-default"
-              />
-              <div
-                ref={menuRef}
-                role="menu"
-                onKeyDown={handleMenuKeyDown}
-                className="absolute right-0 top-11 z-20 w-44 overflow-hidden rounded-2xl border border-slate-200 bg-white py-1 shadow-soft"
-              >
+      </div>
+
+      {menuOpen && menuPosition ? createPortal(
+        <>
+          <button
+            type="button"
+            aria-label={t('common.close')}
+            onClick={onToggleMenu}
+            className="fixed inset-0 z-[1000] cursor-default"
+          />
+          <div
+            ref={menuRef}
+            role="menu"
+            onKeyDown={handleMenuKeyDown}
+            style={{ top: menuPosition.top, left: menuPosition.left }}
+            className="fixed z-[1001] w-44 overflow-hidden rounded-2xl border border-slate-200 bg-white py-1 shadow-soft"
+          >
                 <button
                   type="button"
                   role="menuitem"
@@ -170,16 +205,15 @@ function TripCard({ trip, lang, t, menuOpen, onToggleMenu, onRename, onDuplicate
                   <Trash2 className="h-3.5 w-3.5" />
                   {t('myTrips.menu.delete')}
                 </button>
-              </div>
-            </>
-          ) : null}
-        </div>
-      </div>
+          </div>
+        </>,
+        document.body
+      ) : null}
 
       <div className="flex flex-1 flex-col gap-3 p-4 sm:p-5">
         <Link
           to={`/trip/${trip.id}`}
-          className="line-clamp-2 rounded font-display text-base font-extrabold leading-snug text-slate-900 transition-colors duration-200 ease-out-strong hover:text-brand-700"
+          className="line-clamp-2 rounded font-display text-base font-extrabold leading-snug text-slate-900 transition-colors duration-200 ease-out-strong after:absolute after:inset-0 after:z-10 after:content-[''] hover:text-brand-700"
         >
           {trip.title || t('trip.custom')}
         </Link>
@@ -199,12 +233,6 @@ function TripCard({ trip, lang, t, menuOpen, onToggleMenu, onRename, onDuplicate
           <span className="text-[10.5px] font-semibold text-slate-500">
             {t('myTrips.created', { when: created })}
           </span>
-          <Link
-            to={`/trip/${trip.id}`}
-            className="touch-target inline-flex items-center rounded-full border border-slate-900 bg-slate-900 px-3 py-1.5 text-[11px] font-bold text-white transition-[transform,background-color] duration-200 ease-out-strong hover:bg-slate-800 active:scale-[0.97]"
-          >
-            {t('myTrips.open')}
-          </Link>
         </div>
       </div>
     </article>

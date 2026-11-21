@@ -366,8 +366,17 @@ class GeminiService:
         request: TripConceptRequest,
         places: Sequence[PlaceResponse],
     ) -> ConceptResponse:
+        available_by_norm = {
+            _normalize_district(place.district): place.district for place in places
+        }
         available_districts = list(dict.fromkeys(place.district for place in places))
-        districts = [district for district in request.districts if district in available_districts]
+        districts = list(
+            dict.fromkeys(
+                available_by_norm[_normalize_district(district)]
+                for district in request.districts
+                if _normalize_district(district) in available_by_norm
+            )
+        )
         districts.extend(district for district in available_districts if district not in districts)
         districts = districts[: min(request.days, 3)]
         highlights = list(dict.fromkeys(
@@ -392,7 +401,9 @@ class GeminiService:
         request: TripGenerationRequest,
         places: Sequence[PlaceResponse],
     ) -> TripGenerationResponse:
-        districts = set(request.approved_concept.recommended_districts)
+        districts = {
+            _normalize_district(d) for d in request.approved_concept.recommended_districts
+        }
         preferred_categories = {
             _PREFERENCE_CATEGORIES.get(preference, preference)
             for preference in request.preferences
@@ -400,7 +411,7 @@ class GeminiService:
         ordered_places = sorted(
             places,
             key=lambda place: (
-                place.district not in districts,
+                _normalize_district(place.district) not in districts,
                 place.category not in preferred_categories,
                 place.estimated_cost,
             ),
@@ -542,12 +553,16 @@ class GeminiService:
         request: TripConceptRequest,
         places: Sequence[PlaceResponse],
     ) -> ConceptResponse:
-        available_districts = {place.district.casefold() for place in places}
-        recommended = [
-            district
-            for district in result.recommended_districts
-            if district.casefold() in available_districts
-        ]
+        available_by_norm = {
+            _normalize_district(place.district): place.district for place in places
+        }
+        recommended = list(
+            dict.fromkeys(
+                available_by_norm[_normalize_district(district)]
+                for district in result.recommended_districts
+                if _normalize_district(district) in available_by_norm
+            )
+        )
         if not recommended:
             raise ValueError("Gemini returned no district represented in the verified catalog.")
         return ConceptResponse(
