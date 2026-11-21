@@ -4,13 +4,11 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { cn } from '../lib/cn.js';
 import { translateApiError } from '../lib/errors.js';
-import { hasGoogleSignIn } from '../lib/google.js';
-import GoogleSignInButton from './GoogleSignInButton.jsx';
 import Modal from './Modal.jsx';
 
 export default function AuthModal() {
-  const { t } = useI18n();
-  const { isAuthOpen, authMode, closeAuth, login, register, loginWithGoogle } = useAuth();
+  const { lang, t } = useI18n();
+  const { isAuthOpen, authMode, closeAuth, login, register } = useAuth();
 
   const [mode, setMode] = useState(authMode);
   const [username, setUsername] = useState('');
@@ -83,20 +81,6 @@ export default function AuthModal() {
     }
   };
 
-  const handleGoogleCredential = async (credential) => {
-    if (submitting) return;
-    setSubmitting(true);
-    clearError();
-    try {
-      await loginWithGoogle(credential);
-      closeAuth();
-    } catch (requestError) {
-      setError(translateApiError(t, requestError));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const tabClass = (active) =>
     cn(
       'touch-target rounded-full px-3 py-1.5 text-xs font-bold transition-[transform,color,background-color,box-shadow] duration-200 ease-out-strong active:scale-[0.98]',
@@ -149,89 +133,82 @@ export default function AuthModal() {
             </button>
           </div>
 
-      {hasGoogleSignIn ? (
-        <div className="mt-4">
-          <GoogleSignInButton onCredential={handleGoogleCredential} disabled={submitting} />
-          <div className="my-3 flex items-center gap-3 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-            <span className="h-px flex-1 bg-slate-200" />
-            {t('auth.or')}
-            <span className="h-px flex-1 bg-slate-200" />
-          </div>
-        </div>
-      ) : null}
+          <form
+            id="auth-form"
+            onSubmit={handleSubmit}
+            className="grid gap-3 mt-4"
+          >
+            <label className="grid gap-1.5">
+              <span className="label !mb-0">{t('auth.username')}</span>
+              <input
+                ref={usernameRef}
+                className="input"
+                value={username}
+                onChange={(event) => {
+                  setUsername(event.target.value);
+                  if (errorField === 'username') clearError();
+                }}
+                aria-invalid={errorField === 'username' || undefined}
+                aria-describedby={describedBy('username', isLogin ? null : 'auth-username-hint')}
+                autoComplete="username"
+                minLength={3}
+                maxLength={30}
+                pattern="[A-Za-z0-9_]+"
+                required
+              />
+              {!isLogin && <span id="auth-username-hint" className="text-[11px] text-slate-500">{t('auth.usernameHint')}</span>}
+            </label>
 
-      <form
-        id="auth-form"
-        onSubmit={handleSubmit}
-        className={cn('grid gap-3', hasGoogleSignIn ? '' : 'mt-4')}
-      >
-        <label className="grid gap-1.5">
-          <span className="label !mb-0">{t('auth.username')}</span>
-          <input
-            ref={usernameRef}
-            className="input"
-            value={username}
-            onChange={(event) => {
-              setUsername(event.target.value);
-              if (errorField === 'username') clearError();
-            }}
-            aria-invalid={errorField === 'username' || undefined}
-            aria-describedby={describedBy('username', isLogin ? null : 'auth-username-hint')}
-            autoComplete="username"
-            minLength={3}
-            maxLength={30}
-            pattern="[A-Za-z0-9_]+"
-            required
-          />
-          {!isLogin && <span id="auth-username-hint" className="text-[11px] text-slate-500">{t('auth.usernameHint')}</span>}
-        </label>
+            {!isLogin && (
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-medium leading-relaxed text-amber-800">
+                {t('auth.noRecovery')}
+              </p>
+            )}
 
-        {!isLogin && (
-          <p className="rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-medium leading-relaxed text-amber-800">
-            {t('auth.noRecovery')}
+            <label className="grid gap-1.5">
+              <span className="label !mb-0">{t('auth.password')}</span>
+              <input
+                ref={passwordRef}
+                type="password"
+                className="input"
+                value={password}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  if (errorField === 'password') clearError();
+                }}
+                aria-invalid={errorField === 'password' || undefined}
+                aria-describedby={describedBy('password', isLogin ? null : 'auth-password-hint')}
+                autoComplete={isLogin ? 'current-password' : 'new-password'}
+                minLength={isLogin ? 1 : 8}
+                maxLength={72}
+                required
+              />
+              {!isLogin && (
+                <span id="auth-password-hint" className="text-[11px] text-slate-500">{t('auth.passwordHint')}</span>
+              )}
+            </label>
+
+            {error ? (
+              <p id="auth-form-error" role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+                {error}
+              </p>
+            ) : null}
+          </form>
+
+          <p className="mt-4 text-center text-[11.5px] leading-relaxed text-slate-500">
+            {isLogin
+              ? (lang === 'vi' ? 'Chưa có tài khoản? ' : t('auth.footer.login'))
+              : t('auth.footer.register')}{' '}
+            <button
+              type="button"
+              onClick={() => switchMode(isLogin ? 'register' : 'login')}
+              className="rounded font-bold text-brand-700 transition-colors duration-200 ease-out-strong hover:underline"
+            >
+              {isLogin
+                ? (lang === 'vi' ? 'Đăng ký' : t('auth.switch.register'))
+                : t('auth.switch.login')}
+            </button>
           </p>
-        )}
-
-        <label className="grid gap-1.5">
-          <span className="label !mb-0">{t('auth.password')}</span>
-          <input
-            ref={passwordRef}
-            type="password"
-            className="input"
-            value={password}
-            onChange={(event) => {
-              setPassword(event.target.value);
-              if (errorField === 'password') clearError();
-            }}
-            aria-invalid={errorField === 'password' || undefined}
-            aria-describedby={describedBy('password', isLogin ? null : 'auth-password-hint')}
-            autoComplete={isLogin ? 'current-password' : 'new-password'}
-            minLength={isLogin ? 1 : 8}
-            maxLength={72}
-            required
-          />
-          {!isLogin && (
-            <span id="auth-password-hint" className="text-[11px] text-slate-500">{t('auth.passwordHint')}</span>
-          )}
-        </label>
-
-        {error ? (
-          <p id="auth-form-error" role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
-            {error}
-          </p>
-        ) : null}
-      </form>
-
-      <p className="mt-4 text-center text-[11.5px] leading-relaxed text-slate-500">
-        {isLogin ? t('auth.footer.login') : t('auth.footer.register')}{' '}
-        <button
-          type="button"
-          onClick={() => switchMode(isLogin ? 'register' : 'login')}
-          className="rounded font-bold text-brand-700 transition-colors duration-200 ease-out-strong hover:underline"
-        >
-          {isLogin ? t('auth.switch.register') : t('auth.switch.login')}
-        </button>
-      </p>
         </div>
       </div>
     </Modal>

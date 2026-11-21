@@ -38,10 +38,13 @@ export function AuthProvider({ children }) {
     const onExpired = () => {
       setUser(null);
       setLoading(false);
+      setAuthMode('login');
+      setAuthOpen(true);
+      setNotice(t('error.AUTH_TOKEN_EXPIRED'));
     };
     window.addEventListener('hcmc-auth-expired', onExpired);
     return () => window.removeEventListener('hcmc-auth-expired', onExpired);
-  }, []);
+  }, [t]);
 
   const openAuth = useCallback((mode = 'login') => {
     setAuthMode(mode);
@@ -70,10 +73,6 @@ export function AuthProvider({ children }) {
     async (payload) => applyAuth(await api.register(payload)),
     [applyAuth]
   );
-  const loginWithGoogle = useCallback(
-    async (idToken) => applyAuth(await api.loginWithGoogle(idToken)),
-    [applyAuth]
-  );
   const logout = useCallback(() => {
     clearAuthToken();
     setUser(null);
@@ -95,7 +94,6 @@ export function AuthProvider({ children }) {
       closeAuth,
       login,
       register,
-      loginWithGoogle,
       logout,
       deleteAccount
     }),
@@ -108,7 +106,6 @@ export function AuthProvider({ children }) {
       closeAuth,
       login,
       register,
-      loginWithGoogle,
       logout,
       deleteAccount
     ]
