@@ -188,6 +188,15 @@ def generate_ics_content(
         f"METHOD:{METHOD}",
         f"X-WR-CALNAME:Lịch trình Sài Gòn - {escape_ics_text(title)}",
         f"X-WR-TIMEZONE:{DEFAULT_TIMEZONE}",
+        "BEGIN:VTIMEZONE",
+        f"TZID:{DEFAULT_TIMEZONE}",
+        "BEGIN:STANDARD",
+        "DTSTART:19700101T000000",
+        "TZOFFSETFROM:+0700",
+        "TZOFFSETTO:+0700",
+        "TZNAME:ICT",
+        "END:STANDARD",
+        "END:VTIMEZONE",
     ]
 
     for index, item in enumerate(items, start=1):
@@ -230,13 +239,9 @@ def generate_ics_content(
         )
 
         desc_body = (
-            (
-                f"{description}\\n\\n"
-                f"Chi phí dự kiến: {cost_formatted}\\n"
-                f"Địa chỉ: {address}"
-            )
+            (f"{description}\n\nChi phí dự kiến: {cost_formatted}\nĐịa chỉ: {address}")
             if description
-            else (f"Chi phí dự kiến: {cost_formatted}\\nĐịa chỉ: {address}")
+            else f"Chi phí dự kiến: {cost_formatted}\nĐịa chỉ: {address}"
         )
 
         event_lines: list[str] = [

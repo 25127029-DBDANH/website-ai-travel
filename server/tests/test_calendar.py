@@ -86,12 +86,21 @@ def test_generate_ics_content_structure():
     assert ics_text.startswith("BEGIN:VCALENDAR")
     assert ics_text.strip().endswith("END:VCALENDAR")
 
-    # Calendar metadata
+    # Calendar metadata & VTIMEZONE
     assert "VERSION:2.0" in ics_text
     assert "PRODID:-//Saigon Guide//AI Travel Planner//VI" in ics_text
     assert "CALSCALE:GREGORIAN" in ics_text
     assert "X-WR-CALNAME:Lịch trình Sài Gòn - Du lịch Sài Gòn 1 Ngày" in ics_text
     assert "X-WR-TIMEZONE:Asia/Ho_Chi_Minh" in ics_text
+    assert "BEGIN:VTIMEZONE" in ics_text
+    assert "TZID:Asia/Ho_Chi_Minh" in ics_text
+    assert "TZOFFSETFROM:+0700" in ics_text
+    assert "TZOFFSETTO:+0700" in ics_text
+    assert "TZNAME:ICT" in ics_text
+    assert "END:VTIMEZONE" in ics_text
+
+    # VTIMEZONE must appear before VEVENT
+    assert ics_text.index("BEGIN:VTIMEZONE") < ics_text.index("BEGIN:VEVENT")
 
     # VEVENT attributes
     assert "BEGIN:VEVENT" in ics_text
@@ -191,3 +200,98 @@ def test_root_healthcheck():
     response = client.get("/")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+# ---------------------------------------------------------------------------
+# RFC 5545 Unfolding, Newline & VTIMEZONE Specific Tests
+# ---------------------------------------------------------------------------
+def test_unfolded_description_single_escape_newline_and_no_double_escape():
+    """
+    After unfolding (removing CRLF + 1 space/tab continuation),
+    DESCRIPTION must contain literal '\\n' (single backslash + n)
+    and must NOT contain '\\\\n' (double backslash + n).
+    """
+    items = [
+        {
+            "place_name": "Bảo tàng Chứng tích Chiến tranh",
+            "day_number": 1,
+            "start_time": "09:00",
+            "end_time": "11:00",
+            "address": "28 Võ Văn Tần, Phường 6, Quận 3, TP.HCM",
+            "description": "Dòng 1: Giới thiệu hiện vật.\nDòng 2: Khu vực trưng bày ngoài trời.",
+            "estimated_cost": 40000,
+        }
+    ]
+
+    ics_text = generate_ics_content(
+        trip_id="test-escape-trip",
+        title="Chuyến đi Test Escape",
+        items=items,
+        start_date=date(2026, 12, 1),
+    )
+
+    # RFC 5545 unfolding: remove CRLF followed by single space or tab
+    unfolded = ics_text.replace("\r\n ", "").replace("\r\n\t", "")
+
+    # Extract all DESCRIPTION lines
+    desc_lines = [
+        line for line in unfolded.split("\r\n") if line.startswith("DESCRIPTION:")
+    ]
+    assert len(desc_lines) >= 2  # At least VEVENT description and VALARM description
+
+    # The VEVENT description contains multiline details
+    event_desc = next(line for line in desc_lines if "Chi phí" in line)
+    assert r"\n" in event_desc, (
+        f"VEVENT DESCRIPTION should contain escaped newline: {event_desc}"
+    )
+
+    # No DESCRIPTION (neither VEVENT nor VALARM) may contain double-escaped \\n
+    for dline in desc_lines:
+        assert r"\\n" not in dline, (
+            f"DESCRIPTION must not contain double-escaped \\n: {dline}"
+        )
+
+
+def test_comma_escaping_not_double_escaped():
+    """Commas in text fields must be escaped as '\\,' and not double-escaped as '\\\\,'."""
+    items = [
+        {
+            "place_name": "Quán Cà Phê, Trà Sữa",
+            "day_number": 1,
+            "start_time": "14:00",
+            "end_time": "15:30",
+            "address": "123 Đường Lê Lợi, Phường Bến Nghé, Quận 1, TP.HCM",
+            "description": "Gặp gỡ bạn bè, thưởng thức cà phê, ngắm phố xá.",
+            "estimated_cost": 50000,
+        }
+    ]
+
+    ics_text = generate_ics_content(
+        trip_id="test-comma-trip",
+        title="Test Comma Trip",
+        items=items,
+        start_date=date(2026, 12, 1),
+    )
+
+    unfolded = ics_text.replace("\r\n ", "").replace("\r\n\t", "")
+
+    # Check commas in SUMMARY, LOCATION, DESCRIPTION
+    assert r"\," in unfolded, "Should contain single-escaped commas"
+    assert r"\\," not in unfolded, "Commas must not be double-escaped into \\\\,"
+
+
+def test_vtimezone_asia_ho_chi_minh_block():
+    """Verify full VTIMEZONE definition for Asia/Ho_Chi_Minh in generated ICS."""
+    response = client.get("/api/v1/calendar/ics/demo")
+    assert response.status_code == 200
+    body = response.text
+
+    assert "BEGIN:VTIMEZONE\r\n" in body
+    assert "TZID:Asia/Ho_Chi_Minh\r\n" in body
+    assert "BEGIN:STANDARD\r\n" in body
+    assert "DTSTART:19700101T000000\r\n" in body
+    assert "TZOFFSETFROM:+0700\r\n" in body
+    assert "TZOFFSETTO:+0700\r\n" in body
+    assert "TZNAME:ICT\r\n" in body
+    assert "END:STANDARD\r\n" in body
+    assert "END:VTIMEZONE\r\n" in body
