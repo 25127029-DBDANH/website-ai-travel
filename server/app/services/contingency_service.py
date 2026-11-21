@@ -118,7 +118,8 @@ def adapt_transit_info(
 
     # Rush-hour buffer
     if current_time is not None and is_rush_hour(current_time):
-        adapted["duration_min"] = original_duration + RUSH_HOUR_BUFFER_MINUTES
+        if not adapted.get("is_rush_hour", False):
+            adapted["duration_min"] = original_duration + RUSH_HOUR_BUFFER_MINUTES
         adapted["is_rush_hour"] = True
     else:
         adapted["is_rush_hour"] = False
@@ -126,10 +127,11 @@ def adapt_transit_info(
     # Rain mode
     if is_raining:
         adapted["mode"] = RAIN_DEFAULT_MODE
+        # Idempotent: chỉ nhân phụ phí 1.5x nếu chưa ở trạng thái rain mode
+        if not adapted.get("is_rain_mode", False):
+            original_fare = int(adapted.get("estimated_fare_vnd", 20000))
+            adapted["estimated_fare_vnd"] = max(35000, round(original_fare * 1.5))
         adapted["is_rain_mode"] = True
-        # ASSUMPTION: Trời mưa cước taxi tăng hoặc áp dụng giá sàn 35.000 VND
-        original_fare = int(adapted.get("estimated_fare_vnd", 20000))
-        adapted["estimated_fare_vnd"] = max(35000, round(original_fare * 1.5))
     else:
         adapted["is_rain_mode"] = False
 

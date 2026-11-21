@@ -170,3 +170,40 @@ def test_adapt_itinerary_items_filter_outdoor():
     filtered = adapt_itinerary_items(items, is_raining=True, filter_outdoor=True)
     assert len(filtered) == 1
     assert filtered[0]["place_name"] == "Bảo tàng"
+
+
+def test_adapt_transit_info_idempotent():
+    """Repeated calls to adapt_transit_info must not multiply fare or add buffer repeatedly."""
+    initial_transit = {
+        "mode": "grab_bike",
+        "duration_min": 15,
+        "estimated_fare_vnd": 30000,
+        "is_rain_mode": False,
+        "is_rush_hour": False,
+    }
+
+    # First call with rain and rush hour
+    first_call = adapt_transit_info(
+        initial_transit, current_time=time(17, 30), is_raining=True
+    )
+    expected_fare = max(35000, round(30000 * 1.5))
+    expected_duration = 15 + RUSH_HOUR_BUFFER_MINUTES
+    assert first_call["estimated_fare_vnd"] == expected_fare
+    assert first_call["duration_min"] == expected_duration
+    assert first_call["is_rain_mode"] is True
+    assert first_call["is_rush_hour"] is True
+
+    # Second call on already adapted object
+    second_call = adapt_transit_info(
+        first_call, current_time=time(17, 30), is_raining=True
+    )
+    assert second_call["estimated_fare_vnd"] == expected_fare
+    assert second_call["duration_min"] == expected_duration
+    assert second_call["is_rain_mode"] is True
+    assert second_call["is_rush_hour"] is True
+
+    # Third call
+    third_call = adapt_transit_info(
+        second_call, current_time=time(17, 30), is_raining=True
+    )
+    assert third_call == second_call
