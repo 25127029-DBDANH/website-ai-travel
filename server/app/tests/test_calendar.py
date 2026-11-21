@@ -3,8 +3,10 @@ test_calendar.py — Unit tests for iCalendar RFC 5545 generator and API endpoin
 Author  : Đàng Minh Hạo (Backend Developer — Routing & Adaptive)
 """
 
+import json
 from datetime import UTC, date, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.services.calendar_service import (
@@ -156,6 +158,48 @@ def test_get_calendar_ics_not_found():
     assert response.status_code == 404
     data = response.json()
     assert "Không tìm thấy chuyến đi" in data["detail"]
+
+
+@pytest.mark.anyio
+async def test_get_calendar_ics_from_database():
+    """Verify that a trip stored in SQLite database returns 200 with valid .ics."""
+    import uuid
+
+    from app.db.models import Trip
+    from app.db.session import AsyncSessionLocal, create_tables
+
+    await create_tables()
+    test_trip_id = f"test-db-trip-{uuid.uuid4().hex[:12]}"
+
+    async with AsyncSessionLocal() as session:
+        trip = Trip(
+            id=test_trip_id,
+            user_id="user-test-01",
+            title="Lịch trình Khảo sát Sài Gòn từ DB",
+            itinerary_json=json.dumps(
+                [
+                    {
+                        "place_name": "Bảo tàng Lịch sử TP.HCM",
+                        "day_number": 1,
+                        "start_time": "08:30",
+                        "end_time": "10:30",
+                        "address": "Số 2 Nguyễn Bỉnh Khiêm, Quận 1",
+                        "description": "Lưu giữ cổ vật lịch sử",
+                        "estimated_cost": 30000,
+                    }
+                ]
+            ),
+        )
+        session.add(trip)
+        await session.commit()
+
+    response = client.get(f"/api/v1/calendar/ics/{test_trip_id}")
+    assert response.status_code == 200
+    assert "text/calendar" in response.headers["content-type"]
+    unfolded = response.text.replace("\r\n ", "").replace("\r\n\t", "")
+    assert "Lịch trình Khảo sát Sài Gòn từ DB" in unfolded
+    assert "Bảo tàng Lịch sử TP.HCM" in response.text
+    assert "TRIGGER:-PT30M" in response.text
 
 
 def test_post_export_ics_direct():

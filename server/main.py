@@ -2,6 +2,7 @@
 main.py — FastAPI application entry point.
 Authors : Đỗ Nguyễn An Khang (Backend Lead & Auth Service), Ngô Tấn Đạt (Places)
 """
+
 from __future__ import annotations
 
 import logging
@@ -28,7 +29,7 @@ async def lifespan(app: FastAPI):
     try:
         await create_tables()
         logger.info("Database tables initialized successfully via SQLAlchemy ORM.")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.warning("Could not auto-initialize DB tables on startup: %s", exc)
     yield
     await engine.dispose()
@@ -51,7 +52,9 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()],
+    allow_origins=[
+        origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -70,7 +73,10 @@ app.include_router(api_router)
 async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
-        content={"detail": "INTERNAL_ERROR", "message": "An unexpected error occurred."},
+        content={
+            "detail": "INTERNAL_ERROR",
+            "message": "An unexpected error occurred.",
+        },
     )
 
 
@@ -93,5 +99,5 @@ async def health_check():
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
+    port = int(os.getenv("PORT", "8000"))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

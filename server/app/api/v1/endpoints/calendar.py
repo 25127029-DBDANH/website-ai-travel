@@ -8,16 +8,23 @@ from __future__ import annotations
 import json
 import logging
 from datetime import date
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.models import Trip
+from app.db.session import get_db
 from app.schemas.calendar import CalendarExportResponse, CalendarTrip
 from app.services.calendar_service import generate_ics_content
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/calendar", tags=["Calendar"])
+
+DBSession = Annotated[AsyncSession, Depends(get_db)]
 
 # ---------------------------------------------------------------------------
 # Pre-seeded Demo Trips (Pre-warmed for instant presentation & fallback)
@@ -118,38 +125,37 @@ DEMO_TRIPS: dict[str, dict[str, Any]] = {
 # ---------------------------------------------------------------------------
 # Helper: Fetch Trip from Database or Demo Store
 # ---------------------------------------------------------------------------
-async def _get_trip_data(trip_id: str) -> tuple[str, list[dict[str, Any]]] | None:
+async def _get_trip_data(
+    trip_id: str,
+    db: AsyncSession,
+) -> tuple[str, list[dict[str, Any]]] | None:
     """
     Attempt to load trip title and itinerary items from database or demo catalog.
     Returns (title, items) or None if not found.
     """
-    # 1. First check if SQLAlchemy models and session are available
+    # 1. Query database using injected AsyncSession
     try:
-        from sqlalchemy import select  # type: ignore
+        stmt = select(Trip).where(Trip.id == trip_id)
+        res = await db.execute(stmt)
+        db_trip = res.scalar_one_or_none()
+        if db_trip is not None:
+            try:
+                items = (
+                    json.loads(db_trip.itinerary_json) if db_trip.itinerary_json else []
+                )
+            except (json.JSONDecodeError, TypeError) as parse_err:
+                logger.warning(
+                    "Error parsing itinerary_json for trip %s: %s",
+                    trip_id,
+                    parse_err,
+                )
+                items = []
+            return db_trip.title, items
+    except SQLAlchemyError as exc:
+        logger.error("Database query failed when fetching trip %s: %s", trip_id, exc)
+        raise
 
-        from app.db.models import Trip  # type: ignore
-        from app.db.session import async_session_factory  # type: ignore
-
-        if async_session_factory is not None:
-            async with async_session_factory() as session:
-                stmt = select(Trip).where(Trip.id == trip_id)
-                res = await session.execute(stmt)
-                db_trip = res.scalar_one_or_none()
-                if db_trip is not None:
-                    try:
-                        items = (
-                            json.loads(db_trip.itinerary_json)
-                            if db_trip.itinerary_json
-                            else []
-                        )
-                    except (json.JSONDecodeError, TypeError):
-                        items = []
-                    return db_trip.title, items
-    except (ImportError, RuntimeError, AttributeError) as exc:
-        # Database module not loaded or not configured, proceed to fallback
-        logger.debug("Database not available for trip lookup: %s", exc)
-
-    # 2. Check in-memory demo trips
+    # 2. Check in-memory demo trips (pre-warmed fallback)
     if trip_id in DEMO_TRIPS:
         demo = DEMO_TRIPS[trip_id]
         return demo["title"], demo["items"]
@@ -174,6 +180,7 @@ async def _get_trip_data(trip_id: str) -> tuple[str, list[dict[str, Any]]] | Non
 )
 async def get_trip_ics(
     trip_id: str,
+    db: DBSession,
     start_date: str | None = Query(
         default=None,
         pattern=r"^\d{4}-\d{2}-\d{2}$",
@@ -185,7 +192,7 @@ async def get_trip_ics(
     Includes deterministic UIDs, Asia/Ho_Chi_Minh timezone, CRLF formatting,
     and a VALARM popup reminder set 30 minutes before each activity.
     """
-    trip_data = await _get_trip_data(trip_id)
+    trip_data = await _get_trip_data(trip_id, db)
     if trip_data is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -251,9 +258,12 @@ async def export_ics_from_payload(payload: CalendarTrip) -> Response:
     response_model=CalendarExportResponse,
     summary="Xem trước thông tin đồng bộ lịch trước khi tải",
 )
-async def preview_calendar(trip_id: str) -> CalendarExportResponse:
+async def preview_calendar(
+    trip_id: str,
+    db: DBSession,
+) -> CalendarExportResponse:
     """Return summary metadata and a snippet of the generated .ics file."""
-    trip_data = await _get_trip_data(trip_id)
+    trip_data = await _get_trip_data(trip_id, db)
     if trip_data is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
