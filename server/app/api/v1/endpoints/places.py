@@ -107,7 +107,7 @@ async def get_nearby_places_endpoint(
 # ---------------------------------------------------------------------------
 @router.get("/{place_id}", summary="Chi tiết một địa điểm")
 async def get_place_detail(
-    place_id: UUID,
+    place_id: str,
     db: DBSession,
     enrich: bool = Query(
         True,

@@ -289,16 +289,12 @@ website-ai-travel/
 ├── run_backend.bat                # Script chạy máy chủ Backend FastAPI
 ├── README.md                      # Tài liệu tổng quan, cấu trúc dự án & phân công 7 thành viên
 │
-├── docs/                          # HỆ THỐNG TÀI LIỆU ĐẶC TẢ CHUẨN HÓA
-│   ├── yeu-cau-moi.md             # Đặc tả chi tiết 7 yêu cầu cốt lõi & yêu cầu nâng cấp v2
-│   ├── user-flow.md               # Sơ đồ Mermaid luồng trải nghiệm người dùng 6 giai đoạn
-│   ├── ke-hoach-thuc-hien.md      # Bảng phân công RACI, danh mục WBS và Definition of Done
-│   ├── kien-truc-api-db.md        # Kiến trúc hệ thống, ERD CSDL và danh mục RESTful API
-│   ├── openapi.yaml               # Đặc tả kỹ thuật OpenAPI 3.0 cho toàn bộ hệ thống API
-│   ├── 04-prompt-ai-flow.md       # Thiết kế prompt Gemini & kỹ thuật sinh lịch trình chuẩn
-│   ├── 08-testing.md              # Kế hoạch kiểm thử chất lượng và test cases
-│   ├── 09-deploy.md               # Hướng dẫn đóng gói Docker và triển khai Cloud
-│   └── 13-demo-qa.md              # Kịch bản Live Demo 5 phút và câu hỏi phản biện bảo vệ đồ án
+├── docs/                          # HỆ THỐNG TÀI LIỆU ĐẶC TẢ TINH GỌN (5 FILE CHUẨN)
+│   ├── 01-project-spec.md         # Tổng quan, Phạm vi, 7 Yêu cầu mới, User Flow & Roadmap
+│   ├── 02-architecture-db-ai.md   # Kiến trúc hệ thống, CSDL, Dịch vụ lõi, AI Prompt & Bảo mật
+│   ├── 03-ui-ux-design.md         # UI Design System, Wireframes & Motion/Settings
+│   ├── 04-testing-deploy-demo.md  # Kiểm thử (Testing), Triển khai (Deploy), Rủi ro & Demo Q&A
+│   └── openapi.yaml               # Đặc tả kỹ thuật OpenAPI 3.0 cho toàn bộ hệ thống API
 │
 ├── client/                        # ỨNG DỤNG FRONTEND (REACT 18 + VITE + TAILWIND CSS)
 │   ├── index.html                 # File HTML gốc
