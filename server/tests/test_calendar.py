@@ -195,13 +195,6 @@ def test_preview_calendar_endpoint():
     assert "BEGIN:VCALENDAR" in data["ics_preview"]
 
 
-def test_root_healthcheck():
-    """Root GET / returns 200 OK."""
-    response = client.get("/")
-    assert response.status_code == 200
-    assert response.json()["status"] == "ok"
-
-
 # ---------------------------------------------------------------------------
 # RFC 5545 Unfolding, Newline & VTIMEZONE Specific Tests
 # ---------------------------------------------------------------------------

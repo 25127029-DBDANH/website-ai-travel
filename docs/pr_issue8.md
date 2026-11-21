@@ -61,3 +61,4 @@ Hiện thực hóa các yêu cầu cốt lõi trong đề án HCMC AI Travel Pla
 - [x] Đã xử lý triệt để lỗi double-escape `\\n` và thêm khối `VTIMEZONE`.
 - [x] Có tài liệu ghi nhận sử dụng AI (`docs/ai-use-log.md`).
 - [x] Sẵn sàng để reviewer `25127029-DBDANH` xem xét.
+   
