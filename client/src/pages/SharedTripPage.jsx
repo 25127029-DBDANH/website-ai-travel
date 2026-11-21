@@ -14,11 +14,10 @@ import { useI18n } from '../i18n/I18nContext.jsx';
 import { DEMO, Black } from '../demo.jsx';
 import { api, ApiError } from '../lib/api.js';
 import { translateApiError } from '../lib/errors.js';
-import { formatVnd } from '../lib/format.js';
 
 export default function SharedTripPage() {
   const { token } = useParams();
-  const { lang, t } = useI18n();
+  const { t } = useI18n();
   const navigate = useNavigate();
 
   const [data, setData] = useState(null);
@@ -151,7 +150,7 @@ export default function SharedTripPage() {
     );
   }
 
-  const { trip, itinerary_items: items, budget_summary: budget } = data;
+  const { trip, itinerary_items: items } = data;
 
   return (
     <div className="min-h-screen bg-slate-100/70">
@@ -167,8 +166,7 @@ export default function SharedTripPage() {
               {trip.title || t('trip.custom')}
             </h1>
             <p className="mt-1 text-xs font-semibold text-slate-500">
-              {t('common.days', { count: Number(trip.days) || 1 })} ·{' '}
-              {formatVnd(trip.budget, lang)} · {t('shared.viewOnly')}
+              {t('common.days', { count: Number(trip.days) || 1 })} · {t('shared.viewOnly')}
             </p>
           </div>
 
@@ -191,7 +189,6 @@ export default function SharedTripPage() {
           <ItineraryPanel
             trip={trip}
             items={items}
-            budget={budget}
             status={trip.status}
             activeDay={activeDay}
             onSelectDay={setActiveDay}

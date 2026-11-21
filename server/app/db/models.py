@@ -1,12 +1,8 @@
 """
-models.py — SQLAlchemy ORM models (compatible with SQLite & PostgreSQL).
-Author  : Ngô Tấn Đạt (Member 3 — Places & Interactive Map)
-
-Design constraints:
-  - Use String(36) instead of UUID   → SQLite compatible
-  - Use Text + json.dumps for arrays → no PostgreSQL ARRAY type
-  - Use String(10) for time fields   → 'HH:MM' format, no TIME type
-  - Avoid server_default=func.now()  → use Python-side defaults
+models.py — Unified SQLAlchemy ORM models (compatible with SQLite & PostgreSQL).
+Authors :
+  - Đỗ Nguyễn An Khang (Backend Lead & Auth Service): User, Trip
+  - Ngô Tấn Đạt (Database & Data Engineer): Place, PlaceCache
 
 Tables created by Base.metadata.create_all():
   users, trips, places, places_cache
@@ -14,83 +10,75 @@ Tables created by Base.metadata.create_all():
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
+import uuid
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from sqlalchemy import (
-    Boolean, DateTime, Float, Integer,
-    String, Text,
-)
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
-# ---------------------------------------------------------------------------
-# Shared declarative base (imported by session.py)
-# ---------------------------------------------------------------------------
+def _new_id() -> str:
+    return uuid.uuid4().hex
+
+
+def _uuid() -> str:
+    return str(uuid4())
+
+
 class Base(DeclarativeBase):
     pass
 
 
 # ---------------------------------------------------------------------------
-# Helper: generate UUID string
-# ---------------------------------------------------------------------------
-def _uuid() -> str:
-    return str(uuid4())
-
-
-# ---------------------------------------------------------------------------
-# TABLE: users  (owned by Thành viên 2 — Khang; stub defined here so
-#                Base.metadata.create_all() creates the table on first run)
+# TABLE: users  (Đỗ Nguyễn An Khang — Auth Service)
 # ---------------------------------------------------------------------------
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    username: Mapped[str] = mapped_column(String(60), unique=True, nullable=False)
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    hashed_password: Mapped[str] = mapped_column(Text, nullable=False)
-    full_name: Mapped[str | None] = mapped_column(String(120))
-    avatar_url: Mapped[str | None] = mapped_column(Text)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    id = Column(String(32), primary_key=True, default=_new_id)
+    username = Column(String(60), unique=True, nullable=False, index=True)
+    hashed_password = Column(Text, nullable=False)
+    full_name = Column(String(120), nullable=True)
+    avatar_url = Column(Text, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
 
 # ---------------------------------------------------------------------------
-# TABLE: trips  (owned by Thành viên 4 — Lam & Thành viên 6 — Hao; stub)
+# TABLE: trips  (Đỗ Nguyễn An Khang — Trip CRUD Service)
 # ---------------------------------------------------------------------------
 class Trip(Base):
     __tablename__ = "trips"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False)
-    title: Mapped[str] = mapped_column(String(200), nullable=False)
-    num_days: Mapped[int] = mapped_column(Integer, default=1)
-    district_focus: Mapped[str | None] = mapped_column(String(60))
-    budget_per_day: Mapped[int | None] = mapped_column(Integer)
-    # JSON arrays stored as Text
-    travel_styles: Mapped[str] = mapped_column(Text, default="[]")
-    num_travelers: Mapped[int] = mapped_column(Integer, default=1)
-    transport_mode: Mapped[str] = mapped_column(String(20), default="motorbike")
-    pace: Mapped[str] = mapped_column(String(20), default="moderate")
-    special_notes: Mapped[str | None] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(String(20), default="draft")
-    share_token: Mapped[str | None] = mapped_column(String(64), unique=True)
-    is_featured: Mapped[bool] = mapped_column(Boolean, default=False)
-    calendar_synced: Mapped[bool] = mapped_column(Boolean, default=False)
-    ai_rating: Mapped[int | None] = mapped_column(Integer)
-    ai_rating_note: Mapped[str | None] = mapped_column(Text)
-    itinerary_json: Mapped[str | None] = mapped_column(Text)  # full AI output
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    id = Column(String(32), primary_key=True, default=_new_id)
+    user_id = Column(String(32), nullable=False, index=True)
+    title = Column(String(200), nullable=False)
+    days = Column(Integer, nullable=False, default=1)
+    budget = Column(Integer, nullable=False, default=5000000)
+    total_estimated = Column(Integer, nullable=False, default=0)
+    place_count = Column(Integer, nullable=False, default=0)
+    places_per_day = Column(Integer, nullable=False, default=4)
+    companion = Column(String(20), nullable=False, default="group")
+    member_count = Column(Integer, nullable=False, default=4)
+    transport_mode = Column(String(20), nullable=False, default="grab_bike")
+    start_time = Column(String(10), nullable=False, default="08:00")
+    end_time = Column(String(10), nullable=False, default="21:30")
+    start_location = Column(String(200), nullable=False, default="Quận 1, TP. Hồ Chí Minh")
+    preferences = Column(Text, nullable=False, default="[]")  # JSON array string
+    special_notes = Column(Text, nullable=True)
+    status = Column(String(20), nullable=False, default="completed")
+    share_token = Column(String(64), unique=True, nullable=True, index=True)
+    cover_photo = Column(Text, nullable=True)
+    cover_place_name = Column(String(200), nullable=True)
+    itinerary_json = Column(Text, nullable=False, default="[]")
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
 
 # ---------------------------------------------------------------------------
-# TABLE: places  (owned by Thành viên 3 — Đạt)
+# TABLE: places  (Ngô Tấn Đạt — Places & Interactive Map)
 # ---------------------------------------------------------------------------
 class Place(Base):
     """
@@ -102,7 +90,6 @@ class Place(Base):
       close_time : 'HH:MM' string     e.g. '22:00'
       is_indoor  : True → indoor (museum, mall, restaurant…)
                    False → outdoor (park, street, landmark…)
-                   Used by contingency_service for rainy-day re-routing.
     """
     __tablename__ = "places"
 
@@ -113,21 +100,19 @@ class Place(Base):
     district: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
     latitude: Mapped[float] = mapped_column(Float, nullable=False)
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
-    # category: attraction | food | cafe | culture | shopping | park | entertainment
     category: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
     is_indoor: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
-    open_time: Mapped[str | None] = mapped_column(String(10))   # 'HH:MM'
-    close_time: Mapped[str | None] = mapped_column(String(10))  # 'HH:MM'
+    open_time: Mapped[str | None] = mapped_column(String(10))
+    close_time: Mapped[str | None] = mapped_column(String(10))
     entry_fee_vnd: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     average_rating: Mapped[float | None] = mapped_column(Float)
     google_place_id: Mapped[str | None] = mapped_column(String(100))
     photo_url: Mapped[str | None] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text)
-    tags: Mapped[str] = mapped_column(Text, default="[]")  # JSON array string
+    tags: Mapped[str] = mapped_column(Text, default="[]")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    # ── Convenience helpers ───────────────────────────────────────────────
     def tags_list(self) -> list[str]:
         """Deserialise the JSON tags field."""
         try:
@@ -159,15 +144,14 @@ class Place(Base):
 
 
 # ---------------------------------------------------------------------------
-# TABLE: places_cache  (owned by Thành viên 3 — Đạt)
-# Cache external Google Places API responses with a 7-day TTL.
+# TABLE: places_cache  (Ngô Tấn Đạt — 7-day TTL Cache)
 # ---------------------------------------------------------------------------
 class PlaceCache(Base):
     __tablename__ = "places_cache"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     place_id: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
-    data_json: Mapped[str] = mapped_column(Text, nullable=False)  # cached JSON
+    data_json: Mapped[str] = mapped_column(Text, nullable=False)
     cached_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
