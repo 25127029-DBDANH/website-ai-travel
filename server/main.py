@@ -2,7 +2,6 @@
 main.py — FastAPI Application Entrypoint.
 Sài Gòn Guide — HCMC AI Travel Planner API
 """
-
 from __future__ import annotations
 
 import logging
@@ -25,7 +24,7 @@ async def lifespan(app: FastAPI):
     try:
         await create_tables()
         logger.info("Database tables initialized successfully via SQLAlchemy ORM.")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("Could not auto-initialize DB tables on startup: %s", exc)
     yield
 
@@ -42,13 +41,7 @@ app = FastAPI(
 # CORS configuration to allow Frontend (Vite port 5173 / production) requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-        "*",
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -56,11 +49,6 @@ app.add_middleware(
 
 # Mount API v1 router
 app.include_router(api_router, prefix="/api/v1")
-
-
-@app.get("/")
-async def root():
-    return {"status": "ok", "app": "Sài Gòn Guide API", "version": "2.0.0"}
 
 
 @app.get("/health", tags=["Health"])
@@ -74,5 +62,5 @@ async def health_check():
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "8000"))
+    port = int(os.getenv("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
