@@ -35,23 +35,51 @@ export default function TimelineItem({
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [selectedReplacement, setSelectedReplacement] = useState(null);
   const [alternatives, setAlternatives] = useState([]);
+  const [loadingAlternatives, setLoadingAlternatives] = useState(false);
+  const [swapError, setSwapError] = useState('');
+  const [swapReason, setSwapReason] = useState('');
 
   const meta = getCategoryMeta(item.category);
   const isAccepted = Boolean(item.is_accepted);
   const isVisited = Boolean(item.visited);
 
-  const handleOpenSwapModal = (e) => {
-    e.stopPropagation();
-    const alts = api.getAlternatives(item);
-    setAlternatives(alts);
-    setSelectedReplacement(alts[0] || null);
-    setShowSwapModal(true);
+  const loadSwapSuggestions = async (reason = null) => {
+    setLoadingAlternatives(true);
+    setSwapError('');
+    try {
+      const result = await api.suggestPlaceSwaps({
+        current_item: item,
+        reason: reason?.trim() || null
+      });
+      const alts = result.alternatives || [];
+      setAlternatives(alts);
+      setSelectedReplacement(alts[0] || null);
+    } catch (requestError) {
+      setSwapError(requestError.message || (lang === 'vi' ? 'Không tải được gợi ý đổi điểm.' : 'Could not load swap suggestions.'));
+    } finally {
+      setLoadingAlternatives(false);
+    }
   };
 
-  const handleConfirmSwap = () => {
+  const handleOpenSwapModal = async (e) => {
+    e.stopPropagation();
+    setAlternatives([]);
+    setSelectedReplacement(null);
+    setSwapError('');
+    setSwapReason('');
+    setShowSwapModal(true);
+    await loadSwapSuggestions();
+  };
+
+  const handleConfirmSwap = async () => {
     if (!selectedReplacement || !onSwap) return;
-    onSwap(item, selectedReplacement);
-    setShowSwapModal(false);
+    setSwapError('');
+    try {
+      await onSwap(item, selectedReplacement);
+      setShowSwapModal(false);
+    } catch (requestError) {
+      setSwapError(requestError.message || (lang === 'vi' ? 'Không thể đổi địa điểm.' : 'Could not swap this place.'));
+    }
   };
 
   const handleAcceptClick = (e) => {
@@ -313,12 +341,41 @@ export default function TimelineItem({
             </div>
 
             <div className="mt-3">
+              <label className="block text-xs font-bold text-slate-700" htmlFor={`swap-reason-${item.place_id}`}>
+                {lang === 'vi' ? 'Lý do muốn đổi (không bắt buộc)' : 'Reason for swapping (optional)'}
+              </label>
+              <textarea
+                id={`swap-reason-${item.place_id}`}
+                value={swapReason}
+                onChange={(event) => setSwapReason(event.target.value)}
+                rows={2}
+                maxLength={300}
+                placeholder={lang === 'vi' ? 'Ví dụ: muốn tìm địa điểm trong nhà hoặc ít đông hơn' : 'For example: prefer an indoor or less crowded place'}
+                className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-700 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              />
+              <button
+                type="button"
+                onClick={() => loadSwapSuggestions(swapReason)}
+                disabled={loadingAlternatives}
+                className="mt-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-brand-700 hover:bg-brand-50 disabled:opacity-50"
+              >
+                {lang === 'vi' ? 'Tìm gợi ý theo lý do' : 'Search using this reason'}
+              </button>
               <p className="text-xs font-bold text-slate-700">
                 {lang === 'vi' ? 'Chọn 1 địa điểm thay thế phù hợp:' : 'Select an alternative stop:'}
               </p>
 
               <div className="mt-2.5 max-h-72 space-y-2 overflow-y-auto pr-1">
-                {alternatives.length === 0 ? (
+                {loadingAlternatives ? (
+                  <div className="flex items-center justify-center gap-2 py-8 text-xs font-semibold text-slate-500">
+                    <Loader2 className="h-4 w-4 animate-spin text-brand-600" />
+                    {lang === 'vi' ? 'AI đang tìm địa điểm phù hợp...' : 'AI is finding suitable alternatives...'}
+                  </div>
+                ) : swapError ? (
+                  <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">
+                    {swapError}
+                  </p>
+                ) : alternatives.length === 0 ? (
                   <p className="py-6 text-center text-xs text-slate-400">
                     {lang === 'vi' ? 'Không có địa điểm thay thế khả dụng.' : 'No alternatives available.'}
                   </p>
@@ -356,8 +413,15 @@ export default function TimelineItem({
                             <p className="line-clamp-1 text-[11px] text-slate-500">
                               {alt.description}
                             </p>
+                            {alt.replacement_reason && (
+                              <p className="mt-1 line-clamp-2 text-[10px] font-medium text-emerald-800">
+                                {alt.replacement_reason}
+                              </p>
+                            )}
                             <div className="mt-1 flex items-center gap-2 text-[10.5px] font-bold text-slate-600">
                               <span>📍 {alt.district}</span>
+                              <span>·</span>
+                              <span className="text-amber-600">★ {alt.editorial_score}</span>
                               <span>·</span>
                               <span className="text-brand-700">
                                 {alt.estimated_cost > 0 ? formatVnd(alt.estimated_cost, lang) : (lang === 'vi' ? 'Miễn phí' : 'Free')}
@@ -393,7 +457,7 @@ export default function TimelineItem({
               </button>
               <button
                 type="button"
-                disabled={!selectedReplacement || swapping}
+                disabled={!selectedReplacement || swapping || loadingAlternatives}
                 onClick={handleConfirmSwap}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-brand-600 to-brand-500 px-4 py-2 text-xs font-extrabold text-white shadow-md hover:from-brand-700 hover:to-brand-600 disabled:opacity-50 active:scale-97"
               >
