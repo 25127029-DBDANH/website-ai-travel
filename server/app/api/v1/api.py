@@ -1,26 +1,23 @@
 """
 api.py — API v1 router combining all endpoint modules.
-Author  : Đỗ Nguyễn An Khang (Backend Lead & Auth Service)
+Authors : Đỗ Nguyễn An Khang (Auth & Trips), Ngô Tấn Đạt (Places)
 """
+from __future__ import annotations
+
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import auth, trips
+from app.api.v1.endpoints import auth, places, trips
 
 api_router = APIRouter(prefix="/api/v1")
 
 api_router.include_router(auth.router)
 api_router.include_router(trips.router)
+api_router.include_router(places.router)
 
 # Include other team members' routers when available
 try:
     from app.api.v1.endpoints import ai
     api_router.include_router(ai.router)
-except (ImportError, Exception):
-    pass
-
-try:
-    from app.api.v1.endpoints import places
-    api_router.include_router(places.router)
 except (ImportError, Exception):
     pass
 

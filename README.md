@@ -85,7 +85,7 @@ docker compose up --build
 | **Frontend: Form khảo sát 8 tiêu chí & Landing Page 3D** | `client/src/components/TripForm.jsx`, `LandingPage.jsx`, `components/landing/*` | **Phạm Gia Hưng** |
 | **Frontend: Quản lý Chuyến của tôi & Cài đặt Profile** | `client/src/pages/MyTripsPage.jsx`, `client/src/pages/SettingsPage.jsx` | **Phạm Gia Hưng** |
 | **Frontend: Hệ thống Đa ngôn ngữ Song ngữ Anh - Việt** | `client/src/i18n/I18nContext.jsx`, `client/src/i18n/translations.js` | **Phạm Gia Hưng** |
-| **Frontend: Tích hợp Đăng nhập, Google Sign-In & Auth State** | `client/src/components/AuthModal.jsx`, `context/AuthContext.jsx`, `lib/auth.js` | **Đỗ Nguyễn An Khang** *(Tự tích hợp)* |
+| **Frontend: Tích hợp Đăng nhập, Đăng ký Tài khoản & Auth State** | `client/src/components/AuthModal.jsx`, `context/AuthContext.jsx`, `lib/auth.js` | **Đỗ Nguyễn An Khang** *(Tự tích hợp)* |
 | **Frontend: Tích hợp Trang xem chuyến đi công khai** | `client/src/pages/SharedTripPage.jsx`, `client/src/components/ShareDialog.jsx` | **Đỗ Nguyễn An Khang** *(Tự tích hợp)* |
 | **Frontend: Tích hợp Modal Chi tiết địa điểm TP.HCM** | `client/src/components/itinerary/PlaceDetailModal.jsx` | **Ngô Tấn Đạt** *(Tự tích hợp)* |
 | **Frontend: Tích hợp Cước xe 3 hãng & Khối di chuyển chặng** | `client/src/components/itinerary/TransitConnector.jsx`, `RidePickerModal.jsx` | **Đàng Minh Hạo & Diệp Bảo Danh** |
@@ -157,12 +157,12 @@ docker compose up --build
   * `server/app/api/v1/api.py` (Router tổng hợp API v1)
   * `server/app/core/config.py`, `security.py`, `dependencies.py` (Cấu hình môi trường `.env`, mã hóa bcrypt, JWT Bearer)
   * `server/app/schemas/user.py`, `trip.py` (Pydantic models)
-  * `server/app/api/v1/endpoints/auth.py` (Đăng ký, đăng nhập mật khẩu, Google OAuth 2.0)
+  * `server/app/api/v1/endpoints/auth.py` (Đăng ký tài khoản, đăng nhập mật khẩu bcrypt + JWT; Google Sign-In để sau)
   * `server/app/api/v1/endpoints/trips.py` (CRUD chuyến đi, `GET /trips/me`, `POST /trips/{id}/clone`, `POST /share`)
   * `client/src/pages/SharedTripPage.jsx` *(Tự tích hợp)*
 * **Nhiệm vụ cụ thể:**
   1. *Khung dự án FastAPI:* Dựng cấu trúc mã nguồn Backend chuẩn RESTful; cấu hình CORS cho phép kết nối an toàn từ Frontend; thiết lập bắt lỗi ngoại lệ tập trung.
-  2. *Hệ thống Xác thực (Auth Service):* Mã hóa mật khẩu bằng `bcrypt`; cấp phát và xác thực JWT Bearer Token theo RFC 7519 trong Dependency `get_current_user`; tích hợp Google OAuth 2.0.
+  2. *Hệ thống Xác thực (Auth Service):* Mã hóa mật khẩu bằng `bcrypt`; cấp phát và xác thực JWT Bearer Token theo RFC 7519 trong Dependency `get_current_user`; cơ chế tạo tài khoản và đăng nhập trực tiếp (Google OAuth để sau).
   3. *Bộ API Quản lý Chuyến đi:* Lưu chuyến đi mới tạo từ AI; lấy dữ liệu chi tiết lịch trình; cập nhật trạng thái chặng (`visited`, ghi chú, ảnh); lấy danh sách chuyến đi của user; sao chép nhân bản chuyến đi; API chia sẻ link công khai ẩn thông tin nhạy cảm.
   4. *YÊU CẦU TỰ TÍCH HỢP & TEST E2E:*
      * Kết nối API đăng nhập/đăng ký vào `AuthModal.jsx` và `AuthContext.jsx`.
@@ -177,21 +177,28 @@ docker compose up --build
 * **Họ và tên:** **Ngô Tấn Đạt**
 * **Vai trò chuyên môn:** Kỹ sư Cơ sở Dữ liệu & Quản trị Dữ liệu Địa điểm Sài Gòn
 * **Thư mục & File sở hữu chính:**
+  * `server/app/db/models.py` (Bổ sung Model ORM `Place` tương thích SQLite & PostgreSQL)
   * `server/app/db/schema.sql` (Lược đồ CSDL PostgreSQL)
   * `server/app/db/session.py` (Cấu hình SQLAlchemy Engine & SessionLocal)
-  * `server/app/db/hcmc_data.py` (Kho dữ liệu Seed 70+ địa điểm TP.HCM)
+  * `server/app/db/hcmc_data.py` (Kho dữ liệu Seed 320+ địa điểm TP.HCM — 40+ địa điểm/quận gồm tham quan, ăn uống, đồ uống/cafe)
   * `server/app/services/places_service.py` (Bộ đệm Cache TTL 7 ngày & Fallback Places API)
   * `server/app/api/v1/endpoints/places.py` (Bộ API địa điểm TP.HCM)
   * `client/src/components/itinerary/PlaceDetailModal.jsx` *(Tự tích hợp)*
 * **Nhiệm vụ cụ thể:**
-  1. *Lược đồ CSDL Quan hệ:* Thiết kế các bảng `users`, `trips`, `trip_days`, `itinerary_items`, `expenses`, `places_cache` với ràng buộc khóa ngoại (Foreign Keys) và Indexes tăng tốc truy vấn.
+  1. *Đồng bộ Kiến trúc CSDL theo chuẩn SQLAlchemy ORM (tương thích 100% SQLite local & PostgreSQL/Supabase):* Bổ sung model `Place(Base)` vào `server/app/db/models.py` để `Base.metadata.create_all` tự động tạo đủ 3 bảng (`users`, `trips`, `places`); chuyển câu truy vấn trong `places_service.py` từ raw SQL PostgreSQL (`ILIKE`, `ANY(tags)`) sang SQLAlchemy ORM (`select(Place).where(...)`); sửa phần nạp dữ liệu cuối file `hcmc_data.py` sang `session.add(Place(...))` kèm `photo_url`.
   2. *Bộ đệm Địa điểm (Places Cache TTL 7 ngày):* Xây dựng cơ chế cache địa điểm trong bảng `places_cache`; tự động hoàn trả dữ liệu từ CSDL cục bộ; chỉ gọi Google Places API New khi cache miss hoặc dữ liệu quá hạn 7 ngày.
-  3. *Tập dữ liệu Mồi TP.HCM (`hcmc_data.py`):* Thu thập, làm sạch và chuẩn hóa hơn 70+ địa danh nổi tiếng Sài Gòn đầy đủ tọa độ GPS, mức giá, thời lượng tham quan, ảnh chất lượng cao.
+  3. *Tập dữ liệu Mồi TP.HCM (`hcmc_data.py`) chuẩn hóa quy mô lớn:*
+     * **Quy chuẩn định lượng bắt buộc:** Thu thập, làm sạch và chuẩn hóa tối thiểu **40+ địa điểm cho mỗi quận trọng điểm** (gồm 8 quận chính: Quận 1, Quận 3, Quận 5, Bình Thạnh, Quận 4, Phú Nhuận, TP. Thủ Đức, Quận 7 -> Tổng quy mô CSDL đạt tối thiểu **320+ địa điểm thực tế**).
+     * **Cơ cấu danh mục bắt buộc cho từng quận:** Mỗi quận bắt buộc phải có đầy đủ 3 nhóm thiết yếu:
+       - *Địa điểm tham quan, di tích lịch sử, bảo tàng, công viên văn hóa* (tối thiểu 10–15 điểm/quận).
+       - *Quán ăn, nhà hàng đặc sản, ẩm thực đường phố, quán ăn Michelin/Bib Gourmand* (tối thiểu 15–20 quán/quận).
+       - *Quán đồ uống, cà phê phong cách, trà sữa, quán rooftop nổi tiếng* (tối thiểu 10–15 quán/quận).
+     * **Bộ trường dữ liệu bắt buộc (100% chuẩn hóa):** Tên tiếng Việt & tiếng Anh, Địa chỉ chính xác, Quận, Tọa độ GPS (latitude, longitude), Phân loại danh mục (`attraction`, `culture`, `food`, `cafe`, `shopping`), Phân loại không gian (`is_indoor` phục vụ kịch bản né mưa), Giờ mở/đóng cửa (`open_time`, `close_time`), Mức giá vé/chi phí dự kiến (`entry_fee_vnd`), Điểm đánh giá (rating), Tags từ khóa và **bắt buộc phải có đường dẫn ảnh thật chất lượng cao (`photo_url`)** để hiển thị đồng bộ lên Bản đồ, Thẻ lịch trình, Modal chi tiết và Photobook kỷ niệm.
   4. *YÊU CẦU TỰ TÍCH HỢP & TEST E2E:*
      * Đảm bảo dữ liệu từ DB hiển thị đầy đủ trên Bản đồ Leaflet (`TripMap.jsx`).
      * Tự kết nối API chi tiết địa điểm vào `PlaceDetailModal.jsx` (ảnh, mô tả, giờ mở cửa).
      * Tự test truy vấn dữ liệu địa điểm hiển thị chính xác trên giao diện Frontend.
-* **Tiêu chí hoàn thành (DoD):** CSDL triển khai hoàn tất trên PostgreSQL/Supabase; script seed nạp dữ liệu chạy 100% thành công; query địa điểm phản hồi dưới 30ms.
+* **Tiêu chí hoàn thành (DoD):** Đồng bộ 100% sang SQLAlchemy ORM chạy mượt trên cả SQLite (`travel.db`) lẫn PostgreSQL/Supabase; nạp đầy đủ dữ liệu mồi tối thiểu 40+ địa điểm/quận (320+ địa điểm toàn TP.HCM) gồm đủ 3 nhóm tham quan, ăn uống, đồ uống/cà phê; 100% có GPS, giờ mở/đóng cửa và ảnh `photo_url`; API `GET /places/search` phản hồi dưới 30ms.
 
 ---
 
@@ -282,16 +289,12 @@ website-ai-travel/
 ├── run_backend.bat                # Script chạy máy chủ Backend FastAPI
 ├── README.md                      # Tài liệu tổng quan, cấu trúc dự án & phân công 7 thành viên
 │
-├── docs/                          # HỆ THỐNG TÀI LIỆU ĐẶC TẢ CHUẨN HÓA
-│   ├── yeu-cau-moi.md             # Đặc tả chi tiết 7 yêu cầu cốt lõi & yêu cầu nâng cấp v2
-│   ├── user-flow.md               # Sơ đồ Mermaid luồng trải nghiệm người dùng 6 giai đoạn
-│   ├── ke-hoach-thuc-hien.md      # Bảng phân công RACI, danh mục WBS và Definition of Done
-│   ├── kien-truc-api-db.md        # Kiến trúc hệ thống, ERD CSDL và danh mục RESTful API
-│   ├── openapi.yaml               # Đặc tả kỹ thuật OpenAPI 3.0 cho toàn bộ hệ thống API
-│   ├── 04-prompt-ai-flow.md       # Thiết kế prompt Gemini & kỹ thuật sinh lịch trình chuẩn
-│   ├── 08-testing.md              # Kế hoạch kiểm thử chất lượng và test cases
-│   ├── 09-deploy.md               # Hướng dẫn đóng gói Docker và triển khai Cloud
-│   └── 13-demo-qa.md              # Kịch bản Live Demo 5 phút và câu hỏi phản biện bảo vệ đồ án
+├── docs/                          # HỆ THỐNG TÀI LIỆU ĐẶC TẢ TINH GỌN (5 FILE CHUẨN)
+│   ├── 01-project-spec.md         # Tổng quan, Phạm vi, 7 Yêu cầu mới, User Flow & Roadmap
+│   ├── 02-architecture-db-ai.md   # Kiến trúc hệ thống, CSDL, Dịch vụ lõi, AI Prompt & Bảo mật
+│   ├── 03-ui-ux-design.md         # UI Design System, Wireframes & Motion/Settings
+│   ├── 04-testing-deploy-demo.md  # Kiểm thử (Testing), Triển khai (Deploy), Rủi ro & Demo Q&A
+│   └── openapi.yaml               # Đặc tả kỹ thuật OpenAPI 3.0 cho toàn bộ hệ thống API
 │
 ├── client/                        # ỨNG DỤNG FRONTEND (REACT 18 + VITE + TAILWIND CSS)
 │   ├── index.html                 # File HTML gốc
@@ -331,7 +334,7 @@ website-ai-travel/
     ├── .env.example               # Mẫu biến môi trường (Database URL, Gemini API Key, JWT Secret)
     └── app/
         ├── core/                  # Cấu hình hệ thống, bảo mật bcrypt và JWT
-        ├── db/                    # Schema CSDL PostgreSQL, Session và Seed Data 70+ địa điểm TP.HCM
+        ├── db/                    # Schema CSDL PostgreSQL, Session và Seed Data 320+ địa điểm TP.HCM (40+ điểm/quận)
         ├── schemas/               # Pydantic Schemas kiểm thực dữ liệu đầu vào/ra
         ├── services/              # Xử lý nghiệp vụ thông minh: Gemini AI, Cache địa điểm, Transit, Lịch .ICS
         ├── utils/                 # Thuật toán Haversine tính cự ly & cước 3 hãng xe
@@ -344,7 +347,6 @@ website-ai-travel/
 
 Để đảm bảo quá trình phát triển không xảy ra xung đột mã nguồn:
 1. **Nhánh `main`:** Được bảo vệ (*Protected Branch*), chỉ chứa mã nguồn đã kiểm thử ổn định 100%.
-2. **Nhánh `dev`:** Nhánh tích hợp chung của toàn nhóm.
 3. **Nhánh tính năng cá nhân (*Feature Branches*):**
    * `feature/fe-companion-v2-full` — **Danh** & **Hưng** (Mã nguồn Frontend hoàn chỉnh)
    * `feature/be-auth-trip` — **Khang** (Backend Auth & CRUD Chuyến đi)
@@ -352,4 +354,4 @@ website-ai-travel/
    * `feature/ai-gemini-flow` — **Lam** (Gemini AI & Tối ưu lịch trình)
    * `feature/be-transit-adaptive` — **Hạo** (Routing cước 3 xe & Kịch bản thích ứng)
    * `feature/devops-docker-ci` — **Đăng** (Docker, Pytest & Triển khai Cloud)
-4. **Quy tắc Merge:** Mọi thành viên sau khi hoàn thành tính năng phải mở Pull Request (PR) vào nhánh `dev` và được Trưởng nhóm (Danh) phê duyệt sau khi đã test không xung đột.
+4. **Quy tắc Merge:** Mọi thành viên sau khi hoàn thành tính năng phải mở Pull Request (PR) vào nhánh `main` và được Trưởng nhóm (Danh) phê duyệt sau khi đã test không xung đột.
