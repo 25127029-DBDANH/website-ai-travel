@@ -1682,8 +1682,13 @@ export const api = {
     const days = Math.min(14, Math.max(1, Number(payload.days) || 3));
     const placesPerDay = Math.min(6, Math.max(3, Number(payload.places_per_day) || 4));
     const seed = Math.floor(Math.random() * PLACES.length);
-    const memberCount = Number(payload.member_count) || (payload.companion === 'solo' ? 1 : 4);
-    const companion = payload.companion || (memberCount === 1 ? 'solo' : 'group');
+    const memberCount = Number(payload.member_count) || ((payload.companion || payload.group_type) === 'solo' ? 1 : 4);
+    const companion = payload.companion || payload.group_type || (memberCount === 1 ? 'solo' : 'group');
+    const specialNotes = Array.isArray(payload.special_notes)
+      ? payload.special_notes.map((s) => String(s ?? '').trim()).filter(Boolean).join(', ') || null
+      : typeof payload.special_notes === 'string'
+        ? payload.special_notes.trim() || null
+        : null;
     const items = Array.isArray(payload.itinerary_items) && payload.itinerary_items.length
       ? payload.itinerary_items
       : makeItinerary(days, placesPerDay, seed, payload.start_location || '', payload.transport_mode || 'grab_bike');
@@ -1698,7 +1703,7 @@ export const api = {
       transport_mode: payload.transport_mode || 'grab_bike',
       districts: payload.districts || [],
       pace: payload.pace || 'moderate',
-      special_notes: payload.special_notes || '',
+      special_notes: specialNotes,
       start_time: payload.start_time || '08:00',
       end_time: payload.end_time || '21:30',
       start_location: payload.start_location || 'Quận 1, TP. Hồ Chí Minh',
