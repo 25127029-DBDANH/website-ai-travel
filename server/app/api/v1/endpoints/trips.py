@@ -132,6 +132,83 @@ def _trip_out(trip: Trip, items: list[dict] | None = None) -> TripOut:
     )
 
 
+def _demo_trip_response() -> TripDetailOut:
+    """Build the read-only itinerary used by the public /trip/demo page."""
+    places = [
+        ("Nhà thờ Đức Bà Sài Gòn", "culture", "Quận 1", 10.7797, 106.6990, 0, False),
+        ("Bưu điện Trung tâm Sài Gòn", "culture", "Quận 1", 10.7798, 106.6993, 0, True),
+        ("Dinh Độc Lập", "culture", "Quận 1", 10.7769, 106.6956, 40000, True),
+        ("Cơm Tấm Ba Ghiền", "food", "Phú Nhuận", 10.7925, 106.6710, 55000, True),
+        ("Bảo tàng Mỹ thuật TP.HCM", "culture", "Quận 1", 10.7698, 106.6995, 30000, True),
+        ("Chợ Bến Thành", "shopping", "Quận 1", 10.7726, 106.6982, 0, True),
+        ("Phố đi bộ Nguyễn Huệ", "sightseeing", "Quận 1", 10.7741, 106.7030, 0, False),
+        ("Cơm Niêu Sài Gòn", "food", "Quận 1", 10.7765, 106.6980, 95000, True),
+        ("Bảo tàng Chứng tích Chiến tranh", "culture", "Quận 3", 10.7794, 106.6927, 40000, True),
+        ("Hồ Con Rùa", "sightseeing", "Quận 3", 10.7821, 106.6965, 0, False),
+        ("Quán Bụi — Hương Vị Đồng Quê", "food", "Quận 1", 10.7810, 106.7040, 90000, True),
+        ("Công viên Tao Đàn", "park", "Quận 1", 10.7747, 106.6920, 0, False),
+    ]
+    time_slots = (("08:00", "09:30"), ("10:00", "11:30"), ("12:00", "13:30"), ("15:00", "16:30"))
+    items: list[dict] = []
+    for index, (name, category, district, latitude, longitude, cost, indoor) in enumerate(places):
+        day_number, order_index = divmod(index, 4)
+        start_time, end_time = time_slots[order_index]
+        transit = None if order_index == 0 else {
+            "duration_min": 15,
+            "distance_km": 1.2,
+            "mode": "walk" if order_index == 1 else "grab_bike",
+            "estimated_fare_vnd": 0 if order_index == 1 else 18000,
+            "start_time": time_slots[order_index - 1][1],
+            "end_time": start_time,
+        }
+        items.append({
+            "place_id": f"demo-{index + 1}",
+            "place_name": name,
+            "category": category,
+            "description": f"Điểm tham quan tiêu biểu tại {district}, TP. Hồ Chí Minh.",
+            "address": f"{district}, TP. Hồ Chí Minh",
+            "district": district,
+            "latitude": latitude,
+            "longitude": longitude,
+            "estimated_cost": cost,
+            "editorial_score": 4.6,
+            "is_indoor": indoor,
+            "day_number": day_number + 1,
+            "order_index": order_index + 1,
+            "time_slot": f"{start_time} - {end_time}",
+            "start_time": start_time,
+            "end_time": end_time,
+            "is_lunch": order_index == 2,
+            "transit_info": transit,
+            "visited": False,
+            "is_accepted": True,
+        })
+
+    trip = TripOut(
+        id="demo",
+        title="Khám phá Sài Gòn 3 ngày",
+        days=3,
+        budget=5_000_000,
+        total_estimated=sum(item["estimated_cost"] for item in items) * 4,
+        place_count=len(items),
+        status="completed",
+        created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        is_shared=False,
+        places_per_day=4,
+        companion="group",
+        member_count=4,
+        transport_mode="grab_bike",
+        start_location="Quận 1, TP. Hồ Chí Minh",
+        preferences=["food", "culture"],
+        source="demo",
+    )
+    return TripDetailOut(
+        trip=trip,
+        itinerary_items=items,
+        budget_summary=_compute_budget(trip, items),
+    )
+
+
 async def _get_user_trip(trip_id: str, user: User, db: AsyncSession) -> Trip:
     result = await db.execute(
         select(Trip).where(Trip.id == trip_id, Trip.user_id == user.id)
@@ -224,6 +301,12 @@ async def list_my_trips(
 # ---------------------------------------------------------------------------
 # GET /{trip_id} — Trip detail
 # ---------------------------------------------------------------------------
+@router.get("/demo", response_model=TripDetailOut)
+async def get_demo_trip():
+    """Public, read-only demo itinerary; no user or database row is required."""
+    return _demo_trip_response()
+
+
 @router.get("/{trip_id}", response_model=TripDetailOut)
 async def get_trip(
     trip_id: str,
