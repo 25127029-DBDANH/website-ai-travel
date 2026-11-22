@@ -22,6 +22,7 @@ class TripConceptRequest(BaseModel):
 class ConceptResponse(BaseModel):
     """Concept AI trả về trước khi tạo lịch trình chi tiết."""
 
+    source: Literal["gemini", "fallback"] = "gemini"
     summary: str
     highlights: list[str]
     recommended_districts: list[str]
@@ -82,6 +83,7 @@ class TripGenerationResponse(BaseModel):
     """Danh sách các điểm theo ngày, sẵn sàng cho giao diện lịch trình."""
 
     itinerary_items: list[ItineraryItemResponse]
+    source: Literal["gemini", "fallback"] = "gemini"
 
 
 class SmartSwapRequest(BaseModel):
@@ -101,3 +103,4 @@ class SmartSwapResponse(BaseModel):
     """Hai hoặc ba lựa chọn thay thế để người dùng chọn."""
 
     alternatives: list[SmartSwapOption] = Field(min_length=2, max_length=3)
+    source: Literal["gemini", "fallback"] = "gemini"
