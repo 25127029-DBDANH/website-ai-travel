@@ -65,3 +65,51 @@ def test_place_cache_ttl():
     # Simulate expired entry
     entry.expires_at = datetime.utcnow() - timedelta(minutes=1)
     assert entry.is_expired()
+
+
+def test_photo_route_not_shadowed_by_place_id():
+    """
+    Regression test for Issue #20:
+    Ensure GET /photo is registered BEFORE GET /{place_id} in router.routes
+    so that /places/photo is never captured with place_id="photo".
+    """
+    from app.api.v1.endpoints.places import router
+
+    photo_idx = None
+    place_id_idx = None
+    for idx, route in enumerate(router.routes):
+        path = getattr(route, "path", None)
+        if path and path.endswith("/photo"):
+            photo_idx = idx
+        elif path and path.endswith("/{place_id}"):
+            place_id_idx = idx
+
+    assert photo_idx is not None, "Route /photo not found in places router"
+    assert place_id_idx is not None, "Route /{place_id} not found in places router"
+    assert photo_idx < place_id_idx, (
+        f"Route /photo (index {photo_idx}) must precede /{place_id} (index {place_id_idx}) "
+        f"to prevent route shadowing (Issue #20)!"
+    )
+
+
+def test_photo_endpoint_resolution_not_404_place():
+    """
+    Regression test for Issue #20:
+    Calling GET /api/v1/places/photo?name=test must NOT return 404 'Không tìm thấy địa điểm với id=photo'.
+    Without Google API key, it should safely enter proxy_google_place_photo and return 503.
+    """
+    from fastapi import FastAPI
+    from starlette.testclient import TestClient
+    from app.api.v1.endpoints.places import router
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")
+    client = TestClient(app)
+
+    resp = client.get("/api/v1/places/photo?name=test_photo")
+    # Must NOT be 404 place not found
+    assert "Không tìm thấy địa điểm với id=photo" not in resp.text
+    # Without GOOGLE_PLACES_API_KEY, it correctly reaches the handler and returns 503
+    assert resp.status_code == 503
+    assert "Google Places API key chưa được cấu hình" in resp.json()["detail"]
+
