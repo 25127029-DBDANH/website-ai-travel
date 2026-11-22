@@ -1,38 +1,60 @@
 """
-main.py — FastAPI application entry point.
-Authors : Đỗ Nguyễn An Khang (Backend Lead & Auth Service), Ngô Tấn Đạt (Places)
+main.py — FastAPI application entry point for Sài Gòn Guide.
+Authors : Đỗ Nguyễn An Khang (Auth & Trips), Ngô Tấn Đạt (Places), Lê Hữu Lam (Gemini AI), Đàng Minh Hạo (Calendar)
 """
 
 from __future__ import annotations
 
 import logging
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import func, select
+
+load_dotenv()
 
 from app.api.v1.api import api_router
 from app.core.config import settings
-from app.db.session import create_tables, engine
+from app.db.models import Place
+from app.db.session import AsyncSessionLocal, create_tables, engine
+from app.services.gemini_service import GeminiService
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Lifespan — auto-initialize ORM tables on startup
+# Lifespan — initialize Gemini service, ORM tables, and 327 HCMC places seed
 # ---------------------------------------------------------------------------
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+    application.state.gemini_service = GeminiService(
+        api_key=os.getenv("GEMINI_API_KEY"),
+        model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
+    )
     try:
         await create_tables()
-        logger.info("Database tables initialized successfully via SQLAlchemy ORM.")
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Could not auto-initialize DB tables on startup: %s", exc)
-    yield
-    await engine.dispose()
+        async with AsyncSessionLocal() as session:
+            place_count = await session.scalar(select(func.count()).select_from(Place))
+        if not place_count:
+            from app.db.hcmc_data import seed_places
+
+            await seed_places()
+            logger.info("Seeded the local HCMC place catalog.")
+        else:
+            logger.info("Using existing place catalog (%s places).", place_count)
+    except Exception:
+        logger.exception("Database initialization or place seeding failed.")
+    try:
+        yield
+    finally:
+        application.state.gemini_service = None
+        await engine.dispose()
 
 
 # ---------------------------------------------------------------------------
@@ -50,11 +72,12 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 # CORS
 # ---------------------------------------------------------------------------
+_cors_raw = (
+    os.getenv("CORS_ORIGINS") or os.getenv("FRONTEND_ORIGINS") or settings.CORS_ORIGINS
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()
-    ],
+    allow_origins=[origin.strip() for origin in _cors_raw.split(",") if origin.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
