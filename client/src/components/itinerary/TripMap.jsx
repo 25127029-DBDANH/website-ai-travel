@@ -6,9 +6,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../i18n/I18nContext.jsx';
 import { cn } from '../../lib/cn.js';
 
-const OSM_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const TILE_URL =
+  import.meta.env.VITE_MAP_TILE_URL ||
+  'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png';
 const OSM_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  '&copy; <a href="https://www.openstreetmap.fr/">OpenStreetMap France</a> | &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 const HCMC_CENTER = [10.7769, 106.7009];
 
 function validCoordinate(value, min, max) {
@@ -63,7 +65,8 @@ export default function TripMap({
       zoomControl: true
     }).setView(HCMC_CENTER, 13);
 
-    L.tileLayer(OSM_TILE_URL, {
+    L.tileLayer(TILE_URL, {
+      subdomains: 'abc',
       maxZoom: 19,
       attribution: OSM_ATTRIBUTION
     }).addTo(map);
