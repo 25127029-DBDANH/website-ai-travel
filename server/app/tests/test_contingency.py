@@ -183,9 +183,7 @@ def test_adapt_transit_info_idempotent():
     }
 
     # First call with rain and rush hour
-    first_call = adapt_transit_info(
-        initial_transit, current_time=time(17, 30), is_raining=True
-    )
+    first_call = adapt_transit_info(initial_transit, current_time=time(17, 30), is_raining=True)
     expected_fare = max(35000, round(30000 * 1.5))
     expected_duration = 15 + RUSH_HOUR_BUFFER_MINUTES
     assert first_call["estimated_fare_vnd"] == expected_fare
@@ -194,16 +192,12 @@ def test_adapt_transit_info_idempotent():
     assert first_call["is_rush_hour"] is True
 
     # Second call on already adapted object
-    second_call = adapt_transit_info(
-        first_call, current_time=time(17, 30), is_raining=True
-    )
+    second_call = adapt_transit_info(first_call, current_time=time(17, 30), is_raining=True)
     assert second_call["estimated_fare_vnd"] == expected_fare
     assert second_call["duration_min"] == expected_duration
     assert second_call["is_rain_mode"] is True
     assert second_call["is_rush_hour"] is True
 
     # Third call
-    third_call = adapt_transit_info(
-        second_call, current_time=time(17, 30), is_raining=True
-    )
+    third_call = adapt_transit_info(second_call, current_time=time(17, 30), is_raining=True)
     assert third_call == second_call

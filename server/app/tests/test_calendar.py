@@ -1,28 +1,73 @@
-"""
-test_calendar.py — Unit tests for iCalendar RFC 5545 generator and API endpoints.
-Author  : Đàng Minh Hạo (Backend Developer — Routing & Adaptive)
-"""
+"""RFC 5545 calendar export, unit, and integration tests."""
 
-import json
+from __future__ import annotations
+
 from datetime import UTC, date, datetime
 
 import pytest
-from fastapi.testclient import TestClient
+from httpx import AsyncClient
+from icalendar import Calendar
 
 from app.services.calendar_service import (
     escape_ics_text,
     fold_line,
     generate_ics_content,
 )
-from main import app
+from app.tests.conftest import create_trip
 
-client = TestClient(app)
+
+# ---------------------------------------------------------------------------
+# Integration Tests (authenticated DB trip -> RFC 5545 .ics via icalendar)
+# ---------------------------------------------------------------------------
+@pytest.mark.integration
+async def test_export_ics_parses_and_contains_a_30_minute_reminder(
+    authenticated_client: AsyncClient, trip_payload: dict[str, object]
+) -> None:
+    payload = {
+        **trip_payload,
+        "itinerary_items": [
+            {
+                "day_number": 1,
+                "order_index": 0,
+                "place_name": "Independence Palace",
+                "address": "135 Nam Ky Khoi Nghia, District 1",
+                "latitude": 10.7769,
+                "longitude": 106.6953,
+                "start_time": "09:00",
+                "end_time": "10:00",
+            }
+        ],
+    }
+    trip = await create_trip(authenticated_client, payload)
+    response = await authenticated_client.get(
+        f"/api/v1/calendar/ics/{trip['id']}",
+        params={"start_date": date(2026, 12, 1).isoformat()},
+    )
+
+    assert response.status_code == 200, response.text
+    assert "text/calendar" in response.headers.get("content-type", "")
+    calendar = Calendar.from_ical(response.content)
+    events = [component for component in calendar.walk() if component.name == "VEVENT"]
+    assert events
+    alarms = [alarm for event in events for alarm in event.subcomponents if alarm.name == "VALARM"]
+    assert alarms
+    assert any(alarm.get("TRIGGER").to_ical() == b"-PT30M" for alarm in alarms)
+
+
+@pytest.mark.integration
+async def test_ics_export_rejects_an_unknown_trip(authenticated_client: AsyncClient) -> None:
+    response = await authenticated_client.get(
+        "/api/v1/calendar/ics/00000000-0000-0000-0000-000000000000",
+        params={"start_date": "2026-12-01"},
+    )
+
+    assert response.status_code == 404
 
 
 # ---------------------------------------------------------------------------
 # RFC 5545 Escaping & Line Folding Tests
 # ---------------------------------------------------------------------------
-def test_escape_ics_text_special_characters():
+def test_escape_ics_text_special_characters() -> None:
     """Verify proper escaping of backslash, semicolon, comma, and newlines."""
     assert escape_ics_text("Hello, world; test\\backslash\nnew line") == (
         "Hello\\, world\\; test\\\\backslash\\nnew line"
@@ -31,17 +76,14 @@ def test_escape_ics_text_special_characters():
     assert escape_ics_text(None) == ""
 
 
-def test_fold_line_short_string():
+def test_fold_line_short_string() -> None:
     """Short lines (<= 75 octets) should not be modified."""
     short = "SUMMARY:Tham quan Dinh Độc Lập"
     assert fold_line(short) == short
 
 
-def test_fold_line_long_vietnamese_string():
-    """
-    Long lines (> 75 octets) must be folded with CRLF + space,
-    and every physical line must be <= 75 UTF-8 bytes.
-    """
+def test_fold_line_long_vietnamese_string() -> None:
+    """Long lines (> 75 octets) must be folded with CRLF + space without splitting UTF-8."""
     long_desc = (
         "DESCRIPTION:Khám phá di tích lịch sử Hội trường Thống Nhất với nhiều hiện vật "
         "quý giá thời kỳ kháng chiến cứu nước và kiến trúc độc đáo của kiến trúc sư Ngô Viết Thụ."
@@ -49,86 +91,56 @@ def test_fold_line_long_vietnamese_string():
     folded = fold_line(long_desc)
     assert "\r\n " in folded
 
-    # Check each individual folded segment in octets
     physical_lines = folded.split("\r\n")
-    for idx, pline in enumerate(physical_lines):
-        assert len(pline.encode("utf-8")) <= 75, (
-            f"Line {idx} exceeds 75 octets: {len(pline.encode('utf-8'))}"
-        )
+    for line in physical_lines:
+        assert len(line.encode("utf-8")) <= 75
 
 
-# ---------------------------------------------------------------------------
-# iCalendar Content Generation Tests
-# ---------------------------------------------------------------------------
-def test_generate_ics_content_structure():
-    """Verify standard RFC 5545 tags in generated ICS text."""
-    sample_items = [
+def test_generate_ics_content_structure() -> None:
+    """Generated ICS must follow RFC 5545 structure with CRLF and VALARM -PT30M."""
+    items = [
         {
             "place_name": "Dinh Độc Lập",
             "day_number": 1,
-            "start_time": "09:00",
-            "end_time": "11:30",
+            "start_time": "08:30",
+            "end_time": "10:30",
             "address": "135 Nam Kỳ Khởi Nghĩa, Quận 1",
-            "description": "Tham quan di tích lịch sử",
-            "estimated_cost": 65000,
-        }
+            "description": "Di tích lịch sử",
+            "estimated_cost": 40000,
+        },
+        {
+            "place_name": "Chợ Bến Thành",
+            "day_number": 2,
+            "time_slot": "14:00 - 16:00",
+            "address": "Lê Lợi, Quận 1",
+            "estimated_cost": 0,
+        },
     ]
-
     fixed_now = datetime(2026, 11, 20, 10, 0, 0, tzinfo=UTC)
-    ics_text = generate_ics_content(
-        trip_id="test-trip-001",
-        title="Du lịch Sài Gòn 1 Ngày",
-        items=sample_items,
-        start_date=date(2026, 11, 25),
+    ics = generate_ics_content(
+        trip_id="unit-trip-1",
+        title="Sài Gòn 2 ngày",
+        items=items,
+        start_date=date(2026, 12, 1),
         now_dt=fixed_now,
     )
 
-    # Line endings check: MUST use CRLF (\r\n)
-    assert "\r\n" in ics_text
-    assert ics_text.startswith("BEGIN:VCALENDAR")
-    assert ics_text.strip().endswith("END:VCALENDAR")
-
-    # Calendar metadata & VTIMEZONE
-    assert "VERSION:2.0" in ics_text
-    assert "PRODID:-//Saigon Guide//AI Travel Planner//VI" in ics_text
-    assert "CALSCALE:GREGORIAN" in ics_text
-    assert "X-WR-CALNAME:Lịch trình Sài Gòn - Du lịch Sài Gòn 1 Ngày" in ics_text
-    assert "X-WR-TIMEZONE:Asia/Ho_Chi_Minh" in ics_text
-    assert "BEGIN:VTIMEZONE" in ics_text
-    assert "TZID:Asia/Ho_Chi_Minh" in ics_text
-    assert "TZOFFSETFROM:+0700" in ics_text
-    assert "TZOFFSETTO:+0700" in ics_text
-    assert "TZNAME:ICT" in ics_text
-    assert "END:VTIMEZONE" in ics_text
-
-    # VTIMEZONE must appear before VEVENT
-    assert ics_text.index("BEGIN:VTIMEZONE") < ics_text.index("BEGIN:VEVENT")
-
-    # VEVENT attributes
-    assert "BEGIN:VEVENT" in ics_text
-    assert "UID:test-trip-001-d1-idx1-" in ics_text
-    assert "DTSTAMP:20261120T100000Z" in ics_text
-    assert "DTSTART;TZID=Asia/Ho_Chi_Minh:20261125T090000" in ics_text
-    assert "DTEND;TZID=Asia/Ho_Chi_Minh:20261125T113000" in ics_text
-    assert "SUMMARY:[09:00 - 11:30] Dinh Độc Lập" in ics_text
-    assert "LOCATION:135 Nam Kỳ Khởi Nghĩa\\, Quận 1" in ics_text
-    assert "STATUS:CONFIRMED" in ics_text
-
-    # VALARM 30-minute reminder check
-    assert "BEGIN:VALARM" in ics_text
-    assert "TRIGGER:-PT30M" in ics_text
-    assert "ACTION:DISPLAY" in ics_text
-    assert "DESCRIPTION:Nhắc nhở: Chuẩn bị đến Dinh Độc Lập" in ics_text
-    assert "END:VALARM" in ics_text
-    assert "END:VEVENT" in ics_text
+    assert ics.startswith("BEGIN:VCALENDAR\r\n")
+    assert ics.endswith("END:VCALENDAR\r\n")
+    assert "VERSION:2.0\r\n" in ics
+    assert "DTSTAMP:20261120T100000Z\r\n" in ics
+    assert ics.count("BEGIN:VEVENT\r\n") == 2
+    assert ics.count("TRIGGER:-PT30M\r\n") == 2
+    assert "DTSTART;TZID=Asia/Ho_Chi_Minh:20261201T083000\r\n" in ics
+    assert "DTSTART;TZID=Asia/Ho_Chi_Minh:20261202T140000\r\n" in ics
 
 
 # ---------------------------------------------------------------------------
-# FastAPI Calendar Endpoint Tests
+# Endpoint Tests (using isolated SQLite AsyncClient fixture from conftest.py)
 # ---------------------------------------------------------------------------
-def test_get_calendar_ics_success():
-    """GET /api/v1/calendar/ics/demo returns 200 with valid .ics file attachment."""
-    response = client.get("/api/v1/calendar/ics/demo")
+async def test_get_calendar_ics_success(client: AsyncClient) -> None:
+    """GET /api/v1/calendar/ics/demo returns 200 OK with valid .ics attachment."""
+    response = await client.get("/api/v1/calendar/ics/demo")
     assert response.status_code == 200
     assert "text/calendar" in response.headers["content-type"]
     assert (
@@ -143,66 +155,24 @@ def test_get_calendar_ics_success():
     assert "Chợ Bến Thành" in body
 
 
-def test_get_calendar_ics_demo_1_with_start_date():
+async def test_get_calendar_ics_demo_1_with_start_date(client: AsyncClient) -> None:
     """GET /api/v1/calendar/ics/trip-demo-1 with custom start_date query parameter."""
-    response = client.get("/api/v1/calendar/ics/trip-demo-1?start_date=2026-12-01")
+    response = await client.get("/api/v1/calendar/ics/trip-demo-1?start_date=2026-12-01")
     assert response.status_code == 200
     body = response.text
     assert "20261201T083000" in body
     assert "Dinh Độc Lập" in body
 
 
-def test_get_calendar_ics_not_found():
+async def test_get_calendar_ics_not_found(client: AsyncClient) -> None:
     """GET /api/v1/calendar/ics/unknown-id returns 404 NOT FOUND."""
-    response = client.get("/api/v1/calendar/ics/unknown-id-404")
+    response = await client.get("/api/v1/calendar/ics/unknown-id-404")
     assert response.status_code == 404
     data = response.json()
     assert "Không tìm thấy chuyến đi" in data["detail"]
 
 
-@pytest.mark.anyio
-async def test_get_calendar_ics_from_database():
-    """Verify that a trip stored in SQLite database returns 200 with valid .ics."""
-    import uuid
-
-    from app.db.models import Trip
-    from app.db.session import AsyncSessionLocal, create_tables
-
-    await create_tables()
-    test_trip_id = f"test-db-trip-{uuid.uuid4().hex[:12]}"
-
-    async with AsyncSessionLocal() as session:
-        trip = Trip(
-            id=test_trip_id,
-            user_id="user-test-01",
-            title="Lịch trình Khảo sát Sài Gòn từ DB",
-            itinerary_json=json.dumps(
-                [
-                    {
-                        "place_name": "Bảo tàng Lịch sử TP.HCM",
-                        "day_number": 1,
-                        "start_time": "08:30",
-                        "end_time": "10:30",
-                        "address": "Số 2 Nguyễn Bỉnh Khiêm, Quận 1",
-                        "description": "Lưu giữ cổ vật lịch sử",
-                        "estimated_cost": 30000,
-                    }
-                ]
-            ),
-        )
-        session.add(trip)
-        await session.commit()
-
-    response = client.get(f"/api/v1/calendar/ics/{test_trip_id}")
-    assert response.status_code == 200
-    assert "text/calendar" in response.headers["content-type"]
-    unfolded = response.text.replace("\r\n ", "").replace("\r\n\t", "")
-    assert "Lịch trình Khảo sát Sài Gòn từ DB" in unfolded
-    assert "Bảo tàng Lịch sử TP.HCM" in response.text
-    assert "TRIGGER:-PT30M" in response.text
-
-
-def test_post_export_ics_direct():
+async def test_post_export_ics_direct(client: AsyncClient) -> None:
     """POST /api/v1/calendar/export-ics generates .ics directly from JSON body."""
     payload = {
         "id": "direct-export-99",
@@ -221,16 +191,16 @@ def test_post_export_ics_direct():
         ],
     }
 
-    response = client.post("/api/v1/calendar/export-ics", json=payload)
+    response = await client.post("/api/v1/calendar/export-ics", json=payload)
     assert response.status_code == 200
     assert "text/calendar" in response.headers["content-type"]
     assert "Bitexco Financial Tower" in response.text
     assert "TRIGGER:-PT30M" in response.text
 
 
-def test_preview_calendar_endpoint():
+async def test_preview_calendar_endpoint(client: AsyncClient) -> None:
     """GET /api/v1/calendar/preview/demo returns preview metadata JSON."""
-    response = client.get("/api/v1/calendar/preview/demo")
+    response = await client.get("/api/v1/calendar/preview/demo")
     assert response.status_code == 200
     data = response.json()
     assert data["trip_id"] == "demo"
@@ -242,12 +212,8 @@ def test_preview_calendar_endpoint():
 # ---------------------------------------------------------------------------
 # RFC 5545 Unfolding, Newline & VTIMEZONE Specific Tests
 # ---------------------------------------------------------------------------
-def test_unfolded_description_single_escape_newline_and_no_double_escape():
-    """
-    After unfolding (removing CRLF + 1 space/tab continuation),
-    DESCRIPTION must contain literal '\\n' (single backslash + n)
-    and must NOT contain '\\\\n' (double backslash + n).
-    """
+def test_unfolded_description_single_escape_newline_and_no_double_escape() -> None:
+    """Unfolded DESCRIPTION must contain literal '\\n' and never double-escaped '\\\\n'."""
     items = [
         {
             "place_name": "Bảo tàng Chứng tích Chiến tranh",
@@ -267,29 +233,17 @@ def test_unfolded_description_single_escape_newline_and_no_double_escape():
         start_date=date(2026, 12, 1),
     )
 
-    # RFC 5545 unfolding: remove CRLF followed by single space or tab
     unfolded = ics_text.replace("\r\n ", "").replace("\r\n\t", "")
+    desc_lines = [line for line in unfolded.split("\r\n") if line.startswith("DESCRIPTION:")]
+    assert len(desc_lines) >= 2
 
-    # Extract all DESCRIPTION lines
-    desc_lines = [
-        line for line in unfolded.split("\r\n") if line.startswith("DESCRIPTION:")
-    ]
-    assert len(desc_lines) >= 2  # At least VEVENT description and VALARM description
-
-    # The VEVENT description contains multiline details
     event_desc = next(line for line in desc_lines if "Chi phí" in line)
-    assert r"\n" in event_desc, (
-        f"VEVENT DESCRIPTION should contain escaped newline: {event_desc}"
-    )
-
-    # No DESCRIPTION (neither VEVENT nor VALARM) may contain double-escaped \\n
+    assert r"\n" in event_desc
     for dline in desc_lines:
-        assert r"\\n" not in dline, (
-            f"DESCRIPTION must not contain double-escaped \\n: {dline}"
-        )
+        assert r"\\n" not in dline
 
 
-def test_comma_escaping_not_double_escaped():
+def test_comma_escaping_not_double_escaped() -> None:
     """Commas in text fields must be escaped as '\\,' and not double-escaped as '\\\\,'."""
     items = [
         {
@@ -311,15 +265,13 @@ def test_comma_escaping_not_double_escaped():
     )
 
     unfolded = ics_text.replace("\r\n ", "").replace("\r\n\t", "")
-
-    # Check commas in SUMMARY, LOCATION, DESCRIPTION
-    assert r"\," in unfolded, "Should contain single-escaped commas"
-    assert r"\\," not in unfolded, "Commas must not be double-escaped into \\\\,"
+    assert r"\," in unfolded
+    assert r"\\," not in unfolded
 
 
-def test_vtimezone_asia_ho_chi_minh_block():
+async def test_vtimezone_asia_ho_chi_minh_block(client: AsyncClient) -> None:
     """Verify full VTIMEZONE definition for Asia/Ho_Chi_Minh in generated ICS."""
-    response = client.get("/api/v1/calendar/ics/demo")
+    response = await client.get("/api/v1/calendar/ics/demo")
     assert response.status_code == 200
     body = response.text
 

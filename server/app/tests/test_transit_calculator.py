@@ -34,9 +34,7 @@ def test_haversine_known_hcmc_landmarks():
     """
     dinh_doc_lap = (10.7769, 106.6953)
     nha_tho_duc_ba = (10.7798, 106.6990)
-    dist = haversine_km(
-        dinh_doc_lap[0], dinh_doc_lap[1], nha_tho_duc_ba[0], nha_tho_duc_ba[1]
-    )
+    dist = haversine_km(dinh_doc_lap[0], dinh_doc_lap[1], nha_tho_duc_ba[0], nha_tho_duc_ba[1])
     assert 0.45 < dist < 0.60
 
 
@@ -51,7 +49,7 @@ def test_haversine_ben_thanh_to_airport():
 
 
 def test_haversine_invalid_coordinates():
-    """Coordinates outside physical limits [-90, 90] and [-180, 180] must raise InvalidCoordinateError."""
+    """Coordinates outside [-90, 90] and [-180, 180] must raise InvalidCoordinateError."""
     # Latitude > 90
     with pytest.raises(InvalidCoordinateError):
         haversine_km(91.0, 106.0, 10.0, 106.0)
@@ -134,12 +132,8 @@ def test_estimate_ride_fares_properties():
 
 def test_estimate_ride_fares_monotonic_increase():
     """Car fares for 10 km must be strictly greater than for 2 km."""
-    fares_short = {
-        f.vehicle_type: f.estimated_fare_vnd for f in estimate_ride_fares(2.0)
-    }
-    fares_long = {
-        f.vehicle_type: f.estimated_fare_vnd for f in estimate_ride_fares(10.0)
-    }
+    fares_short = {f.vehicle_type: f.estimated_fare_vnd for f in estimate_ride_fares(2.0)}
+    fares_long = {f.vehicle_type: f.estimated_fare_vnd for f in estimate_ride_fares(10.0)}
 
     for vtype, short_val in fares_short.items():
         assert fares_long[vtype] > short_val
