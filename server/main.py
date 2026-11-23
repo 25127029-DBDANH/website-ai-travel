@@ -1,13 +1,14 @@
 """
 main.py — FastAPI application entry point for Sài Gòn Guide.
-Authors : Đỗ Nguyễn An Khang (Auth & Trips), Ngô Tấn Đạt (Places), Lê Hữu Lam (Gemini AI)
+Authors : Đỗ Nguyễn An Khang (Auth & Trips), Ngô Tấn Đạt (Places), Lê Hữu Lam (Gemini AI), Đàng Minh Hạo (Calendar)
 """
+
 from __future__ import annotations
 
 import logging
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 import uvicorn
 from dotenv import load_dotenv
@@ -18,11 +19,11 @@ from sqlalchemy import func, select
 
 load_dotenv()
 
-from app.api.v1.api import api_router  # noqa: E402
-from app.core.config import settings  # noqa: E402
-from app.db.models import Place  # noqa: E402
-from app.db.session import AsyncSessionLocal, create_tables, engine  # noqa: E402
-from app.services.gemini_service import GeminiService  # noqa: E402
+from app.api.v1.api import api_router
+from app.core.config import settings
+from app.db.models import Place
+from app.db.session import AsyncSessionLocal, create_tables, engine
+from app.services.gemini_service import GeminiService
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,9 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 # CORS
 # ---------------------------------------------------------------------------
-_cors_raw = os.getenv("CORS_ORIGINS") or os.getenv("FRONTEND_ORIGINS") or settings.CORS_ORIGINS
+_cors_raw = (
+    os.getenv("CORS_ORIGINS") or os.getenv("FRONTEND_ORIGINS") or settings.CORS_ORIGINS
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in _cors_raw.split(",") if origin.strip()],
@@ -93,7 +96,10 @@ app.include_router(api_router)
 async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
-        content={"detail": "INTERNAL_ERROR", "message": "An unexpected error occurred."},
+        content={
+            "detail": "INTERNAL_ERROR",
+            "message": "An unexpected error occurred.",
+        },
     )
 
 
@@ -116,5 +122,5 @@ async def health_check():
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
+    port = int(os.getenv("PORT", "8000"))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
