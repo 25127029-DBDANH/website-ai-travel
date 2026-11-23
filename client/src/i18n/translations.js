@@ -258,9 +258,15 @@ export const translations = {
     'auth.tab.login': 'Sign in',
     'auth.tab.register': 'Create account',
     'auth.username': 'Username',
-    'auth.usernameHint': '3–30 letters, numbers or underscores.',
+    'auth.usernameHint':
+      '3–30 letters, numbers or underscores (no leading, trailing or double underscores).',
     'auth.password': 'Password',
-    'auth.passwordHint': 'At least 8 characters.',
+    'auth.passwordHint': '15+ characters, or 8–14 with a lowercase letter and a number (max 64).',
+    'auth.rule.length': '15+ characters, or 8–14 with a lowercase letter and a number',
+    'auth.rule.max': 'Up to 64 characters (max 72 bytes)',
+    'auth.rule.noUsername': 'Does not contain your username',
+    'auth.showPassword': 'Show password',
+    'auth.hidePassword': 'Hide password',
     'auth.noRecovery': 'Password cannot be recovered yet — save it somewhere safe.',
     'auth.or': 'or',
     'auth.google': 'Continue with Google',
@@ -303,7 +309,8 @@ export const translations = {
     'settings.account.google': 'Signed in with Google',
     'settings.account.password': 'Signed in with username and password',
     'settings.password.title': 'Change password',
-    'settings.password.body': 'Use at least 8 characters.',
+    'settings.password.body':
+      '15+ characters, or 8–14 with a lowercase letter and a number (max 64).',
     'settings.password.current': 'Current password',
     'settings.password.new': 'New password',
     'settings.password.confirm': 'Confirm new password',
@@ -353,7 +360,7 @@ export const translations = {
     'category.entertainment': 'Entertainment',
 
     'error.RATE_LIMITED': "You're moving fast! Please wait a minute and try again.",
-    'error.AUTH_RATE_LIMITED': 'Too many sign-in attempts. Please wait a minute and try again.',
+    'error.AUTH_RATE_LIMITED': 'Too many sign-in attempts. Please wait 15 minutes and try again.',
     'error.AI_RATE_LIMITED': 'The AI is taking a short break. Please wait a minute and try again.',
     'error.GEMINI_BUDGET_EXHAUSTED':
       'The AI is handling a lot of requests. Please try again in a few seconds.',
@@ -363,6 +370,9 @@ export const translations = {
     'error.AI_SERVICE_TIMEOUT': 'The AI is busy right now. Please try again in a few seconds.',
     'error.AUTH_INVALID_CREDENTIALS': 'Invalid username or password.',
     'error.AUTH_USERNAME_TAKEN': 'That username or email is already in use.',
+    'error.AUTH_USERNAME_INVALID':
+      'Username must be 3–30 letters, numbers or underscores, with no leading, trailing or double underscores.',
+    'error.AUTH_USERNAME_RESERVED': 'That username is reserved. Please pick another one.',
     'error.AUTH_REQUIRED': 'Please sign in to continue.',
     'error.AUTH_TOKEN_EXPIRED': 'Your session expired. Please sign in again.',
     'error.GOOGLE_NOT_CONFIGURED': 'Google Sign-In is not available right now.',
@@ -371,6 +381,14 @@ export const translations = {
     'error.AUTH_PASSWORD_NOT_SET': 'This account signs in with Google and has no password.',
     'error.AUTH_PASSWORD_INVALID': 'Password is incorrect.',
     'error.AUTH_PASSWORD_REQUIRED': 'Confirm your password to continue.',
+    'error.AUTH_PASSWORD_TOO_SHORT': 'Password must be at least 8 characters.',
+    'error.AUTH_PASSWORD_TOO_WEAK':
+      'Use at least 15 characters, or 8–14 characters with a lowercase letter and a number.',
+    'error.AUTH_PASSWORD_TOO_LONG':
+      'Password is too long (maximum 64 characters and 72 bytes).',
+    'error.AUTH_PASSWORD_COMMON':
+      'This password is too common. Please choose a stronger one.',
+    'error.AUTH_PASSWORD_CONTAINS_USERNAME': 'Password must not contain your username.',
     'error.AUTH_GOOGLE_REAUTH_REQUIRED': 'Confirm with Google to continue.',
     'error.MISSING_ITINERARY_TOOL':
       'The guide could not finish the plan. Please send your message again.',
@@ -635,9 +653,17 @@ export const translations = {
     'auth.tab.login': 'Đăng nhập',
     'auth.tab.register': 'Đăng ký',
     'auth.username': 'Tên đăng nhập',
-    'auth.usernameHint': '3–30 chữ cái, số hoặc dấu gạch dưới.',
+    'auth.usernameHint':
+      '3–30 chữ cái, số hoặc dấu gạch dưới (không đặt _ ở đầu, cuối hoặc liền nhau).',
     'auth.password': 'Mật khẩu',
-    'auth.passwordHint': 'Tối thiểu 8 ký tự.',
+    'auth.passwordHint':
+      'Từ 15 ký tự, hoặc 8–14 ký tự gồm chữ thường và chữ số (tối đa 64 ký tự).',
+    'auth.rule.length':
+      'Từ 15 ký tự trở lên, hoặc 8–14 ký tự có ít nhất 1 chữ thường và 1 chữ số',
+    'auth.rule.max': 'Tối đa 64 ký tự (không quá 72 byte)',
+    'auth.rule.noUsername': 'Không chứa tên đăng nhập',
+    'auth.showPassword': 'Hiện mật khẩu',
+    'auth.hidePassword': 'Ẩn mật khẩu',
     'auth.noRecovery': 'Chưa hỗ trợ khôi phục mật khẩu — hãy lưu mật khẩu ở nơi an toàn.',
     'auth.or': 'hoặc',
     'auth.google': 'Tiếp tục với Google',
@@ -681,7 +707,8 @@ export const translations = {
     'settings.account.google': 'Đăng nhập bằng Google',
     'settings.account.password': 'Đăng nhập bằng tên đăng nhập và mật khẩu',
     'settings.password.title': 'Đổi mật khẩu',
-    'settings.password.body': 'Dùng tối thiểu 8 ký tự.',
+    'settings.password.body':
+      'Từ 15 ký tự, hoặc 8–14 ký tự gồm chữ thường và chữ số (tối đa 64 ký tự).',
     'settings.password.current': 'Mật khẩu hiện tại',
     'settings.password.new': 'Mật khẩu mới',
     'settings.password.confirm': 'Nhập lại mật khẩu mới',
@@ -732,7 +759,7 @@ export const translations = {
     'category.entertainment': 'Giải trí',
 
     'error.RATE_LIMITED': 'Bạn thao tác hơi nhanh! Vui lòng chờ một phút rồi thử lại.',
-    'error.AUTH_RATE_LIMITED': 'Bạn đã thử đăng nhập quá nhiều lần. Vui lòng chờ một phút rồi thử lại.',
+    'error.AUTH_RATE_LIMITED': 'Bạn đã thử đăng nhập quá nhiều lần. Vui lòng chờ 15 phút rồi thử lại.',
     'error.AI_RATE_LIMITED': 'AI đang nghỉ một chút. Vui lòng chờ một phút rồi thử lại.',
     'error.GEMINI_BUDGET_EXHAUSTED':
       'AI đang xử lý nhiều yêu cầu. Vui lòng thử lại sau vài giây.',
@@ -742,6 +769,10 @@ export const translations = {
     'error.AI_SERVICE_TIMEOUT': 'AI đang bận. Vui lòng thử lại sau vài giây.',
     'error.AUTH_INVALID_CREDENTIALS': 'Tên đăng nhập hoặc mật khẩu không đúng.',
     'error.AUTH_USERNAME_TAKEN': 'Tên đăng nhập hoặc email này đã được dùng.',
+    'error.AUTH_USERNAME_INVALID':
+      'Tên đăng nhập gồm 3–30 chữ cái, số hoặc dấu gạch dưới, không đặt _ ở đầu, cuối hoặc liền nhau.',
+    'error.AUTH_USERNAME_RESERVED':
+      'Tên đăng nhập này đã được hệ thống giữ riêng. Bạn hãy chọn tên khác.',
     'error.AUTH_REQUIRED': 'Vui lòng đăng nhập để tiếp tục.',
     'error.AUTH_TOKEN_EXPIRED': 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
     'error.GOOGLE_NOT_CONFIGURED': 'Google Sign-In hiện không khả dụng.',
@@ -750,6 +781,13 @@ export const translations = {
     'error.AUTH_PASSWORD_NOT_SET': 'Tài khoản này đăng nhập bằng Google nên không có mật khẩu.',
     'error.AUTH_PASSWORD_INVALID': 'Mật khẩu không đúng.',
     'error.AUTH_PASSWORD_REQUIRED': 'Vui lòng xác nhận mật khẩu để tiếp tục.',
+    'error.AUTH_PASSWORD_TOO_SHORT': 'Mật khẩu cần có ít nhất 8 ký tự.',
+    'error.AUTH_PASSWORD_TOO_WEAK':
+      'Dùng ít nhất 15 ký tự, hoặc 8–14 ký tự có ít nhất 1 chữ thường và 1 chữ số.',
+    'error.AUTH_PASSWORD_TOO_LONG': 'Mật khẩu quá dài (tối đa 64 ký tự và không quá 72 byte).',
+    'error.AUTH_PASSWORD_COMMON':
+      'Mật khẩu này quá phổ biến. Bạn hãy chọn mật khẩu khác khó đoán hơn.',
+    'error.AUTH_PASSWORD_CONTAINS_USERNAME': 'Mật khẩu không được chứa tên đăng nhập.',
     'error.AUTH_GOOGLE_REAUTH_REQUIRED': 'Vui lòng xác nhận bằng Google để tiếp tục.',
     'error.MISSING_ITINERARY_TOOL':
       'Trợ lý chưa hoàn thành được lịch trình. Vui lòng gửi lại tin nhắn.',

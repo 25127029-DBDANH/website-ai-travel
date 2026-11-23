@@ -1,9 +1,10 @@
-import { Loader2, UserRound } from 'lucide-react';
+import { Eye, EyeOff, Loader2, UserRound } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { cn } from '../lib/cn.js';
 import { translateApiError } from '../lib/errors.js';
+import { checkPassword, checkUsername } from '../lib/passwordPolicy.js';
 import Modal from './Modal.jsx';
 
 export default function AuthModal() {
@@ -13,6 +14,7 @@ export default function AuthModal() {
   const [mode, setMode] = useState(authMode);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [errorField, setErrorField] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -24,6 +26,7 @@ export default function AuthModal() {
     setMode(authMode);
     setUsername('');
     setPassword('');
+    setShowPassword(false);
     setError('');
     setErrorField('');
     setSubmitting(false);
@@ -51,6 +54,7 @@ export default function AuthModal() {
   );
 
   const isLogin = mode === 'login';
+  const passwordCheck = !isLogin ? checkPassword(password, username.trim()) : null;
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -63,6 +67,19 @@ export default function AuthModal() {
     if (!password) {
       showError('password', t('error.VALIDATION_ERROR'));
       return;
+    }
+
+    if (!isLogin) {
+      const usernameCheck = checkUsername(name);
+      if (!usernameCheck.valid) {
+        showError('username', t(`error.${usernameCheck.code}`));
+        return;
+      }
+      const nextPasswordCheck = checkPassword(password, name);
+      if (!nextPasswordCheck.valid) {
+        showError('password', t(`error.${nextPasswordCheck.code}`));
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -165,28 +182,63 @@ export default function AuthModal() {
               </p>
             )}
 
-            <label className="grid gap-1.5">
-              <span className="label !mb-0">{t('auth.password')}</span>
-              <input
-                ref={passwordRef}
-                type="password"
-                className="input"
-                value={password}
-                onChange={(event) => {
-                  setPassword(event.target.value);
-                  if (errorField === 'password') clearError();
-                }}
-                aria-invalid={errorField === 'password' || undefined}
-                aria-describedby={describedBy('password', isLogin ? null : 'auth-password-hint')}
-                autoComplete={isLogin ? 'current-password' : 'new-password'}
-                minLength={isLogin ? 1 : 8}
-                maxLength={72}
-                required
-              />
-              {!isLogin && (
-                <span id="auth-password-hint" className="text-[11px] text-slate-500">{t('auth.passwordHint')}</span>
+            <div className="grid gap-1.5">
+              <label htmlFor="auth-password" className="label !mb-0">{t('auth.password')}</label>
+              <div className="relative">
+                <input
+                  id="auth-password"
+                  ref={passwordRef}
+                  type={showPassword ? 'text' : 'password'}
+                  className="input pr-11"
+                  value={password}
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    if (errorField === 'password') clearError();
+                  }}
+                  aria-invalid={errorField === 'password' || undefined}
+                  aria-describedby={describedBy('password', isLogin ? null : 'auth-password-hint')}
+                  autoComplete={isLogin ? 'current-password' : 'new-password'}
+                  minLength={isLogin ? 1 : 8}
+                  maxLength={64}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
+                  aria-pressed={showPassword}
+                  className="touch-target absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
+              {!isLogin && passwordCheck && (
+                <ul
+                  id="auth-password-hint"
+                  aria-live="polite"
+                  className="grid gap-1 text-[11px]"
+                >
+                  {passwordCheck.rules.map((rule) => (
+                    <li
+                      key={rule.id}
+                      className={cn(
+                        'flex items-start gap-1.5 leading-snug transition-colors',
+                        rule.ok ? 'font-medium text-brand-700' : 'text-slate-500'
+                      )}
+                    >
+                      <span aria-hidden="true" className="w-3.5 shrink-0 text-center font-bold">
+                        {rule.ok ? '✓' : '○'}
+                      </span>
+                      <span>{t(`auth.rule.${rule.id}`)}</span>
+                    </li>
+                  ))}
+                </ul>
               )}
-            </label>
+            </div>
 
             {error ? (
               <p id="auth-form-error" role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">

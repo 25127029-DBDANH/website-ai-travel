@@ -5,6 +5,8 @@ Author  : Đỗ Nguyễn An Khang (Backend Lead & Auth Service)
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import secrets
+import unicodedata
 
 import bcrypt
 from fastapi import HTTPException, status
@@ -12,20 +14,29 @@ from jose import JWTError, jwt
 
 from app.core.config import settings
 
+MAX_BCRYPT_BYTES = 72
+
 
 # ---------------------------------------------------------------------------
 # Password hashing — using bcrypt directly (bcrypt 5.x compatible)
 # ---------------------------------------------------------------------------
 def hash_password(plain: str) -> str:
-    pwd_bytes = plain.encode("utf-8")[:72]
+    pwd_bytes = unicodedata.normalize("NFC", plain).encode("utf-8")
+    if len(pwd_bytes) > MAX_BCRYPT_BYTES:
+        raise ValueError("Password exceeds bcrypt 72-byte limit")
     salt = bcrypt.gensalt(rounds=12)
     return bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    pwd_bytes = plain.encode("utf-8")[:72]
+    pwd_bytes = unicodedata.normalize("NFC", plain).encode("utf-8")
+    if len(pwd_bytes) > MAX_BCRYPT_BYTES:
+        return False
     hashed_bytes = hashed.encode("utf-8")
     return bcrypt.checkpw(pwd_bytes, hashed_bytes)
+
+
+DUMMY_HASH: str = hash_password(secrets.token_urlsafe(32))
 
 
 # ---------------------------------------------------------------------------
