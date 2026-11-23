@@ -7,10 +7,11 @@ import inspect
 import json
 import logging
 import random
+import re
 import time
 from collections import deque
 from collections.abc import Sequence
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel
 
@@ -29,6 +30,7 @@ from app.schemas.ai import (
 
 logger = logging.getLogger(__name__)
 ModelT = TypeVar("ModelT", bound=BaseModel)
+ResponseSource = Literal["gemini", "fallback"]
 
 SYSTEM_INSTRUCTION = """You are HCMC Travel Expert, a professional and warm local travel planner
 specializing in Ho Chi Minh City, Vietnam. Give realistic, concise recommendations.
@@ -145,6 +147,7 @@ class GeminiService:
             client = genai.Client(api_key=api_key)
 
         self._client = client
+        self._api_key = api_key or ""
         self.model = model
         self.max_attempts = max_attempts
         self.retry_base_seconds = retry_base_seconds
@@ -152,6 +155,10 @@ class GeminiService:
         self._semaphore = asyncio.Semaphore(max_concurrent_requests)
         self._request_times: deque[float] = deque()
         self._rate_lock = asyncio.Lock()
+        if client is None and not api_key:
+            logger.warning(
+                "GEMINI_API_KEY is not configured; AI requests will use local fallback responses."
+            )
 
     async def suggest_concept(
         self,
@@ -167,15 +174,21 @@ class GeminiService:
             "a high-level route flow, and a concise confirmation question. Do not "
             "write a timed day-by-day itinerary yet.",
         )
-        generated = await self._generate(
+        generated, source = await self._generate(
             prompt,
             ConceptResponse,
             fallback=lambda: self._fallback_concept(request, places),
         )
         try:
-            return self._ground_concept(generated, request, places)
-        except ValueError:
-            return self._fallback_concept(request, places)
+            result = self._ground_concept(generated, request, places)
+        except ValueError as error:
+            logger.error(
+                "Gemini concept could not be grounded (%s); using local fallback.",
+                self._safe_error_message(error),
+            )
+            result = self._fallback_concept(request, places)
+            source = "fallback"
+        return self._with_source(result, source)
 
     async def generate_itinerary(
         self,
@@ -196,18 +209,19 @@ class GeminiService:
             "the transit calculator will fill that separately.",
         )
         try:
-            generated = await self._generate(
+            generated, source = await self._generate(
                 prompt,
                 TripGenerationResponse,
                 fallback=lambda: self._fallback_itinerary(request, places),
             )
-            return self._ground_itinerary(generated, request, places)
+            result = self._ground_itinerary(generated, request, places)
+            return self._with_source(result, source)
         except Exception as error:
             logger.warning(
-                "Using local itinerary fallback after invalid AI output (%s).",
-                type(error).__name__,
+                "Using local itinerary fallback after invalid AI output (%s: %s).",
+                type(error).__name__, self._safe_error_message(error),
             )
-            return self._fallback_itinerary(request, places)
+            return self._with_source(self._fallback_itinerary(request, places), "fallback")
 
     async def suggest_swaps(
         self,
@@ -224,18 +238,19 @@ class GeminiService:
             "fits the requested change. Do not return the current place.",
         )
         try:
-            generated = await self._generate(
+            generated, source = await self._generate(
                 prompt,
                 SmartSwapResponse,
                 fallback=lambda: self._fallback_swaps(request, places),
             )
-            return self._ground_swaps(generated, request, places)
+            result = self._ground_swaps(generated, request, places)
+            return self._with_source(result, source)
         except Exception as error:
             logger.warning(
-                "Using local Smart Swap fallback after invalid AI output (%s).",
-                type(error).__name__,
+                "Using local Smart Swap fallback after invalid AI output (%s: %s).",
+                type(error).__name__, self._safe_error_message(error),
             )
-            return self._fallback_swaps(request, places)
+            return self._with_source(self._fallback_swaps(request, places), "fallback")
 
     async def _generate(
         self,
@@ -243,7 +258,8 @@ class GeminiService:
         response_model: type[ModelT],
         *,
         fallback: Any,
-    ) -> ModelT:
+    ) -> tuple[ModelT, ResponseSource]:
+        last_error: Exception | None = None
         for attempt in range(1, self.max_attempts + 1):
             if self._client is None:
                 break
@@ -263,8 +279,9 @@ class GeminiService:
                 response_text = getattr(response, "text", None)
                 if not response_text:
                     raise ValueError("Gemini returned an empty structured response.")
-                return _validate_json(response_model, response_text)
+                return _validate_json(response_model, response_text), "gemini"
             except Exception as error:
+                last_error = error
                 if attempt >= self.max_attempts or not self._is_retryable(error):
                     break
                 delay = self.retry_base_seconds * (2 ** (attempt - 1))
@@ -277,15 +294,49 @@ class GeminiService:
                 )
                 await asyncio.sleep(delay)
 
+        if last_error is not None:
+            logger.error(
+                "Gemini request failed (%s, status=%s): %s; using local fallback.",
+                type(last_error).__name__,
+                self._error_status_code(last_error) or "unknown",
+                self._safe_error_message(last_error),
+            )
+
         try:
             fallback_result = fallback()
             if inspect.isawaitable(fallback_result):
                 fallback_result = await fallback_result
-            return _validate_object(response_model, fallback_result)
+            return _validate_object(response_model, fallback_result), "fallback"
         except Exception as fallback_error:
             raise GeminiServiceError(
                 "Gemini request failed and no valid local fallback was available."
             ) from fallback_error
+
+    def _safe_error_message(self, error: Exception) -> str:
+        message = str(error)
+        if self._api_key:
+            message = message.replace(self._api_key, "[REDACTED]")
+        message = re.sub(r"(?i)([?&]key=)[^&\s]+", r"\1[REDACTED]", message)
+        message = re.sub(r"AIza[0-9A-Za-z_-]{20,}", "[REDACTED]", message)
+        message = re.sub(
+            r"(?i)(api[_-]?key|authorization)(\s*[:=]\s*)[^,\s'\"]+",
+            r"\1\2[REDACTED]",
+            message,
+        )
+        return " ".join(message.split())[:300]
+
+    @staticmethod
+    def _error_status_code(error: Exception) -> int | None:
+        status = getattr(error, "code", None) or getattr(error, "status_code", None)
+        response = getattr(error, "response", None)
+        status = status or getattr(response, "status_code", None)
+        return status if isinstance(status, int) else None
+
+    @staticmethod
+    def _with_source(result: ModelT, source: ResponseSource) -> ModelT:
+        if hasattr(result, "model_copy"):
+            return result.model_copy(update={"source": source})
+        return result.copy(update={"source": source})
 
     async def _wait_for_rate_slot(self) -> None:
         window_seconds = 60.0

@@ -1,1159 +1,1624 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
-  title: Travel AI HCMC API
+  title: 🧭 Sài Gòn Guide — AI Travel Planner API
+  description: Hợp đồng API được XUẤT TỰ ĐỘNG từ FastAPI (GET /openapi.json) ngày 22/11/2026 — nguồn sự thật là code trong
+    server/app. Cập nhật lại bằng lệnh trong README khi đổi endpoint.
   version: 2.0.0
-  description: |
-    Hợp đồng API giữa Frontend và Backend. Nguồn gốc: plan02 §3.4 (docs/03-kien-truc-api-db.md).
-    Quy tắc: muốn đổi endpoint/payload thì sửa file này TRONG CÙNG PR với code, và cần
-    duyệt của cả chủ Backend (An) lẫn chủ Frontend (Hạo).
-    CI kiểm tra chống API drift qua contract test (Supertest + jest-openapi do Đạt viết) và Spectral lint.
-
-    Danh tính: BẮT BUỘC ĐĂNG NHẬP. Mọi request nghiệp vụ cần header `Authorization: Bearer <JWT>`. Khách chỉ xem trang giới thiệu.
-    Ngoại lệ công khai: GET /api/health và GET /api/shared/{token} không cần header danh tính.
-    Định dạng lỗi chuẩn (toàn hệ thống): `{ error: { code, message } }`.
-    Quy ước khởi tạo AI: sau khi POST /api/trips, Frontend tự động gửi POST /api/trips/:id/chat với tin nhắn "Plan my trip" để kích hoạt tạo lịch trình.
-    Quy ước Swap place: nút "Swap this place" gửi tin nhắn theo cú pháp "Swap {place_name} on Day {n}".
-    Quy ước vai trò chat: API trả `assistant` (service backend tự động ánh xạ với `model` của Gemini).
-servers:
-  - url: http://localhost:5000
-    description: Local Backend (Docker Compose / Express)
-  - url: http://localhost:3001
-    description: Local Mock Server (Prism CLI)
-  - url: https://your-api.onrender.com
-    description: Production (Render)
-
-tags:
-  - name: Trips
-    description: P0/P1 - chuyến đi, lịch trình, My Trips
-  - name: Chat
-    description: P0 - hội thoại với AI
-  - name: Places
-    description: P0 - Google Places (proxy + cache)
-  - name: Share
-    description: P1 - chia sẻ link chỉ xem
-  - name: Auth
-    description: P2 - tài khoản
-  - name: Adaptive
-    description: P2/P3 - tier, welcome, Smart Start, settings, profile
-  - name: System
-    description: Hạ tầng (health check)
-
-security:
-  - sessionId: []
-
 paths:
-  /api/health:
-    get:
-      tags: [System]
-      summary: Kiểm tra sống (ĐỀ XUẤT thêm, chưa có trong plan02; dùng để ping chống Render ngủ đông)
-      security: []
-      responses:
-        '200':
-          description: Server và DB hoạt động
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [ok, uptime_s]
-                properties:
-                  ok: { type: boolean, example: true }
-                  uptime_s: { type: integer, example: 3600 }
-
-  /api/trips:
+  /api/v1/auth/register:
     post:
-      tags: [Trips]
-      summary: Tạo chuyến đi mới
+      tags:
+      - auth
+      summary: Register
+      operationId: register_api_v1_auth_register_post
       requestBody:
-        required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [start_location, budget, days]
-              properties:
-                start_location: { type: string, example: "Quận 1, TP.HCM" }
-                budget: { type: integer, minimum: 1, description: VND, example: 5000000 }
-                days: { type: integer, minimum: 1, maximum: 14, example: 3 }
-                preferences:
-                  type: array
-                  items: { type: string }
-                  example: ["ẩm thực", "văn hóa", "cà phê"]
-                source:
-                  type: string
-                  enum: [form, sentence, assistant]
-                  default: form
-                  description: Nguồn tạo chuyến đi (form = TripForm, sentence = Natural Sentence Mode, assistant = Smart Start). Clone do server tự gán.
+              $ref: '#/components/schemas/UserCreate'
+        required: true
       responses:
         '201':
-          description: Đã tạo
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Trip' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-    get:
-      tags: [Trips]
-      summary: My Trips - danh sách chuyến của người dùng hiện tại (P1)
-      parameters:
-        - name: limit
-          in: query
-          schema: { type: integer, default: 20 }
-      responses:
-        '200':
-          description: Danh sách
+          description: Successful Response
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  trips:
-                    type: array
-                    items: { $ref: '#/components/schemas/TripSummary' }
-
-  /api/trips/{id}:
-    parameters:
-      - $ref: '#/components/parameters/TripId'
-    get:
-      tags: [Trips]
-      summary: Chi tiết chuyến đi + lịch trình
-      responses:
-        '200':
-          description: Chi tiết
+                $ref: '#/components/schemas/AuthResponse'
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  trip: { $ref: '#/components/schemas/Trip' }
-                  itinerary_items:
-                    type: array
-                    items: { $ref: '#/components/schemas/ItineraryItem' }
-                  budget_summary: { $ref: '#/components/schemas/BudgetSummary' }
-        '404': { $ref: '#/components/responses/NotFound' }
-    put:
-      tags: [Trips]
-      summary: Cập nhật thông tin chuyến đi (đổi tên, ngân sách...)
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/login:
+    post:
+      tags:
+      - auth
+      summary: Login
+      operationId: login_api_v1_auth_login_post
       requestBody:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                title: { type: string }
-                budget: { type: integer }
-                days: { type: integer }
-                preferences:
-                  type: array
-                  items: { type: string }
+              $ref: '#/components/schemas/UserLogin'
+        required: true
       responses:
         '200':
-          description: Chuyến đi sau khi cập nhật
+          description: Successful Response
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Trip' }
-        '404': { $ref: '#/components/responses/NotFound' }
-    delete:
-      tags: [Trips]
-      summary: Xóa chuyến đi
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/me:
+    get:
+      tags:
+      - auth
+      summary: Get Me
+      operationId: get_me_api_v1_auth_me_get
       responses:
-        '200': { $ref: '#/components/responses/Success' }
-        '404': { $ref: '#/components/responses/NotFound' }
-
-  /api/trips/{id}/duplicate:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+      security:
+      - OAuth2PasswordBearer: []
+    delete:
+      tags:
+      - auth
+      summary: Delete Account
+      operationId: delete_account_api_v1_auth_me_delete
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteAccountRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - OAuth2PasswordBearer: []
+  /api/v1/trips/:
     post:
-      tags: [Trips]
-      summary: Nhân bản chuyến đi kèm lịch trình (P1)
-      parameters:
-        - $ref: '#/components/parameters/TripId'
+      tags:
+      - trips
+      summary: Create Trip
+      operationId: create_trip_api_v1_trips__post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TripCreate'
+        required: true
       responses:
         '201':
-          description: Bản sao
+          description: Successful Response
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  id: { type: string, format: uuid }
-        '404': { $ref: '#/components/responses/NotFound' }
-
-  /api/trips/{id}/chat:
-    parameters:
-      - $ref: '#/components/parameters/TripId'
-    post:
-      tags: [Chat]
-      summary: Gửi tin nhắn, nhận phản hồi AI
-      description: |
-        `status`: draft | asking | generating | completed.
-        - Khởi tạo AI: Sau khi tạo chuyến (POST /api/trips), Frontend tự động gửi message "Plan my trip" để AI bắt đầu lên lịch trình.
-        - Thay đổi địa điểm: Nút "Swap this place" gửi tin nhắn theo cú pháp "Swap {place_name} on Day {n}".
-        - Mock Server Prism: Mặc định Prism trả ví dụ đầu tiên (askingPreference). Để nhận lịch trình mẫu hoàn chỉnh, Frontend gửi kèm header `Prefer: example=itineraryReady`.
-        - `client_settings` chỉ dành cho khách; backend chỉ nhận giá trị trong whitelist (persona: saigon_guide, anh_hai, chi_ba, ban_tu, rainbow_guide).
-        - Có thể đổi sang SSE (stream) ở P4 - giữ endpoint này ổn định cho client hiện tại.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [message]
-              properties:
-                message:
-                  type: string
-                  maxLength: 500
-                  example: "Plan my trip"
-                client_settings:
-                  type: object
-                  properties:
-                    persona_id: { type: string, example: "saigon_guide" }
-                    tone: { type: string, example: "friendly" }
-                    ai_interaction: { type: string, enum: [guided, minimal], example: "guided" }
-      responses:
-        '200':
-          description: Phản hồi AI
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ChatResponse' }
-              examples:
-                askingPreference:
-                  summary: AI hỏi thêm thông tin (status asking)
-                  value:
-                    status: asking
-                    reply: "Hello! I see you have a budget of 5,000,000 VND for 3 days in Ho Chi Minh City. Would you prefer focusing on street food alleys in District 4 or exploring historic landmarks and museums in District 1 first?"
-                    quick_replies:
-                      - "Street Food & Nightlife 🍜"
-                      - "Historical Landmarks 🏛️"
-                      - "Balanced Mix ✨"
-                    budget_summary: null
-                    updated_itinerary: null
-                itineraryReady:
-                  summary: AI tạo lịch trình hoàn chỉnh (status completed)
-                  value:
-                    status: completed
-                    reply: "Here is your curated 3-day itinerary for Ho Chi Minh City tailored to your 5,000,000 VND budget, featuring Phở Hòa Pasteur, the Independence Palace, and Central Post Office!"
-                    quick_replies:
-                      - "Swap Day 1 lunch 🔄"
-                      - "Add evening coffee spot ☕"
-                      - "Looks great! Let's go 🎉"
-                    budget_summary:
-                      total_budget: 5000000
-                      activities_cost: 2100000
-                      transit_cost: 450000
-                      total_estimated: 2550000
-                      percentage: 51
-                      health: under_budget
-                    updated_itinerary:
-                      - day_number: 1
-                        order_index: 1
-                        time_slot: "08:00 - 09:30"
-                        place_name: "Phở Hòa Pasteur"
-                        description: "Historic traditional noodle soup restaurant in District 3 famous for rich, fragrant broth."
-                        category: food
-                        place_id_google: "ChIJRz_t_Z4pdTER8Y6vN3vFwGk"
-                        latitude: 10.7892
-                        longitude: 106.6896
-                        estimated_cost: 95000
-                        rating: 4.3
-                        address: "260C Pasteur, Ward 8, District 3, HCMC"
-                        opening_hours: ["06:00 - 22:30"]
-                        photo_url: "https://lh3.googleusercontent.com/p/AF1QipM..."
-                        transit_info: null
-                      - day_number: 1
-                        order_index: 2
-                        time_slot: "10:00 - 12:00"
-                        place_name: "Independence Palace"
-                        description: "Historic landmark and museum surrounded by royal palm trees in central District 1."
-                        category: sightseeing
-                        place_id_google: "ChIJG2_Z6JkpdTERK6R14T2QoX0"
-                        latitude: 10.7770
-                        longitude: 106.6953
-                        estimated_cost: 65000
-                        rating: 4.5
-                        address: "135 Nam Ky Khoi Nghia, Ben Thanh, District 1, HCMC"
-                        opening_hours: ["08:00 - 16:30"]
-                        photo_url: "https://lh3.googleusercontent.com/p/AF1QipN..."
-                        transit_info:
-                          mode: grab
-                          distance_km: 1.8
-                          duration_min: 8
-                          estimated_fare_vnd: 25000
-                          label: "🚕 8 min Grab (~₫25,000)"
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-    get:
-      tags: [Chat]
-      summary: Lịch sử chat của chuyến đi
-      parameters:
-        - name: limit
-          in: query
-          schema: { type: integer, default: 50 }
-      responses:
-        '200':
-          description: Tin nhắn
+                $ref: '#/components/schemas/TripOut'
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  messages:
-                    type: array
-                    items: { $ref: '#/components/schemas/ChatMessage' }
-
-  /api/trips/{id}/feedback:
-    post:
-      tags: [Trips]
-      summary: Đánh giá chuyến đi sau khi đi (P4)
-      parameters:
-        - $ref: '#/components/parameters/TripId'
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [rating]
-              properties:
-                rating: { type: integer, minimum: 1, maximum: 5 }
-                tags:
-                  type: array
-                  items: { type: string }
-                comment: { type: string, maxLength: 300 }
-      responses:
-        '200': { $ref: '#/components/responses/Success' }
-
-  /api/places/search:
-    get:
-      tags: [Places]
-      summary: Tìm địa điểm (proxy Google Places + cache)
-      parameters:
-        - name: query
-          in: query
-          required: true
-          schema: { type: string }
-        - name: type
-          in: query
-          schema: { type: string }
-      responses:
-        '200':
-          description: Địa điểm
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  places:
-                    type: array
-                    items: { $ref: '#/components/schemas/Place' }
-
-  /api/places/{placeId}:
-    get:
-      tags: [Places]
-      summary: Chi tiết địa điểm (cache hoặc API)
-      parameters:
-        - name: placeId
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          description: Địa điểm
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  place: { $ref: '#/components/schemas/Place' }
-        '404': { $ref: '#/components/responses/NotFound' }
-
-  /api/places/photo/{ref}:
-    get:
-      tags: [Places]
-      summary: Proxy ảnh địa điểm, ẩn API key
-      parameters:
-        - name: ref
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        '302':
-          description: Redirect sang lh3.googleusercontent.com
-
-  /api/trips/{id}/share:
-    parameters:
-      - $ref: '#/components/parameters/TripId'
-    post:
-      tags: [Share]
-      summary: Tạo link chia sẻ hoặc xoay token mới (P1)
-      responses:
-        '200':
-          description: Link
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  share_url: { type: string }
-                  token: { type: string }
-        '404': { $ref: '#/components/responses/NotFound' }
-    delete:
-      tags: [Share]
-      summary: Thu hồi link (link cũ trả 404)
-      responses:
-        '200': { $ref: '#/components/responses/Success' }
-
-  /api/shared/{token}:
-    get:
-      tags: [Share]
-      summary: Công khai, chỉ đọc - xem chuyến đi được chia sẻ
-      description: Không chứa session_id, user_id, chat hay email. Header `X-Robots-Tag noindex`.
-      security: []
-      parameters:
-        - $ref: '#/components/parameters/ShareToken'
-      responses:
-        '200':
-          description: Chuyến đi (đã lược bớt)
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  trip: { $ref: '#/components/schemas/SharedTrip' }
-                  itinerary_items:
-                    type: array
-                    items: { $ref: '#/components/schemas/ItineraryItem' }
-                  budget_summary: { $ref: '#/components/schemas/BudgetSummary' }
-        '404':
-          description: Token sai hoặc đã thu hồi (không phân biệt)
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-
-  /api/shared/{token}/clone:
-    post:
-      tags: [Share]
-      summary: Copy to my trips
-      parameters:
-        - $ref: '#/components/parameters/ShareToken'
-      responses:
-        '201':
-          description: Bản sao trong tài khoản/khách hiện tại
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id: { type: string, format: uuid }
-        '404':
-          description: Token sai hoặc đã thu hồi
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-
-  /api/auth/register:
-    post:
-      tags: [Auth]
-      summary: Đăng ký username + password (P2)
-      description: Chạy claim chuyến của khách (cùng transaction) theo header x-session-id.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [username, password]
-              properties:
-                username: { type: string, minLength: 3, maxLength: 30, pattern: '^[A-Za-z0-9_]+$' }
-                password: { type: string, minLength: 8, maxLength: 72 }
-                email: { type: string, format: email }
-      responses:
-        '201':
-          description: Đã tạo tài khoản
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/AuthResult' }
-        '400': { $ref: '#/components/responses/ValidationError' }
-        '409':
-          description: AUTH_USERNAME_TAKEN
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-
-  /api/auth/login:
-    post:
-      tags: [Auth]
-      summary: Đăng nhập
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [username, password]
-              properties:
-                username: { type: string }
-                password: { type: string }
-      responses:
-        '200':
-          description: Thành công
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/AuthResult' }
-        '401':
-          description: AUTH_INVALID_CREDENTIALS (thông báo chung)
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-        '429': { $ref: '#/components/responses/RateLimited' }
-
-  /api/auth/google:
-    post:
-      tags: [Auth]
-      summary: Đăng nhập / đăng ký bằng Google
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [id_token]
-              properties:
-                id_token: { type: string }
-      responses:
-        '200':
-          description: Thành công
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/AuthResult'
-                  - type: object
-                    properties:
-                      is_new: { type: boolean }
-        '401':
-          description: GOOGLE_TOKEN_INVALID
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-
-  /api/auth/me:
-    get:
-      tags: [Auth]
-      summary: Thông tin tài khoản hiện tại
+                $ref: '#/components/schemas/HTTPValidationError'
       security:
-        - sessionId: []
-          bearerAuth: []
+      - OAuth2PasswordBearer: []
+  /api/v1/trips/me:
+    get:
+      tags:
+      - trips
+      summary: List My Trips
+      operationId: list_my_trips_api_v1_trips_me_get
       responses:
         '200':
-          description: Tài khoản
+          description: Successful Response
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  user: { $ref: '#/components/schemas/User' }
-        '401':
-          description: Chưa đăng nhập hoặc token hết hạn (header X-Auth-Status expired)
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-
-  /api/auth/forgot-password:
-    post:
-      tags: [Auth]
-      summary: Gửi email đặt lại mật khẩu
-      description: Luôn trả 200 để không lộ email có tồn tại hay không.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [email]
-              properties:
-                email: { type: string, format: email }
-      responses:
-        '200': { $ref: '#/components/responses/Ok' }
-
-  /api/auth/reset-password:
-    post:
-      tags: [Auth]
-      summary: Đặt mật khẩu mới bằng token trong email
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [token, new_password]
-              properties:
-                token: { type: string }
-                new_password: { type: string, minLength: 8, maxLength: 72 }
-      responses:
-        '200': { $ref: '#/components/responses/Ok' }
-        '400':
-          description: RESET_TOKEN_INVALID
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-
-  /api/auth/password:
-    put:
-      tags: [Auth]
-      summary: Đổi mật khẩu khi đang đăng nhập
+                $ref: '#/components/schemas/TripListOut'
       security:
-        - sessionId: []
-          bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [current_password, new_password]
-              properties:
-                current_password: { type: string }
-                new_password: { type: string, minLength: 8, maxLength: 72 }
+      - OAuth2PasswordBearer: []
+  /api/v1/trips/demo:
+    get:
+      tags:
+      - trips
+      summary: Get Demo Trip
+      description: Public, read-only demo itinerary; no user or database row is required.
+      operationId: get_demo_trip_api_v1_trips_demo_get
       responses:
-        '200': { $ref: '#/components/responses/Ok' }
-        '401':
-          description: Sai mật khẩu hiện tại
+        '200':
+          description: Successful Response
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-
-  /api/auth/account:
-    delete:
-      tags: [Auth]
-      summary: Xóa tài khoản kèm chuyến đi và hồ sơ
+              schema:
+                $ref: '#/components/schemas/TripDetailOut'
+  /api/v1/trips/{trip_id}:
+    get:
+      tags:
+      - trips
+      summary: Get Trip
+      operationId: get_trip_api_v1_trips__trip_id__get
       security:
-        - sessionId: []
-          bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                password: { type: string }
-                id_token:
-                  type: string
-                  description: Dùng cho tài khoản Google thay cho password
-      responses:
-        '200': { $ref: '#/components/responses/Success' }
-
-  /api/me/tier:
-    get:
-      tags: [Adaptive]
-      summary: Type 1 hay Type 2 theo hành vi (P3)
-      responses:
-        '200':
-          description: Tier
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  tier: { type: integer, enum: [1, 2] }
-                  completed_trips: { type: integer }
-                  identity: { type: string, enum: [guest, member] }
-
-  /api/assistant/welcome:
-    get:
-      tags: [Adaptive]
-      summary: Lời chào theo mẫu, không gọi Gemini (P3)
-      responses:
-        '200':
-          description: Lời chào
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  tier: { type: integer, enum: [1, 2] }
-                  show: { type: boolean }
-                  message: { type: string }
-                  chips:
-                    type: array
-                    items: { type: string }
-                  suggested_trip:
-                    type: object
-                    nullable: true
-
-  /api/onboarding/parse:
-    post:
-      tags: [Adaptive]
-      summary: Smart Start - tách thông tin chuyến đi từ một câu tự do (P3)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [text]
-              properties:
-                text: { type: string, maxLength: 500 }
-      responses:
-        '200':
-          description: Kết quả phân tích
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status: { type: string, enum: [ready, asking, failed] }
-                  draft:
-                    type: object
-                    properties:
-                      start_location: { type: string, nullable: true }
-                      budget: { type: integer, nullable: true }
-                      days: { type: integer, nullable: true }
-                      preferences:
-                        type: array
-                        items: { type: string }
-                  missing:
-                    type: array
-                    items: { type: string }
-                  question: { type: string }
-                  quick_replies:
-                    type: array
-                    items: { type: string }
-
-  /api/me/settings:
-    get:
-      tags: [Adaptive]
-      summary: Cài đặt của thành viên
-      responses:
-        '200':
-          description: Cài đặt
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  settings: { $ref: '#/components/schemas/Settings' }
-    put:
-      tags: [Adaptive]
-      summary: Cập nhật cài đặt
-      requestBody:
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/Settings' }
-      responses:
-        '200':
-          description: Cài đặt sau khi cập nhật
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  settings: { $ref: '#/components/schemas/Settings' }
-
-  /api/me/profile:
-    get:
-      tags: [Adaptive]
-      summary: Xem Travel Profile (khách lẫn thành viên)
-      responses:
-        '200':
-          description: Profile
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  profile: { type: object, additionalProperties: true }
-                  enabled: { type: boolean }
-    put:
-      tags: [Adaptive]
-      summary: Sửa hoặc xóa từng mục
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                remove:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      field: { type: string }
-                      value: { type: string }
-                set:
-                  type: object
-                  properties:
-                    pace: { type: string }
-                    crowd_tolerance: { type: string }
-      responses:
-        '200':
-          description: Profile sau khi sửa
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  profile: { type: object, additionalProperties: true }
-    delete:
-      tags: [Adaptive]
-      summary: Xóa toàn bộ trí nhớ của AI
-      responses:
-        '200': { $ref: '#/components/responses/Success' }
-
-
-  /api/trips/{id}/calendar:
-    post:
-      tags: [Trips, Calendar]
-      summary: Đột phá - Đồng bộ toàn bộ lịch trình chi tiết lên Google Calendar (Yêu cầu 6)
-      security:
-        - bearerAuth: []
+      - OAuth2PasswordBearer: []
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      requestBody:
+      - name: trip_id
+        in: path
         required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [start_date]
-              properties:
-                start_date:
-                  type: string
-                  format: date
-                  example: "2026-11-15"
-      responses:
-        '200':
-          description: Đồng bộ Google Calendar thành công
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean, example: true }
-                  calendar_link: { type: string, example: "https://calendar.google.com/calendar/u/0/r" }
-                  synced_events_count: { type: integer, example: 6 }
-
-  /api/trips/{id}/contingency:
-    post:
-      tags: [Trips, Contingency]
-      summary: Phương án dự phòng khi trời mưa, kẹt xe, địa điểm đóng cửa (Yêu cầu 4)
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [reason]
-              properties:
-                reason:
-                  type: string
-                  enum: [rain, traffic, closed_venue, over_budget]
-                  example: "rain"
-                day_number:
-                  type: integer
-                  example: 1
-      responses:
-        '200':
-          description: Đã kích hoạt phương án dự phòng và cập nhật lịch trình
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message: { type: string, example: "Đã chuyển đổi các điểm ngoài trời sang bảo tàng và quán cà phê có mái che." }
-                  updated_itinerary: { type: array, items: { type: object } }
-
-  /api/trips/{id}/review:
-    post:
-      tags: [Trips, AI Review]
-      summary: Yêu cầu AI chấm điểm và đánh giá chuyên môn cho lịch trình (Yêu cầu 5)
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        '200':
-          description: Báo cáo đánh giá từ AI
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  score: { type: number, example: 9.2 }
-                  strengths: { type: array, items: { type: string } }
-                  warnings: { type: array, items: { type: string } }
-                  insider_tips: { type: array, items: { type: string } }
-
-  /api/me/previous-preferences:
-    get:
-      tags: [Adaptive]
-      summary: Lấy thông tin sở thích từ chuyến đi trước để tự động điền sẵn form cho người dùng cũ (Yêu cầu 7)
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Thông tin form điền sẵn
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  is_returning: { type: boolean, example: true }
-                  welcome_message: { type: string }
-                  prefilled_form: { type: object }
-
-components:
-  securitySchemes:
-    sessionId:
-      type: apiKey
-      in: header
-      name: x-session-id
-      description: UUIDv4 do trình duyệt tạo. Gửi trong MỌI request.
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: Chỉ có khi đã đăng nhập. Token hết hạn thì coi như khách, kèm header X-Auth-Status expired.
-
-  parameters:
-    TripId:
-      name: id
-      in: path
-      required: true
-      schema: { type: string, format: uuid }
-    ShareToken:
-      name: token
-      in: path
-      required: true
-      schema: { type: string, description: '22 ký tự base64url' }
-
-  responses:
-    Success:
-      description: Thành công
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              success: { type: boolean }
-    Ok:
-      description: Thành công
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              ok: { type: boolean }
-    ValidationError:
-      description: VALIDATION_ERROR (ngày 1-14, ngân sách > 0, text ≤ 500 ký tự)
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/Error' }
-    NotFound:
-      description: Không tồn tại hoặc không thuộc về người dùng này (404 thay vì 403)
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/Error' }
-    RateLimited:
-      description: Vượt giới hạn (AI_RATE_LIMITED, AUTH_RATE_LIMITED, GEMINI_BUDGET_EXHAUSTED)
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/Error' }
-
-  schemas:
-    Error:
-      type: object
-      required: [error]
-      properties:
-        error:
-          type: object
-          required: [code, message]
-          properties:
-            code: { type: string, example: VALIDATION_ERROR }
-            message: { type: string, example: "Dữ liệu đầu vào không hợp lệ hoặc thiếu x-session-id." }
-
-    Trip:
-      type: object
-      required: [id, title, start_location, budget, days, status, created_at]
-      properties:
-        id: { type: string, format: uuid, example: "550e8400-e29b-41d4-a716-446655440000" }
-        title: { type: string, example: "3 ngày khám phá ẩm thực & văn hóa TP.HCM" }
-        start_location: { type: string, example: "Quận 1, TP.HCM" }
-        budget: { type: integer, example: 5000000 }
-        days: { type: integer, example: 3 }
-        preferences:
-          type: array
-          items: { type: string }
-          example: ["ẩm thực", "văn hóa", "cà phê"]
-        status: { type: string, enum: [draft, asking, generating, completed], example: completed }
-        created_at: { type: string, format: date-time, example: "2026-10-19T08:00:00Z" }
-
-    TripSummary:
-      type: object
-      required: [id, title, start_location, days, budget, status, created_at, place_count, total_estimated, is_shared]
-      properties:
-        id: { type: string, format: uuid, example: "550e8400-e29b-41d4-a716-446655440000" }
-        title: { type: string, example: "3 ngày khám phá ẩm thực & văn hóa TP.HCM" }
-        start_location: { type: string, example: "Quận 1, TP.HCM" }
-        days: { type: integer, example: 3 }
-        budget: { type: integer, example: 5000000 }
-        status: { type: string, example: "completed" }
-        created_at: { type: string, format: date-time, example: "2026-10-19T08:00:00Z" }
-        place_count: { type: integer, example: 8 }
-        total_estimated: { type: integer, example: 2550000 }
-        is_shared: { type: boolean, example: false }
-
-    TransitInfo:
-      type: object
-      required: [mode, distance_km, duration_min, label]
-      properties:
-        mode: { type: string, example: walk }
-        distance_km: { type: number, example: 0.5 }
-        duration_min: { type: integer, example: 7 }
-        estimated_fare_vnd: { type: integer, example: 0 }
-        label: { type: string, example: '🚶 7 min walk (500m)' }
-
-    ItineraryItem:
-      type: object
-      required: [day_number, order_index, time_slot, place_name, category, latitude, longitude, estimated_cost]
-      properties:
-        day_number: { type: integer, example: 1 }
-        order_index: { type: integer, example: 1 }
-        time_slot: { type: string, example: '08:00 - 09:30' }
-        place_name: { type: string, example: "Phở Hòa Pasteur" }
-        description: { type: string, nullable: true, example: "Historic traditional noodle soup restaurant in District 3." }
-        category:
+        schema:
           type: string
-          enum: [food, sightseeing, cafe, shopping, nature, entertainment]
-          example: food
-        place_id_google: { type: string, nullable: true, example: "ChIJRz_t_Z4pdTER8Y6vN3vFwGk" }
-        latitude: { type: number, example: 10.7892 }
-        longitude: { type: number, example: 106.6896 }
-        estimated_cost: { type: integer, example: 95000 }
-        rating: { type: number, nullable: true, example: 4.3 }
-        address: { type: string, nullable: true, example: "260C Pasteur, Ward 8, District 3, HCMC" }
-        opening_hours:
-          type: array
-          items: { type: string }
-          example: ["06:00 - 22:30"]
-        photo_url: { type: string, nullable: true, example: "https://lh3.googleusercontent.com/p/AF1QipM..." }
-        transit_info:
-          allOf:
-            - $ref: '#/components/schemas/TransitInfo'
-          nullable: true
+          title: Trip Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripDetailOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - trips
+      summary: Update Trip
+      operationId: update_trip_api_v1_trips__trip_id__put
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: trip_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Trip Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TripUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - trips
+      summary: Delete Trip
+      operationId: delete_trip_api_v1_trips__trip_id__delete
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: trip_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Trip Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/trips/{trip_id}/items/{day_number}/{order_index}:
+    patch:
+      tags:
+      - trips
+      summary: Update Trip Item
+      description: Persist a stop's visited state and check-in note/photo.
+      operationId: update_trip_item_api_v1_trips__trip_id__items__day_number___order_index__patch
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: trip_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Trip Id
+      - name: day_number
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Day Number
+      - name: order_index
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Order Index
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TripItemUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/trips/{trip_id}/clone:
+    post:
+      tags:
+      - trips
+      summary: Clone Trip
+      operationId: clone_trip_api_v1_trips__trip_id__clone_post
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: trip_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Trip Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloneResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/trips/{trip_id}/share:
+    post:
+      tags:
+      - trips
+      summary: Create Share Link
+      operationId: create_share_link_api_v1_trips__trip_id__share_post
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: trip_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Trip Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - trips
+      summary: Revoke Share Link
+      operationId: revoke_share_link_api_v1_trips__trip_id__share_delete
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: trip_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Trip Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/trips/shared/{token}:
+    get:
+      tags:
+      - trips
+      summary: Get Shared Trip
+      operationId: get_shared_trip_api_v1_trips_shared__token__get
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Token
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripDetailOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/trips/shared/{token}/clone:
+    post:
+      tags:
+      - trips
+      summary: Clone Shared Trip
+      operationId: clone_shared_trip_api_v1_trips_shared__token__clone_post
+      security:
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Token
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloneResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/places/search:
+    get:
+      tags:
+      - Places
+      summary: Tìm kiếm địa điểm TP.HCM
+      description: 'Tìm kiếm địa điểm TP.HCM với các bộ lọc linh hoạt.
 
-    BudgetSummary:
-      type: object
-      required: [total_budget, activities_cost, transit_cost, total_estimated, percentage, health]
+
+        - **q**: từ khoá tự do (tên, địa chỉ, tag)
+
+        - **district**: lọc theo quận/huyện
+
+        - **category**: lọc theo loại địa điểm
+
+        - **is_indoor**: `true` = trong nhà (bảo tàng, mall…), `false` = ngoài trời'
+      operationId: search_places_endpoint_api_v1_places_search_get
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Từ khoá tìm kiếm (tên địa điểm / mô tả)
+          title: Q
+        description: Từ khoá tìm kiếm (tên địa điểm / mô tả)
+      - name: district
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: 'Lọc theo quận/huyện, vd: "Quận 1"'
+          title: District
+        description: 'Lọc theo quận/huyện, vd: "Quận 1"'
+      - name: category
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: 'Loại địa điểm: attraction | food | culture | shopping | park | entertainment'
+          title: Category
+        description: 'Loại địa điểm: attraction | food | culture | shopping | park | entertainment'
+      - name: is_indoor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          description: Lọc địa điểm trong nhà (True/False)
+          title: Is Indoor
+        description: Lọc địa điểm trong nhà (True/False)
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          description: Số kết quả tối đa mỗi trang
+          default: 20
+          title: Limit
+        description: Số kết quả tối đa mỗi trang
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          description: Vị trí bắt đầu phân trang
+          default: 0
+          title: Offset
+        description: Vị trí bắt đầu phân trang
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/places/nearby:
+    get:
+      tags:
+      - Places
+      summary: Tìm địa điểm lân cận trong bán kính
+      description: 'Tìm địa điểm lân cận dựa trên toạ độ GPS và bán kính.
+
+        Phục vụ tính năng **Đổi địa điểm (Swap Place)** — gợi ý 2-3 điểm tương đương.'
+      operationId: get_nearby_places_endpoint_api_v1_places_nearby_get
+      parameters:
+      - name: lat
+        in: query
+        required: true
+        schema:
+          type: number
+          description: Vĩ độ trung tâm
+          title: Lat
+        description: Vĩ độ trung tâm
+      - name: lng
+        in: query
+        required: true
+        schema:
+          type: number
+          description: Kinh độ trung tâm
+          title: Lng
+        description: Kinh độ trung tâm
+      - name: radius_km
+        in: query
+        required: false
+        schema:
+          type: number
+          maximum: 20.0
+          minimum: 0.1
+          description: Bán kính tìm kiếm (km)
+          default: 2.0
+          title: Radius Km
+        description: Bán kính tìm kiếm (km)
+      - name: category
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Lọc theo loại địa điểm
+          title: Category
+        description: Lọc theo loại địa điểm
+      - name: is_indoor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          description: Lọc trong nhà / ngoài trời
+          title: Is Indoor
+        description: Lọc trong nhà / ngoài trời
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 50
+          minimum: 1
+          default: 10
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/places/photo:
+    get:
+      tags:
+      - Places
+      summary: Proxy ảnh từ Google Places API (giữ API key phía server)
+      description: 'Backend proxy that fetches a Google Places photo and streams it to the
+
+        client.  The `GOOGLE_PLACES_API_KEY` is **never** exposed in the response
+
+        body, HTTP headers, or browser history.'
+      operationId: proxy_google_place_photo_api_v1_places_photo_get
+      parameters:
+      - name: name
+        in: query
+        required: true
+        schema:
+          type: string
+          description: Google Places photo resource name
+          title: Name
+        description: Google Places photo resource name
+      - name: max_width
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 4800
+          minimum: 100
+          description: Chiều rộng ảnh tối đa (px)
+          default: 800
+          title: Max Width
+        description: Chiều rộng ảnh tối đa (px)
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/places/{place_id}:
+    get:
+      tags:
+      - Places
+      summary: Chi tiết một địa điểm
+      description: 'Trả về thông tin chi tiết của một địa điểm theo UUID.
+
+
+        Nếu `enrich=true` (mặc định), hệ thống sẽ gọi **Google Places API (New)**
+
+        để lấy rating, ảnh và giờ mở cửa thực tế.  Nếu API không khả dụng, dữ liệu
+
+        cục bộ được dùng làm fallback mà không ảnh hưởng trải nghiệm người dùng.'
+      operationId: get_place_detail_api_v1_places__place_id__get
+      parameters:
+      - name: place_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Place Id
+      - name: enrich
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: Có làm phong phú dữ liệu từ Google Places API không?
+          default: true
+          title: Enrich
+        description: Có làm phong phú dữ liệu từ Google Places API không?
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/concept:
+    post:
+      tags:
+      - AI
+      summary: Đề xuất concept chuyến đi
+      operationId: suggest_trip_concept_api_v1_ai_concept_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TripConceptRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConceptResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/generate:
+    post:
+      tags:
+      - AI
+      summary: Tạo lịch trình chi tiết
+      operationId: generate_trip_itinerary_api_v1_ai_generate_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TripGenerationRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TripGenerationResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai/swap:
+    post:
+      tags:
+      - AI
+      summary: Gợi ý địa điểm thay thế
+      operationId: suggest_place_swaps_api_v1_ai_swap_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SmartSwapRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SmartSwapResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /:
+    get:
+      summary: Root
+      operationId: root__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /health:
+    get:
+      tags:
+      - Health
+      summary: Health Check
+      operationId: health_check_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+components:
+  schemas:
+    AuthResponse:
       properties:
-        total_budget: { type: integer, example: 5000000 }
-        activities_cost: { type: integer, example: 2100000 }
-        transit_cost: { type: integer, example: 450000 }
-        total_estimated: { type: integer, example: 2550000 }
-        percentage: { type: integer, example: 51 }
+        user:
+          $ref: '#/components/schemas/UserOut'
+        token:
+          type: string
+          title: Token
+        claimed_trips:
+          type: integer
+          title: Claimed Trips
+          default: 0
+      type: object
+      required:
+      - user
+      - token
+      title: AuthResponse
+    BudgetSummary:
+      properties:
+        total_budget:
+          type: integer
+          title: Total Budget
+          default: 0
+        total_estimated:
+          type: integer
+          title: Total Estimated
+          default: 0
+        activities_cost:
+          type: integer
+          title: Activities Cost
+          default: 0
+        transit_cost:
+          type: integer
+          title: Transit Cost
+          default: 0
+        member_count:
+          type: integer
+          title: Member Count
+          default: 1
+        per_person_estimated:
+          type: integer
+          title: Per Person Estimated
+          default: 0
+        percentage:
+          type: integer
+          title: Percentage
+          default: 0
         health:
           type: string
-          example: under_budget
-          description: Cờ over_budget hiện Budget Bar màu đỏ
-
-    ChatResponse:
+          title: Health
+          default: under_budget
       type: object
-      required: [status, reply]
+      title: BudgetSummary
+    CloneResponse:
       properties:
-        status: { type: string, enum: [draft, asking, generating, completed], example: completed }
-        reply: { type: string, example: "Here is your curated 3-day itinerary for Ho Chi Minh City tailored to your budget!" }
-        quick_replies:
+        id:
+          type: string
+          title: Id
+        trip:
+          $ref: '#/components/schemas/TripOut'
+      type: object
+      required:
+      - id
+      - trip
+      title: CloneResponse
+    ConceptResponse:
+      properties:
+        summary:
+          type: string
+          title: Summary
+        highlights:
+          items:
+            type: string
           type: array
-          items: { type: string }
-          example: ["Swap Day 1 lunch 🔄", "Add evening coffee spot ☕", "Looks great! Let's go 🎉"]
-        budget_summary:
-          allOf:
-            - $ref: '#/components/schemas/BudgetSummary'
-          nullable: true
-        updated_itinerary:
+          title: Highlights
+        recommended_districts:
+          items:
+            type: string
           type: array
-          nullable: true
-          items: { $ref: '#/components/schemas/ItineraryItem' }
-
-    ChatMessage:
+          title: Recommended Districts
+        route_overview:
+          type: string
+          title: Route Overview
+        confirmation_question:
+          type: string
+          title: Confirmation Question
       type: object
-      required: [role, content, created_at]
+      required:
+      - summary
+      - highlights
+      - recommended_districts
+      - route_overview
+      - confirmation_question
+      title: ConceptResponse
+      description: Concept AI trả về trước khi tạo lịch trình chi tiết.
+    DeleteAccountRequest:
       properties:
-        role: { type: string, enum: [user, assistant], example: user }
-        content: { type: string, example: "Plan my trip" }
-        created_at: { type: string, format: date-time, example: "2026-10-19T08:00:00Z" }
-
-    Place:
+        password:
+          type: string
+          title: Password
       type: object
-      required: [place_id_google, name, address, latitude, longitude]
+      required:
+      - password
+      title: DeleteAccountRequest
+    HTTPValidationError:
       properties:
-        place_id_google: { type: string, example: "ChIJRz_t_Z4pdTER8Y6vN3vFwGk" }
-        name: { type: string, example: "Phở Hòa Pasteur" }
-        address: { type: string, example: "260C Pasteur, Phường 8, Quận 3, TP.HCM" }
-        latitude: { type: number, example: 10.7892 }
-        longitude: { type: number, example: 106.6896 }
-        rating: { type: number, nullable: true, example: 4.3 }
-        user_ratings_total: { type: integer, example: 2450 }
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    ItineraryItemResponse:
+      properties:
+        place_id:
+          type: string
+          title: Place Id
+        place_name:
+          type: string
+          title: Place Name
+        category:
+          type: string
+          title: Category
+        description:
+          type: string
+          title: Description
+        address:
+          type: string
+          title: Address
+        district:
+          type: string
+          title: District
+        latitude:
+          type: number
+          title: Latitude
+        longitude:
+          type: number
+          title: Longitude
+        estimated_cost:
+          type: integer
+          title: Estimated Cost
+        photo_url:
+          type: string
+          title: Photo Url
+        editorial_score:
+          type: number
+          title: Editorial Score
+        is_indoor:
+          type: boolean
+          title: Is Indoor
         opening_hours:
+          items:
+            type: string
           type: array
-          items: { type: string }
-          example: ["06:00 - 22:30"]
-        photo_url: { type: string, nullable: true, example: "https://lh3.googleusercontent.com/p/AF1QipM..." }
-
-    User:
+          title: Opening Hours
+        suggested_duration:
+          type: integer
+          title: Suggested Duration
+        day_number:
+          type: integer
+          title: Day Number
+        order_index:
+          type: integer
+          title: Order Index
+        time_slot:
+          type: string
+          title: Time Slot
+        start_time:
+          type: string
+          title: Start Time
+        end_time:
+          type: string
+          title: End Time
+        is_lunch:
+          type: boolean
+          title: Is Lunch
+          default: false
+        transit_info:
+          anyOf:
+          - $ref: '#/components/schemas/TransitInfoResponse'
+          - type: 'null'
+        visited:
+          type: boolean
+          title: Visited
+          default: false
       type: object
-      required: [id, display_name]
+      required:
+      - place_id
+      - place_name
+      - category
+      - description
+      - address
+      - district
+      - latitude
+      - longitude
+      - estimated_cost
+      - photo_url
+      - editorial_score
+      - is_indoor
+      - opening_hours
+      - suggested_duration
+      - day_number
+      - order_index
+      - time_slot
+      - start_time
+      - end_time
+      title: ItineraryItemResponse
+      description: Một địa điểm đã được xếp vào ngày và khung giờ cụ thể.
+    ShareResponse:
       properties:
-        id: { type: string, format: uuid, example: "11111111-2222-3333-4444-555555555555" }
-        username: { type: string, nullable: true, example: "demo_traveler" }
-        email: { type: string, nullable: true, example: "traveler@example.com" }
-        display_name: { type: string, example: "Sài Gòn Explorer" }
-
-    AuthResult:
+        token:
+          type: string
+          title: Token
+        share_url:
+          type: string
+          title: Share Url
       type: object
-      required: [token, user]
+      required:
+      - token
+      - share_url
+      title: ShareResponse
+    SmartSwapOption:
       properties:
-        token: { type: string, example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." }
-        user: { $ref: '#/components/schemas/User' }
-        claimed_trips: { type: integer, example: 1 }
-
-    Settings:
+        place_id:
+          type: string
+          title: Place Id
+        place_name:
+          type: string
+          title: Place Name
+        category:
+          type: string
+          title: Category
+        description:
+          type: string
+          title: Description
+        address:
+          type: string
+          title: Address
+        district:
+          type: string
+          title: District
+        latitude:
+          type: number
+          title: Latitude
+        longitude:
+          type: number
+          title: Longitude
+        estimated_cost:
+          type: integer
+          title: Estimated Cost
+        photo_url:
+          type: string
+          title: Photo Url
+        editorial_score:
+          type: number
+          title: Editorial Score
+        is_indoor:
+          type: boolean
+          title: Is Indoor
+        opening_hours:
+          items:
+            type: string
+          type: array
+          title: Opening Hours
+        suggested_duration:
+          type: integer
+          title: Suggested Duration
+        replacement_reason:
+          type: string
+          title: Replacement Reason
       type: object
-      required: [persona_id, tone, ai_interaction, show_greeting, memory_enabled, theme]
+      required:
+      - place_id
+      - place_name
+      - category
+      - description
+      - address
+      - district
+      - latitude
+      - longitude
+      - estimated_cost
+      - photo_url
+      - editorial_score
+      - is_indoor
+      - opening_hours
+      - suggested_duration
+      - replacement_reason
+      title: SmartSwapOption
+      description: Một địa điểm thay thế kèm lý do phù hợp.
+    SmartSwapRequest:
       properties:
-        persona_id: { type: string, example: "saigon_guide" }
-        tone: { type: string, example: "friendly" }
-        ai_interaction: { type: string, enum: [guided, minimal], example: "guided" }
-        show_greeting: { type: boolean, example: true }
-        memory_enabled: { type: boolean, example: true }
-        theme: { type: string, example: "light" }
-
-    SharedTrip:
+        current_item:
+          $ref: '#/components/schemas/ItineraryItemResponse'
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
       type: object
-      additionalProperties: false
-      description: Bản lược bớt an toàn cho link chia sẻ công khai, tuyệt đối không chứa session_id hay user_id
-      required: [id, title, start_location, budget, days, status, created_at]
+      required:
+      - current_item
+      title: SmartSwapRequest
+      description: Thông tin điểm hiện tại và lý do người dùng muốn đổi điểm.
+    SmartSwapResponse:
       properties:
-        id: { type: string, format: uuid, example: "550e8400-e29b-41d4-a716-446655440000" }
-        title: { type: string, example: "3 days exploring culture & street food in HCMC" }
-        start_location: { type: string, example: "District 1, HCMC" }
-        budget: { type: integer, example: 5000000 }
-        days: { type: integer, example: 3 }
+        alternatives:
+          items:
+            $ref: '#/components/schemas/SmartSwapOption'
+          type: array
+          maxItems: 3
+          minItems: 2
+          title: Alternatives
+      type: object
+      required:
+      - alternatives
+      title: SmartSwapResponse
+      description: Hai hoặc ba lựa chọn thay thế để người dùng chọn.
+    TransitInfoResponse:
+      properties:
+        duration_min:
+          type: integer
+          title: Duration Min
+        distance_km:
+          type: number
+          title: Distance Km
+        mode:
+          type: string
+          enum:
+          - walk
+          - grab_bike
+          - grab_car
+          - public
+          title: Mode
+        estimated_fare_vnd:
+          type: integer
+          title: Estimated Fare Vnd
+        start_time:
+          type: string
+          title: Start Time
+        end_time:
+          type: string
+          title: End Time
+      type: object
+      required:
+      - duration_min
+      - distance_km
+      - mode
+      - estimated_fare_vnd
+      - start_time
+      - end_time
+      title: TransitInfoResponse
+      description: Thông tin chặng di chuyển do backend bổ sung cho mỗi điểm.
+    TripConceptRequest:
+      properties:
+        start_location:
+          type: string
+          minLength: 1
+          title: Start Location
+        budget:
+          type: integer
+          exclusiveMinimum: 0.0
+          title: Budget
+        days:
+          type: integer
+          maximum: 14.0
+          minimum: 1.0
+          title: Days
+        districts:
+          items:
+            type: string
+          type: array
+          minItems: 1
+          title: Districts
+        places_per_day:
+          type: integer
+          maximum: 6.0
+          minimum: 3.0
+          title: Places Per Day
+        companion:
+          type: string
+          enum:
+          - solo
+          - couple
+          - friends
+          - family
+          title: Companion
+        member_count:
+          type: integer
+          minimum: 1.0
+          title: Member Count
+        transport_mode:
+          type: string
+          enum:
+          - walk
+          - grab_bike
+          - grab_car
+          - public
+          title: Transport Mode
         preferences:
+          items:
+            type: string
           type: array
-          items: { type: string }
-          example: ["ẩm thực", "văn hóa", "cà phê"]
-        status: { type: string, enum: [draft, asking, generating, completed], example: completed }
-        created_at: { type: string, format: date-time, example: "2026-10-19T08:00:00Z" }
+          minItems: 1
+          title: Preferences
+        pace:
+          type: string
+          enum:
+          - relaxed
+          - moderate
+          - packed
+          title: Pace
+        special_notes:
+          type: string
+          maxLength: 500
+          title: Special Notes
+          default: ''
+      type: object
+      required:
+      - start_location
+      - budget
+      - days
+      - districts
+      - places_per_day
+      - companion
+      - member_count
+      - transport_mode
+      - preferences
+      - pace
+      title: TripConceptRequest
+      description: Thông tin form gửi lên để AI đề xuất concept chuyến đi.
+    TripCreate:
+      properties:
+        title:
+          type: string
+          title: Title
+          default: Khám phá Sài Gòn
+        days:
+          type: integer
+          maximum: 14.0
+          minimum: 1.0
+          title: Days
+          default: 1
+        budget:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Budget
+        places_per_day:
+          type: integer
+          maximum: 6.0
+          minimum: 3.0
+          title: Places Per Day
+          default: 4
+        companion:
+          type: string
+          title: Companion
+          default: group
+        member_count:
+          type: integer
+          minimum: 1.0
+          title: Member Count
+          default: 4
+        transport_mode:
+          type: string
+          title: Transport Mode
+          default: grab_bike
+        start_time:
+          type: string
+          title: Start Time
+          default: 08:00
+        end_time:
+          type: string
+          title: End Time
+          default: '21:30'
+        start_location:
+          type: string
+          title: Start Location
+          default: Quận 1, TP. Hồ Chí Minh
+        preferences:
+          items:
+            type: string
+          type: array
+          title: Preferences
+        special_notes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Special Notes
+        itinerary_items:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Itinerary Items
+      type: object
+      title: TripCreate
+    TripDetailOut:
+      properties:
+        trip:
+          $ref: '#/components/schemas/TripOut'
+        itinerary_items:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Itinerary Items
+        budget_summary:
+          $ref: '#/components/schemas/BudgetSummary'
+      type: object
+      required:
+      - trip
+      title: TripDetailOut
+    TripGenerationRequest:
+      properties:
+        start_location:
+          type: string
+          minLength: 1
+          title: Start Location
+        budget:
+          type: integer
+          exclusiveMinimum: 0.0
+          title: Budget
+        days:
+          type: integer
+          maximum: 14.0
+          minimum: 1.0
+          title: Days
+        districts:
+          items:
+            type: string
+          type: array
+          minItems: 1
+          title: Districts
+        places_per_day:
+          type: integer
+          maximum: 6.0
+          minimum: 3.0
+          title: Places Per Day
+        companion:
+          type: string
+          enum:
+          - solo
+          - couple
+          - friends
+          - family
+          title: Companion
+        member_count:
+          type: integer
+          minimum: 1.0
+          title: Member Count
+        transport_mode:
+          type: string
+          enum:
+          - walk
+          - grab_bike
+          - grab_car
+          - public
+          title: Transport Mode
+        preferences:
+          items:
+            type: string
+          type: array
+          minItems: 1
+          title: Preferences
+        pace:
+          type: string
+          enum:
+          - relaxed
+          - moderate
+          - packed
+          title: Pace
+        special_notes:
+          type: string
+          maxLength: 500
+          title: Special Notes
+          default: ''
+        approved_concept:
+          $ref: '#/components/schemas/ConceptResponse'
+      type: object
+      required:
+      - start_location
+      - budget
+      - days
+      - districts
+      - places_per_day
+      - companion
+      - member_count
+      - transport_mode
+      - preferences
+      - pace
+      - approved_concept
+      title: TripGenerationRequest
+      description: Yêu cầu tạo lịch trình sau khi người dùng duyệt concept.
+    TripGenerationResponse:
+      properties:
+        itinerary_items:
+          items:
+            $ref: '#/components/schemas/ItineraryItemResponse'
+          type: array
+          title: Itinerary Items
+      type: object
+      required:
+      - itinerary_items
+      title: TripGenerationResponse
+      description: Danh sách các điểm theo ngày, sẵn sàng cho giao diện lịch trình.
+    TripItemUpdate:
+      properties:
+        visited:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Visited
+        is_accepted:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Is Accepted
+        photo_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Photo Url
+        note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Note
+      type: object
+      title: TripItemUpdate
+    TripListOut:
+      properties:
+        trips:
+          items:
+            $ref: '#/components/schemas/TripOut'
+          type: array
+          title: Trips
+      type: object
+      required:
+      - trips
+      title: TripListOut
+    TripOut:
+      properties:
+        id:
+          type: string
+          title: Id
+        title:
+          type: string
+          title: Title
+        days:
+          type: integer
+          title: Days
+        budget:
+          type: integer
+          title: Budget
+        total_estimated:
+          type: integer
+          title: Total Estimated
+          default: 0
+        place_count:
+          type: integer
+          title: Place Count
+          default: 0
+        status:
+          type: string
+          title: Status
+          default: completed
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        is_shared:
+          type: boolean
+          title: Is Shared
+          default: false
+        cover_photo:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cover Photo
+        cover_place_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cover Place Name
+        places_per_day:
+          type: integer
+          title: Places Per Day
+          default: 4
+        companion:
+          type: string
+          title: Companion
+          default: group
+        member_count:
+          type: integer
+          title: Member Count
+          default: 4
+        transport_mode:
+          type: string
+          title: Transport Mode
+          default: grab_bike
+        start_time:
+          type: string
+          title: Start Time
+          default: 08:00
+        end_time:
+          type: string
+          title: End Time
+          default: '21:30'
+        start_location:
+          type: string
+          title: Start Location
+          default: Quận 1, TP. Hồ Chí Minh
+        preferences:
+          items:
+            type: string
+          type: array
+          title: Preferences
+        special_notes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Special Notes
+        source:
+          type: string
+          title: Source
+          default: saved
+      type: object
+      required:
+      - id
+      - title
+      - days
+      - budget
+      - created_at
+      title: TripOut
+    TripUpdate:
+      properties:
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+        itinerary_items:
+          anyOf:
+          - items:
+              additionalProperties: true
+              type: object
+            type: array
+          - type: 'null'
+          title: Itinerary Items
+      type: object
+      title: TripUpdate
+    UserCreate:
+      properties:
+        username:
+          type: string
+          maxLength: 30
+          minLength: 3
+          pattern: ^[A-Za-z0-9_]+$
+          title: Username
+        password:
+          type: string
+          maxLength: 72
+          minLength: 8
+          title: Password
+      type: object
+      required:
+      - username
+      - password
+      title: UserCreate
+    UserLogin:
+      properties:
+        username:
+          type: string
+          title: Username
+        password:
+          type: string
+          title: Password
+      type: object
+      required:
+      - username
+      - password
+      title: UserLogin
+    UserOut:
+      properties:
+        id:
+          type: string
+          title: Id
+        username:
+          type: string
+          title: Username
+        full_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Full Name
+        avatar_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Avatar Url
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - username
+      - created_at
+      title: UserOut
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+  securitySchemes:
+    OAuth2PasswordBearer:
+      type: oauth2
+      flows:
+        password:
+          scopes: {}
+          tokenUrl: /api/v1/auth/login
+servers:
+- url: http://localhost:8000
+  description: Local FastAPI (uvicorn)

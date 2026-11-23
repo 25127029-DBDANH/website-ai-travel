@@ -103,35 +103,8 @@ async def get_nearby_places_endpoint(
 
 
 # ---------------------------------------------------------------------------
-# GET /api/v1/places/{place_id}
-# ---------------------------------------------------------------------------
-@router.get("/{place_id}", summary="Chi tiết một địa điểm")
-async def get_place_detail(
-    place_id: str,
-    db: DBSession,
-    enrich: bool = Query(
-        True,
-        description="Có làm phong phú dữ liệu từ Google Places API không?",
-    ),
-):
-    """
-    Trả về thông tin chi tiết của một địa điểm theo UUID.
-
-    Nếu `enrich=true` (mặc định), hệ thống sẽ gọi **Google Places API (New)**
-    để lấy rating, ảnh và giờ mở cửa thực tế.  Nếu API không khả dụng, dữ liệu
-    cục bộ được dùng làm fallback mà không ảnh hưởng trải nghiệm người dùng.
-    """
-    place = await get_place_by_id(db, place_id, enrich_from_google=enrich)
-    if not place:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Không tìm thấy địa điểm với id={place_id}",
-        )
-    return place
-
-
-# ---------------------------------------------------------------------------
 # GET /api/v1/places/photo  — backend proxy for Google Places photos
+# [Route order] MUST come BEFORE /{place_id} so /photo is not captured as an ID!
 # [Security] The Google API key is injected server-side here; clients only
 # receive the proxied image bytes — the key is never visible in the browser.
 # ---------------------------------------------------------------------------
@@ -171,3 +144,31 @@ async def proxy_google_place_photo(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Lỗi kết nối Google Places: {exc}",
         )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/places/{place_id}  (must come AFTER static routes like /search, /nearby, /photo)
+# ---------------------------------------------------------------------------
+@router.get("/{place_id}", summary="Chi tiết một địa điểm")
+async def get_place_detail(
+    place_id: str,
+    db: DBSession,
+    enrich: bool = Query(
+        True,
+        description="Có làm phong phú dữ liệu từ Google Places API không?",
+    ),
+):
+    """
+    Trả về thông tin chi tiết của một địa điểm theo UUID.
+
+    Nếu `enrich=true` (mặc định), hệ thống sẽ gọi **Google Places API (New)**
+    để lấy rating, ảnh và giờ mở cửa thực tế.  Nếu API không khả dụng, dữ liệu
+    cục bộ được dùng làm fallback mà không ảnh hưởng trải nghiệm người dùng.
+    """
+    place = await get_place_by_id(db, place_id, enrich_from_google=enrich)
+    if not place:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Không tìm thấy địa điểm với id={place_id}",
+        )
+    return place

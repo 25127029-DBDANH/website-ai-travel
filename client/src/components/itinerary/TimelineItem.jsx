@@ -38,6 +38,7 @@ export default function TimelineItem({
   const [loadingAlternatives, setLoadingAlternatives] = useState(false);
   const [swapError, setSwapError] = useState('');
   const [swapReason, setSwapReason] = useState('');
+  const [swapSource, setSwapSource] = useState(null);
 
   const meta = getCategoryMeta(item.category);
   const isAccepted = Boolean(item.is_accepted);
@@ -53,8 +54,10 @@ export default function TimelineItem({
       });
       const alts = result.alternatives || [];
       setAlternatives(alts);
+      setSwapSource(result.source || 'gemini');
       setSelectedReplacement(alts[0] || null);
     } catch (requestError) {
+      setSwapSource(null);
       setSwapError(requestError.message || (lang === 'vi' ? 'Không tải được gợi ý đổi điểm.' : 'Could not load swap suggestions.'));
     } finally {
       setLoadingAlternatives(false);
@@ -67,6 +70,7 @@ export default function TimelineItem({
     setSelectedReplacement(null);
     setSwapError('');
     setSwapReason('');
+    setSwapSource(null);
     setShowSwapModal(true);
     await loadSwapSuggestions();
   };
@@ -364,6 +368,22 @@ export default function TimelineItem({
               <p className="text-xs font-bold text-slate-700">
                 {lang === 'vi' ? 'Chọn 1 địa điểm thay thế phù hợp:' : 'Select an alternative stop:'}
               </p>
+
+              {!loadingAlternatives && alternatives.length > 0 && (
+                <p
+                  role="status"
+                  className={cn(
+                    'rounded-lg px-2.5 py-2 text-[11px] font-semibold',
+                    swapSource === 'fallback'
+                      ? 'border border-amber-200 bg-amber-50 text-amber-900'
+                      : 'border border-emerald-200 bg-emerald-50 text-emerald-900'
+                  )}
+                >
+                  {swapSource === 'fallback'
+                    ? 'Gemini chưa phản hồi; đây là gợi ý dự phòng từ danh mục địa điểm.'
+                    : 'Gợi ý thay thế do Gemini tạo.'}
+                </p>
+              )}
 
               <div className="mt-2.5 max-h-72 space-y-2 overflow-y-auto pr-1">
                 {loadingAlternatives ? (
