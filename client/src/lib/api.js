@@ -1,7 +1,7 @@
 // Data layer & API Gateway with rich HCMC catalog, detailed time slots, contingency scenarios,
 // Google Calendar sync, and VITE_USE_BACKEND toggle between FastAPI Backend (Khang/Lam/Đạt) and Mock Data.
 // Authors: Diệp Bảo Danh (API Gateway Lead), Đỗ Nguyễn An Khang (Auth & Trip CRUD), Lê Hữu Lam (Gemini AI), Ngô Tấn Đạt (Places)
-import { getAuthToken, clearAuthToken } from './auth.js';
+import { getAuthToken, clearAuthToken, getSessionId } from './auth.js';
 
 const RAW_API_BASE = (import.meta.env?.VITE_API_BASE || 'http://localhost:8000').replace(/\/$/, '');
 const API_ORIGIN = RAW_API_BASE.replace(/\/api\/v1$/, '');
@@ -66,6 +66,9 @@ async function request(method, path, body) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getAuthToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (path.startsWith('/api/v1/trips') || path.startsWith('/api/v1/auth/')) {
+    headers['x-session-id'] = getSessionId();
+  }
 
   let res;
   try {
