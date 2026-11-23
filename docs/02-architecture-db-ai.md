@@ -1,1080 +1,326 @@
-# 🏗️ 02. Kiến Trúc Hệ Thống, Cơ Sở Dữ Liệu, Dịch Vụ Lõi & AI Prompt
+# 🏗️ 02. Kiến Trúc Hệ Thống, Cơ Sở Dữ Liệu, Dịch Vụ Lõi & AI
 
-> **Tài liệu hợp nhất:** Gộp từ `03-kien-truc-api-db.md`, `04-prompt-ai-flow.md`, `06-error-handling.md`, `07-security.md` và các tài liệu thiết kế dịch vụ `12-1` → `12-8`.
-> *(Đặc tả OpenAPI 3.0 chi tiết cho các endpoints nằm tại [`docs/openapi.yaml`](./openapi.yaml)).*
+> **Phạm vi tài liệu:** Đặc tả kiến trúc backend FastAPI, lược đồ CSDL SQLAlchemy ORM, luồng AI Gemini, dịch vụ địa điểm/chuyến đi, xử lý lỗi và bảo mật — đồng bộ trực tiếp với mã nguồn trong `server/`.
+> *(Đặc tả OpenAPI 3.1 chi tiết cho toàn bộ endpoint được xuất tự động tại [`docs/openapi.yaml`](./openapi.yaml)).*
 
 ## Mục lục
-- 1. Kiến trúc Hệ thống, API Contracts & DB
-- 2. Kỹ thuật Prompt & Luồng Xử lý AI (Gemini)
-- 3. Lược đồ CSDL (Database Schema)
-- 4. Thuật toán Tuyến đường & Cước xe (Transit Calculator)
-- 5. Dịch vụ Địa điểm & Cache (Place Service)
-- 6. Dịch vụ Quản lý Chuyến đi (Trip Service)
-- 7. Dữ liệu Mồi & Demo Seed
-- 8. Danh tính, Xác thực & Tầng Thích ứng (Identity, Auth & Adaptive)
-- 9. Xử lý lỗi (Error Handling) & Bảo mật (Security)
+1. [Tổng quan Kiến trúc Hệ thống](#1-tổng-quan-kiến-trúc-hệ-thống)
+2. [Mô hình Danh tính & Xác thực (Identity & Auth)](#2-mô-hình-danh-tính--xác-thực-identity--auth)
+3. [Hợp đồng API (REST Endpoints)](#3-hợp-đồng-api-rest-endpoints)
+4. [Lược đồ Cơ sở Dữ liệu (Database Schema)](#4-lược-đồ-cơ-sở-dữ-liệu-database-schema)
+5. [Luồng Xử lý AI (Gemini Service)](#5-luồng-xử-lý-ai-gemini-service)
+6. [Dịch vụ Địa điểm, Chuyến đi & Auto-Seed](#6-dịch-vụ-địa-điểm-chuyến-đi--auto-seed)
+7. [Tính toán Di chuyển, Dự phòng & Xuất lịch (Transit / Contingency / Calendar)](#7-tính-toán-di-chuyển-dự-phòng--xuất-lịch-transit--contingency--calendar)
+8. [Xử lý Lỗi (Error Handling)](#8-xử-lý-lỗi-error-handling)
+9. [Bảo mật (Security)](#9-bảo-mật-security)
 
 ---
 
-## 🏗️ 3. Kiến trúc Hệ thống, API Contracts & Cơ sở Dữ liệu v3
+## 1. Tổng quan Kiến trúc Hệ thống
 
-## 3.1. Mô hình Danh tính & Bảo mật Mới
-- Không còn hỗ trợ chế độ Khách thao tác trên các tiện ích tạo chuyến.
-- Mọi request tạo chuyến, xem bản đồ, đồng bộ lịch bắt buộc phải có header:
-  `Authorization: Bearer <JWT>`
-- Token JWT chứa `sub: user_id` và được FastAPI dependency `get_current_user` (`server/app/core/dependencies.py`) xác thực tính toàn vẹn.
-
-## 3.2. Bảng Danh sách API Bổ sung theo Kiến trúc v2 Hoàn thiện
-
-| Method | Endpoint | Chức năng mới | Input | Output |
-|---|---|---|---|---|
-| `POST` | `/api/trips` | Tạo chuyến đi với form 8 trường | `{ days, districts, budget, preferences, group_size, transport, pace, notes }` | `{ trip_id, status: 'draft', itinerary: [...] }` |
-| `POST` | `/api/trips/:id/swap` | Đổi địa điểm thông minh (Smart Swap) | `{ stop_id, reason?: string }` | `{ alternatives: [...], updated_itinerary }` |
-| `POST` | `/api/trips/:id/contingency` | Kích hoạt phương án dự phòng thời tiết/kẹt xe | `{ reason: 'rain' \| 'traffic' \| 'closed' \| 'budget' }` | `{ backup_plan, updated_itinerary, message }` |
-| `POST` | `/api/trips/:id/review` | Yêu cầu AI chấm điểm & đánh giá lịch trình | Không | `{ score, strengths, warnings, insider_tips }` |
-| `POST` | `/api/trips/:id/calendar` | Đẩy lịch trình lên Google Calendar | `{ start_date }` | `{ success: true, calendar_link, synced_events }` |
-| `GET`  | `/api/trips/:id/export-ics` | Xuất file chuẩn lịch quốc tế `.ICS` | Không | File stream `.ics` |
-| `GET`  | `/api/me/previous-preferences` | Lấy sở thích cũ để điền sẵn vào form | Không | `{ has_history: true, preferences: {...} }` |
-| `PATCH`| `/api/trips/:id/stops/:stopId` | Cập nhật check-in chặng thực tế (`visited`, ảnh, note) | `{ visited: boolean, photo_url?: string }` | `{ stop_id, visited: true, updated_at }` |
-| `POST` | `/api/transit/fare-estimate` | Tính cước 3 hãng xe (Grab / Xanh SM / Be) theo tọa độ | `{ origin_coords, dest_coords }` | `{ grab: {...}, xanh_sm: {...}, be: {...} }` |
-| `PATCH`| `/api/trips/:id/expenses/:id` | Cập nhật số tiền thực chi (Inline fare editing) | `{ actual_amount: number }` | `{ expense_id, actual_amount, variance }` |
-| `GET`  | `/api/trips/:id/summary` | Lấy dữ liệu tổng kết chuyến đi (4 KPI, 3 nhóm tiền, ảnh) | Không | `{ kpis: {...}, breakdown: {...}, gallery: [...] }` |
-
-## 3.3. Cập nhật Lược đồ Cơ sở Dữ liệu (Schema Updates)
-- Bảng `trips`:
-  - `user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE` (Bắt buộc có tài khoản).
-  - Thêm các cột: `districts JSONB`, `group_size VARCHAR(20)`, `transport VARCHAR(30)`, `pace VARCHAR(20)`, `special_notes TEXT`, `ai_review JSONB`, `google_calendar_synced BOOLEAN DEFAULT FALSE`.
-- Bảng `users`:
-  - Bỏ trường cấu hình `trợ lý du lịch TP.HCM chuẩn mực` và `tone`.
-  - Thêm trường lưu OAuth Refresh Token cho Google Calendar nếu cần: `google_calendar_token TEXT`.
+- **Backend (`server/`):** Python **FastAPI** (`server/main.py`, `server/app/`), chạy bằng `uvicorn` ở cổng `8000`, toàn bộ REST API nghiệp vụ gắn tiền tố `/api/v1` (qua `server/app/api/v1/api.py`), tài liệu tương tác tại `/docs` và `/redoc`.
+- **Cơ sở dữ liệu (`server/app/db/`):** **SQLAlchemy 2.0 Async ORM**, mặc định dùng SQLite cục bộ (`sqlite+aiosqlite:///./travel.db`) và hỗ trợ PostgreSQL (`postgresql+asyncpg://...`) thông qua biến môi trường `DATABASE_URL`.
+- **AI Engine (`server/app/services/gemini_service.py`):** Tích hợp **Google Gemini** qua SDK `google-genai`, model cấu hình qua biến `GEMINI_MODEL` (mặc định `gemini-3.5-flash`), sinh dữ liệu bằng **Structured Output JSON** bám sát catalog địa điểm TP.HCM cục bộ.
+- **Frontend (`client/`):** React 18 + Vite + Tailwind CSS + Leaflet (dùng tile OpenStreetMap France), gọi API backend qua HTTP JSON.
+- **Vòng đời khởi động (`lifespan` trong `server/main.py`):**
+  1. Khởi tạo một instance `GeminiService` dùng chung trên `app.state.gemini_service`.
+  2. Gọi `create_tables()` (`Base.metadata.create_all`) để đảm bảo đủ 4 bảng ORM.
+  3. Kiểm tra số bản ghi bảng `places`; nếu đang rỗng thì tự động gọi `seed_places()` từ `server/app/db/hcmc_data.py` để nạp 327 địa điểm TP.HCM.
+  4. Khi tắt server, giải phóng `gemini_service` và đóng `engine.dispose()`.
+- **Hạ tầng triển khai & kiểm thử:** Hiện có pytest tại `server/app/tests/test_places.py`; đóng gói Docker/CI đang mở — **🚧 Đang triển khai (#9, Đăng)**.
 
 ---
 
-## 🤖 4. Kỹ thuật Prompt & Luồng Xử lý AI v3
+## 2. Mô hình Danh tính & Xác thực (Identity & Auth)
 
-## 4.1. Cấu trúc System Instruction Mới (Loại bỏ Persona, Tập trung Chuyên gia Bản địa)
+### 2.1. Hiện trạng Xác thực JWT (`server/app/core/dependencies.py`, `security.py`)
 
-```text
-You are "HCMC Travel Expert", an expert, professional, and proactive AI travel planner specializing exclusively in Ho Chi Minh City (Saigon), Vietnam.
+Phụ trách: **Đỗ Nguyễn An Khang** (Backend Lead & Auth Service).
 
-CORE BEHAVIOR & RULES:
-1. Role: Act as a trusted local travel specialist. Tone must be professional, warm, insightful, concise, and focused on delivering realistic itineraries. (NO gimmicky personas or cartoon characters).
-2. Four-Step Planning Flow:
-   - When receiving the initial 8-criteria trip form, DO NOT immediately generate a full itinerary. First, provide a concrete concept suggestion summarizing the trip's highlights, key districts, and flow. Ask the user if they agree.
-   - Only when the user confirms/agrees, generate the full day-by-day itinerary with exact timing, verified places, and coordinates.
-3. Swap Place Handling:
-   - When the user asks to swap a place, provide 2-3 verified alternative options in the same district/category, explain the tradeoffs briefly, and update the schedule when chosen.
-4. Contingency & Weather Awareness:
-   - If informed of rain or bad weather in HCMC, proactively replace outdoor sights (walking streets, open parks) with indoor cultural/culinary alternatives (museums, indoor markets, specialty cafes) within the same district.
-   - For evening rush hour (17:00 - 19:00), cluster activities within one district to avoid major traffic congestion points.
-5. Anti-Hallucination & Grounding:
-   - Never invent venues. Only suggest verified places retrieved via Google Places tools with rating >= 4.0.
-```
+- **Cơ chế token:** Sử dụng `OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)`. Client gửi header:
+  ```http
+  Authorization: Bearer <JWT>
+  ```
+- **Ký và giải mã JWT (`server/app/core/security.py`):**
+  - Thư viện `python-jose` với thuật toán `JWT_ALGORITHM = "HS256"`, khoá bí mật `JWT_SECRET`, thời hạn `JWT_EXPIRE_MINUTES = 10080` (7 ngày).
+  - Payload gồm `{"sub": user.id, "exp": <utc_timestamp>}`.
+  - Mật khẩu được băm bằng `bcrypt` (rounds = 12, cắt tối đa 72 byte theo chuẩn bcrypt) và kiểm tra bằng `bcrypt.checkpw`.
+- **Hai FastAPI dependency trong `server/app/core/dependencies.py`:**
+  - `get_current_user`: Bắt buộc phải có Bearer token hợp lệ và bản ghi `User` còn tồn tại trong DB. Thiếu token → `401` (`detail="AUTH_REQUIRED"`); token sai/hết hạn hoặc user không tồn tại → `401` (`detail="AUTH_TOKEN_EXPIRED"`).
+  - `get_optional_user`: Trả về `User | None`; nếu thiếu hoặc token không hợp lệ thì trả `None` (không ném lỗi).
+- **Phạm vi Auth hiện có ở backend:** Đăng ký (`username`/`password`), đăng nhập, xem hồ sơ (`/auth/me`) và xoá tài khoản (`DELETE /auth/me` yêu cầu xác nhận mật khẩu, đồng thời xoá tường minh mọi `Trip` thuộc `user.id`). Google Sign-In, quên mật khẩu và đổi mật khẩu **chưa triển khai** ở backend.
 
-## 4.2. Luồng Tool Calling Mở rộng
-- `suggestConcept(summary, highlights, recommended_districts)`: Gửi tóm tắt định hướng cho Bước 2.
-- `searchPlaces(queries[])`: Truy vấn hàng loạt địa điểm thật tại TP.HCM.
-- `saveItinerary(days_data)`: Lưu trữ lịch trình có cấu trúc sau khi người dùng đồng ý.
-- `suggestSwapAlternatives(place_to_swap, alternatives[])`: Đưa ra 2-3 địa điểm thay thế cụ thể.
-- `generateContingencyPlan(reason, affected_day, replacement_items[])`: Kích hoạt phương án thay thế trời mưa/kẹt xe.
-- `reviewItinerary(trip_id)`: Phân tích, chấm điểm thang 10, chỉ ra ưu điểm, rủi ro và mẹo bản địa.
+### 2.2. Chế độ Khách (`x-session-id`) & Claim Chuyến đi — 🚧 Đang triển khai (#31)
+
+- **Quyết định thiết kế (22/11/2026):** Cho phép **khách chưa đăng nhập** tạo và chỉnh sửa chuyến đi bằng header định danh phiên `x-session-id`. Khi khách đăng ký hoặc đăng nhập, backend sẽ tự động **claim** (chuyển quyền sở hữu) toàn bộ chuyến đi gắn với `x-session-id` đó sang tài khoản thành viên mới và trả số chuyến đã gộp trong trường `claimed_trips` của `AuthResponse`.
+- **Trạng thái trên nhánh `main` (🚧 #31, Khang):**
+  - `AuthResponse` đã có trường `claimed_trips: int = 0` nhưng `register`/`login` hiện chưa nhận `x-session-id` nên luôn trả `0`.
+  - Bảng `trips` hiện có `user_id` bắt buộc (`nullable=False`), và các endpoint `POST /api/v1/trips/`, `/trips/me`, `/trips/{trip_id}*` vẫn đang yêu cầu `Depends(get_current_user)`.
+  - Hiện tại khách chưa đăng nhập mới chỉ truy cập được các endpoint công khai (`/trips/demo`, `/trips/shared/{token}`, `/places/*`, `/ai/*`).
 
 ---
 
-## 12. Phụ lục Code Implementation Cốt Lõi (Production-Ready Boilerplate)
+## 3. Hợp đồng API (REST Endpoints)
 
-### 12.1. File `server/src/db/schema.sql` (PostgreSQL 16, bản v2)
+### 3.1. Danh sách 21 Path API hiện hành (theo `docs/openapi.yaml`)
 
-```sql
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+Mọi endpoint nghiệp vụ đều nằm dưới prefix `/api/v1`; riêng `/` và `/health` nằm ở root của ứng dụng FastAPI.
 
--- 0. [v2] Bảng người dùng. Tạo TRƯỚC trips vì trips tham chiếu tới users.
-CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    username VARCHAR(30),                         -- NULL nếu chỉ đăng nhập bằng Google
-    password_hash TEXT,                           -- bcrypt hash, NULL nếu chỉ đăng nhập bằng Google
-    email VARCHAR(254),                           -- tùy chọn; cần cho quên mật khẩu
-    google_sub VARCHAR(64) UNIQUE,                -- ID cố định của tài khoản Google
-    display_name VARCHAR(60),
-    settings JSONB NOT NULL DEFAULT '{}'::jsonb,  -- trợ lý du lịch TP.HCM chuẩn mực, tone, ai_interaction, theme...
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_login_at TIMESTAMPTZ,
-    -- Phải có ít nhất một cách đăng nhập: Google, hoặc cả username lẫn mật khẩu
-    CONSTRAINT users_login_method CHECK (
-        google_sub IS NOT NULL OR (username IS NOT NULL AND password_hash IS NOT NULL)
-    ),
-    CONSTRAINT users_username_format CHECK (username IS NULL OR username ~ '^[A-Za-z0-9_]{3,30}$')
-);
+| Method | Path | Auth | Mô tả |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/auth/register` | Công khai | Đăng ký tài khoản mới (`username`, `password`), trả về `user`, `token` JWT và `claimed_trips` |
+| `POST` | `/api/v1/auth/login` | Công khai | Đăng nhập bằng `username`/`password`, trả về `user`, `token` JWT và `claimed_trips` |
+| `GET` | `/api/v1/auth/me` | Bearer JWT | Lấy thông tin người dùng hiện tại (`UserOut`) |
+| `DELETE` | `/api/v1/auth/me` | Bearer JWT | Xác nhận mật khẩu và xoá vĩnh viễn tài khoản cùng toàn bộ chuyến đi của user |
+| `POST` | `/api/v1/trips/` | Bearer JWT *(🚧 #31 hỗ trợ `x-session-id`)* | Tạo và lưu chuyến đi mới kèm `itinerary_items`, tự tính `total_estimated` |
+| `GET` | `/api/v1/trips/me` | Bearer JWT | Liệt kê toàn bộ chuyến đi của người dùng hiện tại, sắp xếp mới nhất trước |
+| `GET` | `/api/v1/trips/demo` | Công khai | Trả lịch trình mẫu 3 ngày tại TP.HCM (chỉ đọc, không cần đăng nhập hay bản ghi DB) |
+| `GET` | `/api/v1/trips/{trip_id}` | Bearer JWT | Chi tiết chuyến đi thuộc chủ sở hữu gồm `trip`, `itinerary_items` và `budget_summary` |
+| `PUT` | `/api/v1/trips/{trip_id}` | Bearer JWT | Cập nhật `title`, `status`, hoặc mảng `itinerary_items` (tự tính lại `place_count` và ngân sách) |
+| `DELETE` | `/api/v1/trips/{trip_id}` | Bearer JWT | Xoá chuyến đi thuộc người dùng hiện tại |
+| `PATCH` | `/api/v1/trips/{trip_id}/items/{day_number}/{order_index}` | Bearer JWT | Cập nhật trạng thái một điểm dừng (`visited`, `is_accepted`, `photo_url`, `note`, ghi `checkin_time`) |
+| `POST` | `/api/v1/trips/{trip_id}/clone` | Bearer JWT | Nhân bản chuyến đi của chính mình với tiêu đề tự đánh số `(1)`, `(2)`… |
+| `POST` | `/api/v1/trips/{trip_id}/share` | Bearer JWT | Sinh `share_token` (128-bit URL-safe) nếu chưa có và trả `share_url` chỉ đọc |
+| `DELETE` | `/api/v1/trips/{trip_id}/share` | Bearer JWT | Thu hồi liên kết chia sẻ (`share_token = None`) |
+| `GET` | `/api/v1/trips/shared/{token}` | Công khai | Xem chuyến đi chia sẻ chỉ đọc; tự động lọc bỏ ngân sách, ghi chú riêng và thông tin check-in |
+| `POST` | `/api/v1/trips/shared/{token}/clone` | Bearer JWT | Nhân bản chuyến đi từ link chia sẻ công khai về tài khoản hiện tại |
+| `GET` | `/api/v1/places/search` | Công khai | Tìm kiếm và lọc địa điểm TP.HCM theo `q`, `district`, `category`, `is_indoor`, `limit`, `offset` |
+| `GET` | `/api/v1/places/nearby` | Công khai | Tìm địa điểm lân cận theo `lat`, `lng`, `radius_km` (0.1–20 km), `category`, `is_indoor`, `limit` |
+| `GET` | `/api/v1/places/photo` | Công khai | Proxy tải ảnh từ Google Places API (`name`, `max_width`), giữ `GOOGLE_PLACES_API_KEY` ở server |
+| `GET` | `/api/v1/places/{place_id}` | Công khai | Chi tiết địa điểm theo UUID; khi `enrich=true` sẽ bổ sung rating/ảnh từ Google Places (cache 7 ngày) |
+| `POST` | `/api/v1/ai/concept` | Công khai | Gọi Gemini đề xuất concept chuyến đi (tóm tắt, điểm nhấn, quận gợi ý, tổng quan tuyến) |
+| `POST` | `/api/v1/ai/generate` | Công khai | Gọi Gemini sinh lịch trình chi tiết theo ngày dựa trên concept đã duyệt |
+| `POST` | `/api/v1/ai/swap` | Công khai | Gọi Gemini đề xuất 2–3 địa điểm thay thế tương đương (Smart Swap) cho một điểm dừng |
+| `GET` | `/` | Công khai | Endpoint gốc xác nhận API đang hoạt động (`status`, `app`, `version`) |
+| `GET` | `/health` | Công khai | Kiểm tra sức khoẻ dịch vụ FastAPI và cấu hình kết nối CSDL |
 
--- Unique KHÔNG phân biệt hoa thường: "Linh" và "linh" không thể cùng tồn tại
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (LOWER(username)) WHERE username IS NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON users (LOWER(email)) WHERE email IS NOT NULL;
+### 3.2. Nhóm Endpoint Chưa Có trên `main` — 🚧 Đang triển khai (#8/#18)
 
--- 0b. [v2] Token đặt lại mật khẩu: chỉ lưu HASH, dùng một lần, hết hạn nhanh
-CREATE TABLE IF NOT EXISTS password_reset_tokens (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token_hash CHAR(64) NOT NULL UNIQUE,          -- SHA-256 dạng hex
-    expires_at TIMESTAMPTZ NOT NULL,
-    used_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- 1. Bảng lưu thông tin chuyến đi (khách: phân tách theo session_id; thành viên: theo user_id)
-CREATE TABLE IF NOT EXISTS trips (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    session_id UUID NOT NULL,
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,   -- [v2] NULL = chuyến của khách
-    title VARCHAR(120),                                    -- [v2] tên hiển thị trong My Trips
-    start_location TEXT NOT NULL,
-    budget INTEGER NOT NULL CHECK (budget > 0),
-    days SMALLINT NOT NULL CHECK (days BETWEEN 1 AND 14),
-    preferences JSONB NOT NULL DEFAULT '[]'::jsonb,
-    status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'asking', 'generating', 'completed')),
-    source VARCHAR(20) NOT NULL DEFAULT 'form' CHECK (source IN ('form', 'sentence', 'assistant', 'clone')),
-    share_token VARCHAR(32) UNIQUE,                        -- [v2] NULL = chưa chia sẻ
-    shared_at TIMESTAMPTZ,
-    feedback JSONB,                                        -- [v2] đánh giá sau chuyến (P4)
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_trips_session_id ON trips(session_id);
-CREATE INDEX IF NOT EXISTS idx_trips_user_id ON trips(user_id, created_at DESC);
-
--- 2. Bảng Cache dữ liệu từ Google Places API (TTL 7 ngày)
-CREATE TABLE IF NOT EXISTS places_cache (
-    place_id_google VARCHAR(255) PRIMARY KEY,
-    name TEXT NOT NULL,
-    rating NUMERIC(2,1),
-    address TEXT,
-    types JSONB DEFAULT '[]'::jsonb,
-    opening_hours JSONB DEFAULT '[]'::jsonb,
-    latitude DOUBLE PRECISION NOT NULL,
-    longitude DOUBLE PRECISION NOT NULL,
-    photo_url TEXT,
-    cached_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '7 days')
-);
-
-CREATE INDEX IF NOT EXISTS idx_places_cache_name ON places_cache USING GIN (to_tsvector('simple', name));
-
--- 3. Bảng từng mục hoạt động trong lịch trình
-CREATE TABLE IF NOT EXISTS itinerary_items (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
-    day_number SMALLINT NOT NULL CHECK (day_number >= 1),
-    order_index SMALLINT NOT NULL CHECK (order_index >= 1),
-    time_slot VARCHAR(50) NOT NULL,
-    place_name TEXT NOT NULL,
-    description TEXT,
-    category VARCHAR(30) NOT NULL CHECK (category IN ('food', 'sightseeing', 'cafe', 'shopping', 'nature', 'entertainment')),
-    place_id_google VARCHAR(255),
-    latitude DOUBLE PRECISION NOT NULL,
-    longitude DOUBLE PRECISION NOT NULL,
-    estimated_cost INTEGER NOT NULL DEFAULT 0 CHECK (estimated_cost >= 0),
-    transit_info JSONB DEFAULT NULL,
-    UNIQUE (trip_id, day_number, order_index)
-);
-
-CREATE INDEX IF NOT EXISTS idx_itinerary_trip_day ON itinerary_items(trip_id, day_number, order_index);
-CREATE INDEX IF NOT EXISTS idx_itinerary_place_id ON itinerary_items(place_id_google);
-
--- 4. Bảng lưu lịch sử chuyến đi nhiều lượt với Gemini
-CREATE TABLE IF NOT EXISTS conversations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
-    role VARCHAR(15) NOT NULL CHECK (role IN ('user', 'model')),
-    content TEXT NOT NULL,
-    metadata JSONB DEFAULT '{}'::jsonb,                    -- [v2] có thể ghi sự kiện swap
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_conversations_trip_id ON conversations(trip_id, created_at);
-
--- 5. [v2] Trí nhớ của AI (Travel Profile). Khóa: 'u:<user_id>' hoặc 's:<session_id>'.
---    Không có FK vì khóa có thể là session của khách -> xóa tài khoản phải xóa bằng code.
-CREATE TABLE IF NOT EXISTS travel_profiles (
-    owner_key VARCHAR(50) PRIMARY KEY,
-    profile JSONB NOT NULL DEFAULT '{}'::jsonb,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-### 12.1.b. Lưu ý cấu hình kiểu dữ liệu trong SQLAlchemy & Pydantic (trong `server/app/db/session.py`)
-
-Cột `rating NUMERIC(2,1)` trong PostgreSQL được ánh xạ sang kiểu `Float` trong SQLAlchemy ORM và Pydantic schemas. Trong Pydantic Schema (`server/app/schemas/trip.py`), định nghĩa field: `rating: Optional[float] = None` để tự động parse kiểu số thực (`float`) chuẩn xác cho Client React:
-
-```python
-from pydantic import BaseModel
-from typing import Optional
-
-class PlaceRatingSchema(BaseModel):
-    place_id: str
-    rating: Optional[float] = None  # Tự động parse từ Numeric DB sang float
-```
+Phụ trách: **Hạo** (PR #18 đang mở; `server/app/api/v1/api.py` đã dự phòng hook nạp `calendar.router` khi module sẵn sàng):
+- **Transit / ước tính cước xe** (`/api/v1/transit/...`) — 🚧 Đang triển khai (#8/#18).
+- **Contingency / phương án dự phòng thời tiết & kẹt xe** (`/api/v1/trips/{trip_id}/contingency`) — 🚧 Đang triển khai (#8/#18).
+- **Calendar / xuất file `.ics` hoặc đồng bộ lịch** (`/api/v1/calendar/...` hoặc `/trips/{trip_id}/export-ics`) — 🚧 Đang triển khai (#8/#18).
 
 ---
 
-### 12.2. File `server/app/utils/transit_calculator.py` (Toán học Haversine & Ước tính thời gian di chuyển TP.HCM)
+## 4. Lược đồ Cơ sở Dữ liệu (Database Schema)
 
-```python
-import math
-from typing import Optional, Dict, Any
+### 4.1. Cấu hình Session & Engine (`server/app/db/session.py`)
 
-EARTH_RADIUS_KM = 6371.0
-HCMC_ROAD_FACTOR = 1.3  # Hệ số đường thực tế nội đô TP.HCM so với đường chim bay
+- **Mặc định phát triển cục bộ:** `DATABASE_URL = "sqlite+aiosqlite:///./travel.db"` (`connect_args={"check_same_thread": False}`).
+- **Hỗ trợ PostgreSQL / Production:** Tự động chuẩn hoá tiền tố `postgres://` hoặc `postgresql://` sang driver async `postgresql+asyncpg://` với connection pool (`pool_size=10`, `max_overflow=20`, `pool_timeout=30`, `pool_recycle=1800`).
+- **Quản lý giao dịch:** Dependency `get_db()` cấp `AsyncSession` cho từng request, tự `commit()` khi thành công và `rollback()` khi phát sinh ngoại lệ.
 
-def to_rad(deg: float) -> float:
-    return (deg * math.pi) / 180.0
+### 4.2. Chi tiết 4 Bảng ORM (`server/app/db/models.py`)
 
-def calculate_transit(from_lat: float, from_lng: float, to_lat: float, to_lng: float) -> Optional[Dict[str, Any]]:
-    if None in (from_lat, from_lng, to_lat, to_lng):
-        return None
+Toàn bộ lược đồ hiện gồm đúng **4 bảng** dùng chung cho cả SQLite và PostgreSQL:
 
-    d_lat = to_rad(to_lat - from_lat)
-    d_lng = to_rad(to_lng - from_lng)
-    a = (math.sin(d_lat / 2) ** 2 +
-         math.cos(to_rad(from_lat)) * math.cos(to_rad(to_lat)) * math.sin(d_lng / 2) ** 2)
+#### 1) Bảng `users` *(Đỗ Nguyễn An Khang — Auth Service)*
 
-    straight_distance_km = 2 * EARTH_RADIUS_KM * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    road_distance_km = round(straight_distance_km * HCMC_ROAD_FACTOR, 2)
+| Cột | Kiểu SQLAlchemy | Ràng buộc / Mặc định | Ghi chú |
+| :--- | :--- | :--- | :--- |
+| `id` | `String(32)` | PK, `uuid4().hex` | Định danh người dùng (32 ký tự hex) |
+| `username` | `String(60)` | `UNIQUE`, `NOT NULL`, index | Tên đăng nhập (schema kiểm tra 3–30 ký tự `[A-Za-z0-9_]`) |
+| `hashed_password` | `Text` | `NOT NULL` | Chuỗi băm `bcrypt` (cost 12) |
+| `full_name` | `String(120)` | Nullable | Tên hiển thị |
+| `avatar_url` | `Text` | Nullable | Đường dẫn ảnh đại diện |
+| `is_active` | `Boolean` | `NOT NULL`, default `True` | Trạng thái hoạt động của tài khoản |
+| `created_at` | `DateTime` | `NOT NULL`, UTC now | Thời điểm tạo |
+| `updated_at` | `DateTime` | `NOT NULL`, UTC now | Thời điểm cập nhật gần nhất |
 
-    # Khoảng cách <= 800m: Gợi ý đi bộ (~5 km/h)
-    if road_distance_km <= 0.8:
-        walk_minutes = max(2, round((road_distance_km / 5.0) * 60))
-        return {
-            "mode": "walk",
-            "distance_km": road_distance_km,
-            "duration_min": walk_minutes,
-            "estimated_fare_vnd": 0,
-            "label": f"🚶 {walk_minutes} min walk ({int(road_distance_km * 1000)}m)"
-        }
+#### 2) Bảng `trips` *(Đỗ Nguyễn An Khang — Trip CRUD Service)*
 
-    # Khoảng cách > 800m: Ước tính phương tiện nội đô (~20 km/h, mở cửa 2km đầu 18,000đ + 5,500đ/km tiếp theo)
-    ride_minutes = max(5, round((road_distance_km / 20.0) * 60))
-    raw_fare = 18000 + max(0.0, road_distance_km - 2) * 5500
-    rounded_fare = int(math.ceil(raw_fare / 5000.0) * 5000)
+| Cột | Kiểu SQLAlchemy | Ràng buộc / Mặc định | Ghi chú |
+| :--- | :--- | :--- | :--- |
+| `id` | `String(32)` | PK, `uuid4().hex` | Định danh chuyến đi |
+| `user_id` | `String(32)` | `NOT NULL`, index | Chủ sở hữu chuyến đi *(🚧 #31 sẽ bổ sung `session_id` và cho phép chuyến đi của khách)* |
+| `title` | `String(200)` | `NOT NULL` | Tiêu đề chuyến đi |
+| `days` | `Integer` | `NOT NULL`, default `1` | Số ngày (1–14 theo schema) |
+| `budget` | `Integer` | `NOT NULL`, default `5000000` | Ngân sách mục tiêu (VND) |
+| `total_estimated` | `Integer` | `NOT NULL`, default `0` | Tổng chi phí ước tính đã tính sẵn (VND) |
+| `place_count` | `Integer` | `NOT NULL`, default `0` | Tổng số điểm dừng trong lịch trình |
+| `places_per_day` | `Integer` | `NOT NULL`, default `4` | Số điểm mỗi ngày (3–6) |
+| `companion` | `String(20)` | `NOT NULL`, default `"group"` | Kiểu nhóm đi (`solo`, `couple`, `friends`, `family`, `group`) |
+| `member_count` | `Integer` | `NOT NULL`, default `4` | Số thành viên trong nhóm |
+| `transport_mode` | `String(20)` | `NOT NULL`, default `"grab_bike"` | Phương tiện chính |
+| `start_time` / `end_time` | `String(10)` | default `"08:00"` / `"21:30"` | Khung giờ bắt đầu & kết thúc trong ngày |
+| `start_location` | `String(200)` | default `"Quận 1, TP. Hồ Chí Minh"` | Điểm xuất phát |
+| `preferences` | `Text` | `NOT NULL`, default `"[]"` | Chuỗi JSON mảng sở thích |
+| `special_notes` | `Text` | Nullable | Ghi chú đặc biệt của người dùng |
+| `status` | `String(20)` | `NOT NULL`, default `"completed"` | Trạng thái chuyến đi |
+| `share_token` | `String(64)` | `UNIQUE`, nullable, index | Token chia sẻ chỉ đọc (`NULL` = chưa chia sẻ) |
+| `cover_photo` / `cover_place_name` | `Text` / `String(200)` | Nullable | Ảnh bìa và tên địa điểm đầu tiên cho thẻ My Trips |
+| `itinerary_json` | `Text` | `NOT NULL`, default `"[]"` | **Lưu toàn bộ mảng item lịch trình dạng JSON** (ngày, thứ tự, giờ, địa điểm, toạ độ, chi phí, `transit_info`, check-in) |
+| `created_at` / `updated_at` | `DateTime` | `NOT NULL`, UTC now | Dấu thời gian tạo và cập nhật |
 
-    return {
-        "mode": "ride",
-        "distance_km": road_distance_km,
-        "duration_min": ride_minutes,
-        "estimated_fare_vnd": rounded_fare,
-        "label": f"🚕 {ride_minutes} min ride (~₫{rounded_fare:,})"
-    }
-```
+> **Lưu ý thiết kế:** Thay vì tách bảng `itinerary_items`, toàn bộ các chặng của chuyến đi được lưu tập trung dưới dạng mảng JSON trong cột `trips.itinerary_json` để tương thích đồng nhất giữa SQLite và PostgreSQL. Do ORM hiện không khai báo FK cascade giữa `users` và `trips`, endpoint `DELETE /api/v1/auth/me` chủ động xoá các bản ghi `Trip` theo `user_id` trước khi xoá `User`.
 
----
+#### 3) Bảng `places` *(Ngô Tấn Đạt — Places & Interactive Map)*
 
-### 12.3. File `server/app/services/places_service.py` (Google Places API New + Cache TTL + Ẩn API Key)
+| Cột | Kiểu SQLAlchemy | Ràng buộc / Mặc định | Ghi chú |
+| :--- | :--- | :--- | :--- |
+| `id` | `String(36)` | PK, UUID chuẩn | Định danh địa điểm |
+| `name` / `name_vi` | `String(200)` | `name` `NOT NULL`, `name_vi` nullable | Tên địa điểm (tiếng Anh / tiếng Việt) |
+| `address` | `Text` | `NOT NULL` | Địa chỉ chi tiết |
+| `district` | `String(60)` | `NOT NULL`, index | Quận/huyện (vd: `"Quận 1"`, `"TP. Thủ Đức"`) |
+| `latitude` / `longitude` | `Float` | `NOT NULL` | Toạ độ GPS dùng cho bản đồ Leaflet và Haversine |
+| `category` | `String(60)` | `NOT NULL`, index | `attraction`, `food`, `cafe`, `culture`, `shopping`, `park`, `entertainment` |
+| `is_indoor` | `Boolean` | `NOT NULL`, default `False`, index | `True`: trong nhà; `False`: ngoài trời |
+| `open_time` / `close_time` | `String(10)` | Nullable | Giờ mở/đóng cửa dạng `HH:MM` |
+| `entry_fee_vnd` | `Integer` | `NOT NULL`, default `0` | Chi phí vé/ăn uống ước tính (VND) |
+| `average_rating` | `Float` | Nullable | Điểm đánh giá trung bình (AI lọc `>= 4.0`) |
+| `google_place_id` | `String(100)` | Nullable | ID liên kết Google Places API (New) để enrich |
+| `photo_url` / `description` | `Text` | Nullable | Ảnh minh hoạ và mô tả ngắn |
+| `tags` | `Text` | default `"[]"` | Chuỗi JSON mảng thẻ mô tả |
+| `is_active` | `Boolean` | `NOT NULL`, default `True` | Cờ ẩn/hiện địa điểm |
+| `created_at` | `DateTime` | default UTC now | Thời điểm tạo bản ghi |
 
-> Nội dung giữ nguyên từ v1; chỉ sửa lại các URL bị lỗi định dạng markdown (`PLACES_SEARCH_URL`, `mediaUrl`).
+#### 4) Bảng `places_cache` *(Ngô Tấn Đạt — 7-day TTL Cache)*
 
-```javascript
-import pool from '../db/connection.js';
-
-const PLACES_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText';
-const FIELD_MASK = [
-  'places.id',
-  'places.displayName',
-  'places.formattedAddress',
-  'places.location',
-  'places.rating',
-  'places.types',
-  'places.regularOpeningHours.weekdayDescriptions',
-  'places.photos'
-].join(',');
-
-/**
- * Resolve photo reference sang link CDN lh3.googleusercontent.com để không lộ GOOGLE_PLACES_API_KEY
- */
-async function resolveSafePhotoUrl(photoName) {
-  if (!photoName || !process.env.GOOGLE_PLACES_API_KEY) return null;
-  try {
-    const mediaUrl = `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=600&key=${process.env.GOOGLE_PLACES_API_KEY}`;
-    const res = await fetch(mediaUrl, { redirect: 'manual' });
-    const redirectLocation = res.headers.get('location');
-    return redirectLocation || null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Tìm địa điểm kết hợp PostgreSQL Cache (TTL 7 ngày) và Google Places API (New)
- */
-export async function searchSingleQuery({ query, type, maxResults = 3 }) {
-  // 1. Kiểm tra trong places_cache còn hạn trước
-  const cachedRes = await pool.query(
-    `SELECT place_id_google AS "placeId", name, rating, address, types,
-            opening_hours AS "openingHours", latitude AS lat, longitude AS lng, photo_url AS "photoUrl"
-     FROM places_cache
-     WHERE expires_at > NOW()
-       AND (name ILIKE $1 OR address ILIKE $1)
-     LIMIT $2`,
-    [`%${query}%`, maxResults]
-  );
-
-  if (cachedRes.rows.length >= 2) {
-    return cachedRes.rows;
-  }
-
-  // 2. Gọi Google Places API (New) Text Search nếu chưa đủ cache
-  const response = await fetch(PLACES_SEARCH_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': process.env.GOOGLE_PLACES_API_KEY,
-      'X-Goog-FieldMask': FIELD_MASK
-    },
-    body: JSON.stringify({
-      textQuery: `${query} in Ho Chi Minh City, Vietnam`,
-      includedType: type || undefined,
-      maxResultCount: Math.min(maxResults, 5)
-    })
-  });
-
-  if (!response.ok) {
-    // Fallback về dữ liệu trong cache kể cả khi hết hạn nếu API lỗi
-    const fallbackRes = await pool.query(
-      `SELECT place_id_google AS "placeId", name, rating, address,
-              opening_hours AS "openingHours", latitude AS lat, longitude AS lng, photo_url AS "photoUrl"
-       FROM places_cache
-       WHERE name ILIKE $1 OR address ILIKE $1
-       LIMIT $2`,
-      [`%${query}%`, maxResults]
-    );
-    return fallbackRes.rows;
-  }
-
-  const data = await response.json();
-  const places = data.places || [];
-  const results = [];
-
-  for (const p of places) {
-    const placeId = p.id;
-    const name = p.displayName?.text || 'Unknown Venue';
-    const rating = p.rating || 4.2;
-    const address = p.formattedAddress || 'Ho Chi Minh City';
-    const types = p.types || [];
-    const openingHours = p.regularOpeningHours?.weekdayDescriptions || [];
-    const lat = p.location?.latitude;
-    const lng = p.location?.longitude;
-    const firstPhotoName = p.photos?.[0]?.name;
-    const photoUrl = await resolveSafePhotoUrl(firstPhotoName);
-
-    if (lat && lng) {
-      await pool.query(
-        `INSERT INTO places_cache
-          (place_id_google, name, rating, address, types, opening_hours, latitude, longitude, photo_url, cached_at, expires_at)
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9, NOW(), NOW() + INTERVAL '7 days')
-         ON CONFLICT (place_id_google) DO UPDATE SET
-          rating = EXCLUDED.rating,
-          opening_hours = EXCLUDED.opening_hours,
-          photo_url = COALESCE(EXCLUDED.photo_url, places_cache.photo_url),
-          cached_at = NOW(),
-          expires_at = NOW() + INTERVAL '7 days'`,
-        [
-          placeId,
-          name,
-          rating,
-          address,
-          JSON.stringify(types),
-          JSON.stringify(openingHours),
-          lat,
-          lng,
-          photoUrl
-        ]
-      );
-
-      results.push({ placeId, name, rating, address, openingHours, photoUrl, lat, lng });
-    }
-  }
-
-  return results;
-}
-
-export async function batchSearchPlaces(queries = []) {
-  const allResults = await Promise.all(queries.map((q) => searchSingleQuery(q)));
-  return allResults.flat();
-}
-```
+| Cột | Kiểu SQLAlchemy | Ràng buộc / Mặc định | Ghi chú |
+| :--- | :--- | :--- | :--- |
+| `id` | `String(36)` | PK, UUID chuẩn | Định danh bản ghi cache |
+| `place_id` | `String(100)` | `UNIQUE`, `NOT NULL`, index | Lưu `google_place_id` làm khoá tra cứu |
+| `data_json` | `Text` | `NOT NULL` | Payload JSON thô nhận từ Google Places API (New) |
+| `cached_at` | `DateTime` | `NOT NULL`, UTC now | Thời điểm lưu cache |
+| `expires_at` | `DateTime` | `NOT NULL` | Thời điểm hết hạn (mặc định `cached_at + 7 ngày`) |
 
 ---
 
-### 12.4. File `server/app/api/v1/endpoints/trips.py` (Transaction Lưu Lịch Trình, Ngân Sách, My Trips)
+## 5. Luồng Xử lý AI (Gemini Service)
 
-> `saveTripItinerary` và `getFullTripWithBudget` giữ nguyên từ v1. **Mới:** `createTrip` (gắn `user_id` nếu là thành viên) và `listTrips` (My Trips, P1). Quyền truy cập được kiểm tra ở route bằng `ownerClause()` (mục 12.6) trước khi gọi các hàm này.
+Phụ trách: **Lê Hữu Lam** (`server/app/services/gemini_service.py`, `server/app/api/v1/endpoints/ai.py`, `server/app/schemas/ai.py`).
 
-```javascript
-import pool from '../db/connection.js';
-import { calculateTransit } from '../utils/transitCalculator.js';
-import { ownerClause } from '../middleware/identity.js';
+### 5.1. Kiến trúc Gọi Model & Structured Output JSON
 
-export async function saveTripItinerary(tripId, daysData) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+Hệ thống **không dùng Tool Calling** mà dùng cơ chế **Structured Output JSON** của SDK `google-genai`:
 
-    for (const dayObj of daysData) {
-      const { day_number, items } = dayObj;
+1. `server/main.py` khởi tạo một singleton `GeminiService(api_key=GEMINI_API_KEY, model=GEMINI_MODEL)` (mặc định `gemini-3.5-flash`) đặt tại `app.state.gemini_service`.
+2. Để bảo vệ quota chung, `GeminiService` áp dụng điều tiết nội bộ:
+   - `asyncio.Semaphore(max_concurrent_requests=2)` giới hạn tối đa 2 request đồng thời.
+   - Sliding window `_wait_for_rate_slot()` giới hạn mặc định `requests_per_minute=15`.
+3. Mỗi lần gọi, `_generate()` chạy `self._client.models.generate_content(...)` bên trong `asyncio.to_thread` với cấu hình:
+   - `temperature = 0.4`
+   - `response_mime_type = "application/json"`
+   - `response_json_schema = _model_schema(response_model)` (JSON Schema xuất trực tiếp từ Pydantic model đích).
+4. Cấu trúc prompt gồm: `SYSTEM_INSTRUCTION` (*HCMC Travel Expert* — chuyên gia du lịch TP.HCM thực tế, không dùng persona/tone), một ví dụ few-shot sinh động từ catalog địa điểm, JSON yêu cầu của người dùng, danh sách địa điểm đã kiểm chứng (`VERIFIED PLACE CATALOG`) và luật cụ thể của từng tác vụ.
+5. Phản hồi chuỗi JSON được kiểm chứng ngay bằng Pydantic (`model_validate_json`).
 
-      // Xóa các mục cũ của ngày được cập nhật để tránh lệch order_index
-      await client.query(
-        `DELETE FROM itinerary_items WHERE trip_id = $1 AND day_number = $2`,
-        [tripId, day_number]
-      );
+### 5.2. Ba Tác vụ AI Chính
 
-      const sortedItems = [...items].sort((a, b) => a.order_index - b.order_index);
+| Tác vụ | Endpoint & Method | Input Schema | Output Schema | Mục đích |
+| :--- | :--- | :--- | :--- | :--- |
+| **1. Đề xuất Concept** | `POST /api/v1/ai/concept` (`suggest_concept`) | `TripConceptRequest` | `ConceptResponse` | Đề xuất tóm tắt, điểm nổi bật, các quận phù hợp, tổng quan tuyến và câu hỏi xác nhận trước khi lập lịch chi tiết |
+| **2. Sinh Lịch trình** | `POST /api/v1/ai/generate` (`generate_itinerary`) | `TripGenerationRequest` (kèm `approved_concept`) | `TripGenerationResponse` | Sinh đủ `days × places_per_day` điểm dừng theo khung giờ, gom cụm theo quận, khớp bữa trưa và ngân sách; đặt `transit_info = None` để tầng transit điền sau |
+| **3. Đổi Địa điểm (Smart Swap)** | `POST /api/v1/ai/swap` (`suggest_swaps`) | `SmartSwapRequest` (`current_item`, `reason`) | `SmartSwapResponse` | Gợi ý 2–3 địa điểm thay thế tương đương cùng quận, cùng loại hình, chi phí tương đương kèm lý do thay thế |
 
-      for (let i = 0; i < sortedItems.length; i++) {
-        const item = sortedItems[i];
-        const prevItem = i > 0 ? sortedItems[i - 1] : null;
+> **🚧 Đang triển khai (#25):** Form tạo lịch trình trên frontend hiện chưa đấu nối trực tiếp tới luồng `/api/v1/ai/concept` → `/api/v1/ai/generate`.
 
-        const transitInfo = prevItem
-          ? calculateTransit(prevItem.latitude, prevItem.longitude, item.latitude, item.longitude)
-          : null;
+### 5.3. Grounding vào Catalog, Retry Backoff & Fallback Cục bộ
 
-        await client.query(
-          `INSERT INTO itinerary_items
-            (trip_id, day_number, order_index, time_slot, place_name, description,
-             category, place_id_google, latitude, longitude, estimated_cost, transit_info)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)`,
-          [
-            tripId,
-            day_number,
-            item.order_index,
-            item.time_slot,
-            item.place_name,
-            item.description,
-            item.category,
-            item.place_id_google || null,
-            item.latitude,
-            item.longitude,
-            item.estimated_cost || 0,
-            transitInfo ? JSON.stringify(transitInfo) : null
-          ]
-        );
-      }
-    }
-
-    await client.query(`UPDATE trips SET status = 'completed', updated_at = NOW() WHERE id = $1`, [
-      tripId
-    ]);
-
-    await client.query('COMMIT');
-    return await getFullTripWithBudget(tripId);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-
-export async function getFullTripWithBudget(tripId) {
-  const tripRes = await pool.query(`SELECT * FROM trips WHERE id = $1`, [tripId]);
-  const trip = tripRes.rows[0];
-  if (!trip) return null;
-
-  const itemsRes = await pool.query(
-    `SELECT i.*, p.rating, p.address, p.opening_hours, p.photo_url
-     FROM itinerary_items i
-     LEFT JOIN places_cache p ON i.place_id_google = p.place_id_google
-     WHERE i.trip_id = $1
-     ORDER BY i.day_number ASC, i.order_index ASC`,
-    [tripId]
-  );
-
-  const items = itemsRes.rows;
-  const activitiesCost = items.reduce((sum, it) => sum + Number(it.estimated_cost || 0), 0);
-  const transitCost = items.reduce(
-    (sum, it) => sum + Number(it.transit_info?.estimated_fare_vnd || 0),
-    0
-  );
-  const totalEstimated = activitiesCost + transitCost;
-  const percentage = Math.round((totalEstimated / trip.budget) * 100);
-
-  let health = 'under_budget';
-  if (percentage > 100) health = 'over_budget';
-  else if (percentage >= 80) health = 'near_budget';
-
-  return {
-    trip,
-    itinerary_items: items,
-    budget_summary: {
-      total_budget: trip.budget,
-      activities_cost: activitiesCost,
-      transit_cost: transitCost,
-      total_estimated: totalEstimated,
-      percentage,
-      health
-    }
-  };
-}
-
-/**
- * [v2] Tạo chuyến đi. Thành viên: gắn user_id ngay từ đầu. Khách: user_id = NULL.
- * Nếu JWT còn hạn nhưng tài khoản đã bị xóa, FK sẽ chặn INSERT -> route nên trả 401.
- */
-export async function createTrip(principal, { start_location, budget, days, preferences = [], source = 'form' }) {
-  // Tên mặc định: "2-day HCMC · street food, cafe" (người dùng đổi tên được trong My Trips)
-  const prefText = preferences.slice(0, 2).map((p) => p.replace(/_/g, ' ')).join(', ');
-  const title = `${days}-day HCMC · ${prefText || 'custom trip'}`.slice(0, 120);
-
-  const res = await pool.query(
-    `INSERT INTO trips (session_id, user_id, title, start_location, budget, days, preferences, source, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, 'draft')
-     RETURNING *`,
-    [principal.sessionId, principal.userId, title, start_location, budget, days, JSON.stringify(preferences), source]
-  );
-  return res.rows[0];
-}
-
-/**
- * [v2, P1] My Trips: danh sách chuyến của người dùng hiện tại (khách hoặc thành viên).
- * Tính sẵn số điểm đến và tổng chi phí ước tính để thẻ trong My Trips không cần gọi thêm API.
- */
-export async function listTrips(principal, limit = 20) {
-  const { clause, params } = ownerClause(principal, 1, 't'); // alias 't' vì có JOIN
-  const res = await pool.query(
-    `SELECT t.id, t.title, t.start_location, t.days, t.budget, t.status, t.created_at,
-            (t.share_token IS NOT NULL) AS is_shared,
-            COUNT(i.id)::int AS place_count,
-            (COALESCE(SUM(i.estimated_cost), 0)
-             + COALESCE(SUM((i.transit_info->>'estimated_fare_vnd')::int), 0))::int AS total_estimated
-     FROM trips t
-     LEFT JOIN itinerary_items i ON i.trip_id = t.id
-     WHERE ${clause}
-     GROUP BY t.id
-     ORDER BY t.created_at DESC
-     LIMIT $${params.length + 1}`,
-    [...params, Math.min(limit, 50)]
-  );
-  return res.rows;
-}
-```
+- **Chuẩn bị Catalog (`_load_catalog` trong `ai.py`):** Truy vấn tối đa 400 địa điểm đang hoạt động từ `places_service.search_places`, chuẩn hoá nhóm loại hình (`attraction`/`culture` → `sightseeing`, `park` → `nature`) và chỉ giữ địa điểm có `editorial_score >= 4.0`. Riêng `/ai/swap` lọc trước theo quận của `current_item`.
+- **Kiểm chứng & Grounding chống bịa đặt (Anti-Hallucination):**
+  - `_ground_concept`: Chuẩn hoá và lọc `recommended_districts` phải có trong catalog; nếu rỗng sẽ ném `ValueError`.
+  - `_ground_itinerary`: Kiểm tra đúng tổng số điểm `days × places_per_day`, mọi `place_id` phải tồn tại trong catalog, không trùng `(day_number, order_index)`, đúng biên ngày/thứ tự; **ghi đè toàn bộ metadata địa điểm** (tên, địa chỉ, toạ độ, giá, ảnh, giờ mở cửa…) từ bản ghi chuẩn trong catalog và ép `transit_info = None`.
+  - `_ground_swaps`: Xác minh từng gợi ý khác `current_item.place_id`, không trùng nhau, cùng quận (đã bỏ tiền tố `"TP. "`), cùng `category`, chênh lệch chi phí `<= max(50_000, 50% estimated_cost)`.
+- **Retry có Exponential Backoff:** Với các lỗi tạm thời (HTTP `408, 429, 500, 502, 503, 504`, `TimeoutError`, `ConnectionError`, `OSError`, `DeadlineExceeded`, `ResourceExhausted`, `ServiceUnavailable`, `TooManyRequests`…), `_generate()` thử lại tối đa `max_attempts = 3` với độ trễ `0.75s × 2^(attempt - 1)` nhân jitter ngẫu nhiên `[0.8, 1.2]`.
+- **Fallback cục bộ xác định:** Nếu chưa cấu hình `GEMINI_API_KEY`, hết lượt retry, lỗi không retry được, hoặc đầu ra AI không qua được bước grounding, dịch vụ tự động gọi `_fallback_concept` / `_fallback_itinerary` / `_fallback_swaps` để chọn trực tiếp từ catalog `places` (chỉ ném `GeminiServiceError` → HTTP `503` khi catalog không đủ điểm).
+- **⚠️ Lưu ý lỗi bị nuốt im lặng — 🚧 Đang triển khai (#23):** Hiện tại mọi lỗi gọi Gemini hay lỗi grounding đều bị bắt và âm thầm trả về kết quả fallback cục bộ với HTTP `200` (chỉ ghi `logger.warning`, không gắn cờ phân biệt trong JSON response). Cần bổ sung log/chỉ báo rõ nguồn kết quả (`ai` vs `fallback`) hoặc xử lý lỗi minh bạch theo issue #23.
 
 ---
 
-### 12.5. Seed dữ liệu cho buổi thuyết trình
+## 6. Dịch vụ Địa điểm, Chuyến đi & Auto-Seed
 
-#### 12.5.1. File `server/src/db/seedDemoCache.js` (Pre-warmed Cache)
+### 6.1. Dịch vụ Địa điểm & Cache 7 ngày (`server/app/services/places_service.py`)
 
-```javascript
-import pool from './connection.js';
+Phụ trách: **Ngô Tấn Đạt** (Places & Interactive Map).
 
-const DEMO_PLACES = [
-  {
-    place_id_google: 'ChIJ7aVxn8ItdTERF5Y65239Q2c',
-    name: 'War Remnants Museum',
-    rating: 4.6,
-    address: '28 Võ Văn Tần, Phường 6, Quận 3, TP.HCM',
-    types: ['museum', 'tourist_attraction'],
-    opening_hours: ['Daily: 07:30 AM – 05:30 PM'],
-    latitude: 10.77951,
-    longitude: 106.69209,
-    photo_url: 'https://images.unsplash.com/photo-1583417319070-4a69db38a482?auto=format&fit=crop&w=800&q=80'
-  },
-  {
-    place_id_google: 'ChIJL5_p1sItdTERq1X6J8_p1sI',
-    name: 'Phở Hòa Pasteur',
-    rating: 4.3,
-    address: '260C Pasteur, Phường Võ Thị Sáu, Quận 3, TP.HCM',
-    types: ['restaurant', 'food'],
-    opening_hours: ['Daily: 06:00 AM – 10:30 PM'],
-    latitude: 10.78634,
-    longitude: 106.68812,
-    photo_url: 'https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?auto=format&fit=crop&w=800&q=80'
-  },
-  {
-    place_id_google: 'ChIJW8_p1sItdTER98X6J8_p1sB',
-    name: 'The Workshop Coffee',
-    rating: 4.5,
-    address: '27 Ngô Đức Kế, Bến Nghé, Quận 1, TP.HCM',
-    types: ['cafe', 'food'],
-    opening_hours: ['Daily: 08:00 AM – 09:00 PM'],
-    latitude: 10.77452,
-    longitude: 106.70391,
-    photo_url: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80'
-  },
-  {
-    place_id_google: 'ChIJB_b1sItdTER12X6J8_p1sC',
-    name: 'Bến Thành Street Food Market',
-    rating: 4.2,
-    address: '26-28-30 Thủ Khoa Huân, Bến Thành, Quận 1, TP.HCM',
-    types: ['restaurant', 'food'],
-    opening_hours: ['Daily: 09:00 AM – 11:30 PM'],
-    latitude: 10.77341,
-    longitude: 106.69745,
-    photo_url: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=800&q=80'
-  },
-  {
-    place_id_google: 'ChIJH_c1sItdTER44X6J8_p1sD',
-    name: 'Heart of Darkness Craft Brewery',
-    rating: 4.6,
-    address: '31D Lý Tự Trọng, Bến Nghé, Quận 1, TP.HCM',
-    types: ['bar', 'restaurant'],
-    opening_hours: ['Daily: 11:00 AM – 12:00 AM'],
-    latitude: 10.77815,
-    longitude: 106.70162,
-    photo_url: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80'
-  },
-  {
-    place_id_google: 'ChIJK_d1sItdTER77X6J8_p1sE',
-    name: 'Independence Palace (Reunification Palace)',
-    rating: 4.5,
-    address: '135 Nam Kỳ Khởi Nghĩa, Bến Thành, Quận 1, TP.HCM',
-    types: ['tourist_attraction', 'museum'],
-    opening_hours: ['Daily: 08:00 AM – 04:30 PM'],
-    latitude: 10.77699,
-    longitude: 106.69536,
-    photo_url: 'https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&w=800&q=80'
-  }
-];
+- **100% SQLAlchemy Async ORM** (tương thích SQLite & PostgreSQL):
+  - `search_places`: Lọc `Place.is_active == True`, tìm kiếm từ khoá `q` bằng `ilike` trên `name`, `name_vi`, `address`, `tags`, `description`; lọc chính xác `district`, `category`, `is_indoor`; sắp xếp `average_rating DESC` với biểu thức `CASE` giả lập `NULLS LAST` chạy được trên cả SQLite lẫn PostgreSQL.
+  - `get_nearby_places`: Lọc thô bằng bounding-box (`latitude.between`, `longitude.between`) trên DB rồi tính khoảng cách chính xác bằng công thức Haversine trong Python (có kẹp giá trị `a` vào `[0.0, 1.0]` tránh lỗi `math domain error`), trả về tối đa `limit` điểm kèm `distance_km` tăng dần.
+  - `get_place_by_id`: Lấy bản ghi cục bộ; nếu `enrich_from_google=True` và có `google_place_id`, tra cứu bảng `places_cache` (TTL 7 ngày). Khi cache miss/hết hạn và có `GOOGLE_PLACES_API_KEY`, gọi `GET https://places.googleapis.com/v1/places/{google_place_id}` (timeout 5s) để làm mới `average_rating` và gắn ảnh qua proxy `/api/v1/places/photo?name=...`. Nếu API Google lỗi hoặc thiếu key, fallback về bản cache cũ (nếu có) hoặc giữ nguyên dữ liệu cục bộ.
 
-async function seed() {
-  for (const p of DEMO_PLACES) {
-    await pool.query(
-      `INSERT INTO places_cache
-        (place_id_google, name, rating, address, types, opening_hours, latitude, longitude, photo_url, cached_at, expires_at)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9, NOW(), NOW() + INTERVAL '14 days')
-       ON CONFLICT (place_id_google) DO UPDATE SET
-        expires_at = NOW() + INTERVAL '14 days'`,
-      [
-        p.place_id_google,
-        p.name,
-        p.rating,
-        p.address,
-        JSON.stringify(p.types),
-        JSON.stringify(p.opening_hours),
-        p.latitude,
-        p.longitude,
-        p.photo_url
-      ]
-    );
-  }
-  console.log('✅ Demo cache pre-warmed successfully!');
-  process.exit(0);
-}
+### 6.2. Dịch vụ Quản lý Chuyến đi (`server/app/api/v1/endpoints/trips.py`)
 
-seed();
-```
+Phụ trách: **Đỗ Nguyễn An Khang** (Auth & Trip CRUD).
 
-#### 12.5.2. File `server/src/db/seedDemoUser.js` (Tài khoản demo cho Type 2) — mới
+- **Quyền sở hữu:** Mọi thao tác đọc/sửa/xoá/clone/share theo `trip_id` đi qua `_get_user_trip(trip_id, user, db)` lọc `Trip.id == trip_id AND Trip.user_id == user.id` (không khớp trả `404 NOT_FOUND`).
+- **Tính toán ngân sách (`_compute_budget`):**
+  - `activities_cost = sum(item.estimated_cost) × member_count`.
+  - `transit_cost`: cộng `estimated_fare_vnd` của từng chặng (nhân `member_count` nếu `mode == "grab_bike"`) + phụ phí `5,000 VND × số điểm`.
+  - Phân loại trạng thái `health`: `over_budget` (`> 100%`), `near_budget` (`> 85%`), còn lại `under_budget`.
+- **Chia sẻ công khai an toàn (`_public_items`):** Khi trả `GET /api/v1/trips/shared/{token}` hoặc `POST /shared/{token}/clone`, lọc đệ quy các khoá nhạy cảm (`user`, `session`, `email`, `phone`, `checkin`, `cost`, `budget`, `expense`, `private`, `note`, `notes`) và đặt `budget = 0`, `total_estimated = 0`, `special_notes = None` trên trang chia sẻ.
+- **Lịch trình mẫu (`GET /api/v1/trips/demo`):** Sinh trực tiếp lịch trình 3 ngày (12 điểm tại Quận 1, Quận 3, Phú Nhuận) trong bộ nhớ, chỉ đọc, không phụ thuộc DB hay tài khoản.
 
-Chạy **sau** `seedDemoCache.js`. Tạo tài khoản `demo_traveler` với 3 chuyến `completed` và một Travel Profile, để trên sân khấu chỉ cần đăng nhập là thấy ngay lời chào "Welcome back" của Type 2, không phải tạo 3 chuyến thật trước mặt giảng viên.
+### 6.3. Tự động nạp Catalog 327 Địa điểm (`server/app/db/hcmc_data.py`)
 
-```javascript
-import bcrypt from 'bcryptjs';
-import pool from './connection.js';
-import { calculateTransit } from '../utils/transitCalculator.js';
+Phụ trách: **Ngô Tấn Đạt**.
 
-const DEMO_USERNAME = 'demo_traveler';
-
-// 3 chuyến hoàn tất => vượt ngưỡng TIER2_MIN_COMPLETED_TRIPS (3) => Type 2
-const DEMO_TRIPS = [
-  { title: '2-day HCMC · street food, culture', days: 2, budget: 3000000, prefs: ['street_food', 'culture'] },
-  { title: '2-day HCMC · street food, cafe', days: 2, budget: 3000000, prefs: ['street_food', 'cafe'] },
-  { title: '3-day HCMC · street food, nightlife', days: 3, budget: 4500000, prefs: ['street_food', 'nightlife'] }
-];
-
-// Phải dùng giá trị trong TỪ VỰNG CỐ ĐỊNH (xem sanitizeProfile ở mục 12.8)
-const DEMO_PROFILE = {
-  food_styles: ['street food', 'specialty coffee'],
-  favorite_districts: ['District 1', 'District 3'],
-  dislikes: ['crowded places'],
-  pace: 'relaxed',
-  crowd_tolerance: 'low',
-  typical_budget_per_day: 1500000
-};
-
-async function seedDemoUser() {
-  const password = process.env.DEMO_USER_PASSWORD;
-  if (!password) throw new Error('Set DEMO_USER_PASSWORD before seeding the demo user');
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    // Chạy lại nhiều lần được (idempotent): xóa tài khoản cũ nếu có (cascade xóa luôn trips)
-    const old = await client.query(`SELECT id FROM users WHERE LOWER(username) = $1`, [DEMO_USERNAME]);
-    for (const row of old.rows) {
-      await client.query(`DELETE FROM travel_profiles WHERE owner_key = $1`, [`u:${row.id}`]);
-      await client.query(`DELETE FROM users WHERE id = $1`, [row.id]);
-    }
-
-    const hash = await bcrypt.hash(password, 12);
-    const u = await client.query(
-      `INSERT INTO users (username, password_hash, display_name)
-       VALUES ($1, $2, 'Demo Traveler') RETURNING id`,
-      [DEMO_USERNAME, hash]
-    );
-    const userId = u.rows[0].id;
-
-    // Lấy vài địa điểm đã nạp bởi seedDemoCache.js để My Trips có "place_count" thật
-    const places = (await client.query(`SELECT * FROM places_cache ORDER BY name LIMIT 3`)).rows;
-    const slots = ['09:00 - 11:00', '12:00 - 13:30', '15:00 - 17:00'];
-
-    for (const t of DEMO_TRIPS) {
-      const trip = await client.query(
-        `INSERT INTO trips (session_id, user_id, title, start_location, budget, days, preferences, source, status)
-         VALUES (gen_random_uuid(), $1, $2, 'District 1, Ho Chi Minh City', $3, $4, $5::jsonb, 'form', 'completed')
-         RETURNING id`,
-        [userId, t.title, t.budget, t.days, JSON.stringify(t.prefs)]
-      );
-
-      for (let i = 0; i < places.length; i++) {
-        const p = places[i];
-        const prev = i > 0 ? places[i - 1] : null;
-        const transit = prev ? calculateTransit(prev.latitude, prev.longitude, p.latitude, p.longitude) : null;
-        await client.query(
-          `INSERT INTO itinerary_items
-            (trip_id, day_number, order_index, time_slot, place_name, description, category,
-             place_id_google, latitude, longitude, estimated_cost, transit_info)
-           VALUES ($1, 1, $2, $3, $4, 'Seeded demo stop', $5, $6, $7, $8, 60000, $9::jsonb)`,
-          [
-            trip.rows[0].id, i + 1, slots[i], p.name,
-            p.types?.includes('cafe') ? 'cafe' : p.types?.includes('museum') ? 'sightseeing' : 'food',
-            p.place_id_google, p.latitude, p.longitude,
-            transit ? JSON.stringify(transit) : null
-          ]
-        );
-      }
-    }
-
-    await client.query(
-      `INSERT INTO travel_profiles (owner_key, profile) VALUES ($1, $2::jsonb)`,
-      [`u:${userId}`, JSON.stringify(DEMO_PROFILE)]
-    );
-
-    await client.query('COMMIT');
-    console.log(`✅ Demo user "${DEMO_USERNAME}" created with ${DEMO_TRIPS.length} completed trips (Type 2).`);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
-  process.exit(0);
-}
-
-seedDemoUser().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
-```
+- Khi backend khởi động (`lifespan` trong `server/main.py`), nếu bảng `places` có 0 bản ghi, hệ thống tự động gọi `await seed_places()` để nạp **327 địa điểm thực tế tại TP.HCM** phủ 8 khu vực (Quận 1, Quận 3, Quận 4, Quận 5, Bình Thạnh, Phú Nhuận, TP. Thủ Đức, Quận 7) với ảnh mặc định theo từng loại hình.
+- Có thể chạy thủ công bằng `python -m app.db.hcmc_data` trong thư mục `server/`.
 
 ---
 
-## 🛡️ 12-6. Dependency Xác thực Danh tính FastAPI (Identity Dependency v3)
-### File: `server/app/core/dependencies.py`
+## 7. Tính toán Di chuyển, Dự phòng & Xuất lịch (Transit / Contingency / Calendar)
 
-```python
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt, JWTError
-from app.core.config import settings
-
-security = HTTPBearer()
-
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
-    """
-    FastAPI Dependency bắt buộc đăng nhập (Auth Gate v3 - Thực thi Yêu cầu 1).
-    Mọi endpoint cá nhân (trips, transit, calendar, review) đều yêu cầu Bearer JWT hợp lệ.
-    """
-    token = credentials.credentials
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={"code": "AUTH_REQUIRED", "message": "Bạn cần đăng nhập để sử dụng tính năng này."}
-            )
-        return {"id": user_id, "email": payload.get("email")}
-    except JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "AUTH_TOKEN_INVALID", "message": "Phiên đăng nhập không hợp lệ hoặc đã hết hạn."}
-        )
-```
+- **Trạng thái hiện tại:** **🚧 Đang triển khai (#8/#18, Hạo)**.
+- File `server/app/utils/transit_calculator.py` trên nhánh `main` hiện đang **rỗng (0 byte)**; các endpoint contingency và xuất lịch (`.ics` / Google Calendar) chưa được hợp nhất vào `main` (đang mở ở PR #18).
+- Hiện tại `GeminiService.generate_itinerary` luôn để `transit_info = None` để module `transit_calculator.py` bổ sung khoảng cách, thời gian và ước tính cước xe sau khi PR #18 được hợp nhất.
 
 ---
 
-### 12.7. File `server/app/api/v1/endpoints/auth.py` (Đăng ký / đăng nhập / Google / Claim) — mới
+## 8. Xử lý Lỗi (Error Handling)
 
-```javascript
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import { OAuth2Client } from 'google-auth-library';
-import pool from '../db/connection.js';
+FastAPI trả lỗi theo 3 dạng chuẩn:
 
-const BCRYPT_COST = 12;
-// Hash "giả": khi username không tồn tại ta VẪN tốn thời gian bcrypt y như khi có.
-// Nếu không, kẻ tấn công đo thời gian phản hồi là biết username nào tồn tại.
-const DUMMY_HASH = bcrypt.hashSync('timing-equalizer', BCRYPT_COST);
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+1. **Lỗi nghiệp vụ (`HTTPException`):** JSON dạng `{"detail": "<MÃ_LỖI_HOẶC_THÔNG_BÁO>"}`.
+2. **Lỗi kiểm tra dữ liệu đầu vào (Pydantic v2 / Query validation):** HTTP `422 Unprocessable Entity` với danh sách chi tiết trường sai trong `{"detail": [...]}`.
+3. **Lỗi hệ thống không bắt được (`global_exception_handler` trong `server/main.py`):** HTTP `500 Internal Server Error` với `{"detail": "INTERNAL_ERROR", "message": "An unexpected error occurred."}`.
 
-function authError(status, code, message) {
-  const e = new Error(message);
-  e.status = status;
-  e.code = code;
-  return e;
-}
-
-export function signToken(userId) {
-  return jwt.sign({ sub: userId }, process.env.JWT_SECRET, {
-    algorithm: 'HS256',
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d'
-  });
-}
-
-/**
- * Gán chuyến đi (và hồ sơ) của KHÁCH cho tài khoản.
- * PHẢI gọi bên trong transaction của đăng ký / đăng nhập.
- *
- * Trace: khách có session S, đã tạo trip A và B (user_id = NULL).
- *   Đăng ký xong, có user U.
- *   UPDATE ... WHERE session_id = S AND user_id IS NULL
- *     => A và B có user_id = U, rowCount = 2 (trả về làm claimed_trips).
- *   Từ giờ ownerClause cho U thấy A, B; khách với session S không còn thấy (user_id khác NULL).
- *   Gọi lại lần nữa => rowCount = 0 (idempotent), không hỏng gì.
- */
-export async function saveUserTripData() {
-  const trips = await client.query(
-    `UPDATE trips SET user_id = $1, updated_at = NOW()
-     WHERE session_id = $2 AND user_id IS NULL`,
-    [userId, sessionId]
-  );
-  // Hồ sơ du lịch của khách: chuyển sang tài khoản nếu tài khoản CHƯA có hồ sơ
-  await client.query(
-    `UPDATE travel_profiles SET owner_key = $1
-     WHERE owner_key = $2
-       AND NOT EXISTS (SELECT 1 FROM travel_profiles WHERE owner_key = $1)`,
-    [`u:${userId}`, `s:${sessionId}`]
-  );
-  // Nếu tài khoản đã có hồ sơ thì hồ sơ khách còn sót lại -> xóa để không bị mồ côi
-  await client.query(`DELETE FROM travel_profiles WHERE owner_key = $1`, [`s:${sessionId}`]);
-  return trips.rowCount;
-}
-
-export async function register({ username, password, email }, sessionId) {
-  const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const ins = await client.query(
-      `INSERT INTO users (username, password_hash, email, display_name)
-       VALUES ($1, $2, $3, $1)
-       RETURNING id, username, email, display_name, settings`,
-      [username, passwordHash, email || null]
-    );
-    const user = ins.rows[0];
-    const claimed = await saveUserTripData();
-    await client.query('COMMIT');
-    return { token: signToken(user.id), user, claimed_trips: claimed };
-  } catch (err) {
-    await client.query('ROLLBACK'); // lỗi ở bất kỳ bước nào => vẫn là khách, KHÔNG mất chuyến đi nào
-    // 23505 = unique_violation: trùng LOWER(username) hoặc LOWER(email)
-    if (err.code === '23505') {
-      throw authError(409, 'AUTH_USERNAME_TAKEN', 'Username or email already in use');
-    }
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-
-export async function login({ username, password }, sessionId) {
-  const found = await pool.query(
-    `SELECT id, username, email, display_name, settings, password_hash
-     FROM users WHERE LOWER(username) = LOWER($1)`,
-    [username]
-  );
-  const row = found.rows[0];
-
-  // Luôn chạy compare (kể cả khi không có user) để thời gian phản hồi giống nhau
-  const ok = await bcrypt.compare(password, row?.password_hash ?? DUMMY_HASH);
-  if (!row || !ok) {
-    // Thông báo CHUNG: không nói sai username hay sai mật khẩu
-    throw authError(401, 'AUTH_INVALID_CREDENTIALS', 'Invalid username or password');
-  }
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query(`UPDATE users SET last_login_at = NOW() WHERE id = $1`, [row.id]);
-    const claimed = await saveUserTripData();
-    await client.query('COMMIT');
-    const { password_hash, ...user } = row; // KHÔNG trả password_hash ra ngoài
-    return { token: signToken(row.id), user, claimed_trips: claimed };
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-
-export async function loginWithGoogle(idToken, sessionId) {
-  // 1. BACKEND xác minh ID token (chữ ký, hạn dùng, audience). Không tin gì client tự gửi.
-  let payload;
-  try {
-    const ticket = await googleClient.verifyIdToken({
-      idToken,
-      audience: process.env.GOOGLE_CLIENT_ID
-    });
-    payload = ticket.getPayload();
-  } catch {
-    throw authError(401, 'GOOGLE_TOKEN_INVALID', 'Google sign-in failed');
-  }
-  if (!payload?.sub || !payload.email_verified) {
-    throw authError(401, 'GOOGLE_TOKEN_INVALID', 'Google sign-in failed');
-  }
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    // 2. Tạo mới hoặc đăng nhập theo google_sub. (xmax = 0) là mẹo nhận biết dòng vừa được INSERT.
-    const up = await client.query(
-      `INSERT INTO users (google_sub, email, display_name)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (google_sub) DO UPDATE SET last_login_at = NOW()
-       RETURNING id, username, email, display_name, settings, (xmax = 0) AS is_new`,
-      [payload.sub, payload.email, payload.name || null]
-    );
-    const user = up.rows[0];
-    const claimed = await saveUserTripData();
-    await client.query('COMMIT');
-    const { is_new, ...safeUser } = user;
-    return { token: signToken(user.id), user: safeUser, claimed_trips: claimed, is_new };
-  } catch (err) {
-    await client.query('ROLLBACK');
-    // Email này đã thuộc một tài khoản username: v2 KHÔNG tự gộp (Out of Scope, mục 2.2)
-    if (err.code === '23505') {
-      throw authError(409, 'AUTH_USERNAME_TAKEN', 'This email is already used by another account');
-    }
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-```
+| Tình huống | HTTP Status | `detail` / Hành vi thực tế trong code |
+| :--- | :---: | :--- |
+| Thiếu header `Authorization: Bearer` ở route yêu cầu đăng nhập | `401` | `"AUTH_REQUIRED"` (kèm header `WWW-Authenticate: Bearer`) |
+| Token JWT sai chữ ký, hết hạn hoặc `user_id` không còn trong DB | `401` | `"AUTH_TOKEN_EXPIRED"` |
+| Sai `username` hoặc `password` khi đăng nhập | `401` | `"AUTH_INVALID_CREDENTIALS"` (thông báo chung, không phân biệt sai trường nào) |
+| Đăng ký trùng `username` đã tồn tại | `409` | `"AUTH_USERNAME_TAKEN"` |
+| Xác nhận sai mật khẩu khi gọi `DELETE /api/v1/auth/me` | `403` | `"AUTH_PASSWORD_INVALID"` |
+| `trip_id` không tồn tại hoặc không thuộc `user_id` hiện tại | `404` | `"NOT_FOUND"` |
+| Không tìm thấy điểm `(day_number, order_index)` khi `PATCH` item | `404` | `"TRIP_ITEM_NOT_FOUND"` |
+| `share_token` không tồn tại hoặc đã bị thu hồi | `404` | `"SHARE_TOKEN_INVALID"` |
+| `place_id` không tồn tại trong bảng `places` | `404` | `"Không tìm thấy địa điểm với id=..."` |
+| Dữ liệu request sai định dạng/ràng buộc (`days`, `budget`, `username`, `password`, query params…) | `422` | `HTTPValidationError` chuẩn của FastAPI/Pydantic |
+| Chưa cấu hình `GOOGLE_PLACES_API_KEY` khi gọi `/places/photo` | `503` | `"Google Places API key chưa được cấu hình."` |
+| Lỗi kết nối hoặc phản hồi lỗi từ Google Places khi proxy ảnh | `502` | `"Không thể tải ảnh từ Google Places API."` / `"Lỗi kết nối Google Places: ..."` |
+| `gemini_service` chưa sẵn sàng hoặc catalog không đủ điểm hợp lệ | `503` | `"AI service is not configured."` / `"No verified places..."` / `"AI could not create a result..."` |
+| Gemini API lỗi tạm thời (`429`/`5xx`/timeout) hoặc trả JSON sai grounding | `200` *(fallback)* | Retry tối đa 3 lần có backoff + jitter, sau đó rơi về fallback cục bộ *(🚧 #23: lỗi đang bị nuốt im lặng, cần làm minh bạch)* |
+| Ngoại lệ không dự kiến phía server | `500` | `{"detail": "INTERNAL_ERROR", "message": "An unexpected error occurred."}` |
 
 ---
 
-## 🧭 12-8. Tầng Thích ứng Người dùng Cũ & Bỏ Persona v3
+## 9. Bảo mật (Security)
 
-## 1. Loại bỏ Personas
-- Đã xóa bỏ hoàn toàn định nghĩa file `personas.js` và các tùy chọn phong cách.
-- AI phản hồi duy nhất với tư cách là Trợ lý Chuyên gia Du lịch TP.HCM.
+| Biện pháp / Rủi ro | Hiện trạng triển khai trong FastAPI |
+| :--- | :--- |
+| **Chống SQL Injection** | Toàn bộ truy vấn dùng SQLAlchemy 2.0 ORM tham số hoá (`select`, `where`, `ilike`), không ghép chuỗi SQL thô. |
+| **Băm mật khẩu & JWT** | `bcrypt` trực tiếp trong `security.py` (rounds = 12, giới hạn 72 byte; gói `passlib[bcrypt]` cũng có trong `requirements.txt`). Không trả `hashed_password` qua `UserOut`. JWT ký `HS256` bằng `python-jose` với `JWT_SECRET` từ `server/.env` và hạn `JWT_EXPIRE_MINUTES` (mặc định 7 ngày). |
+| **Chống truy cập trái phép (IDOR)** | `_get_user_trip` ràng buộc cả `Trip.id` và `Trip.user_id == user.id`, trả `404 NOT_FOUND` để không lộ sự tồn tại chuyến đi của người khác. *(🚧 #31 sẽ bổ sung kiểm tra sở hữu theo `x-session-id` cho khách).* |
+| **Giữ API Key phía server** | `GEMINI_API_KEY` và `GOOGLE_PLACES_API_KEY` chỉ lưu trong `server/.env` (bị `.gitignore`, không commit). Ảnh Google Places đi qua proxy `GET /api/v1/places/photo`, không bao giờ lộ key ra trình duyệt. |
+| **Kiểm soát CORS** | `CORSMiddleware` đọc danh sách origin hợp lệ từ biến môi trường `CORS_ORIGINS` (hoặc `FRONTEND_ORIGINS`), mặc định chỉ mở cho `localhost:5173`, `localhost:3000`, `127.0.0.1:5173`, `127.0.0.1:3000`. |
+| **Kiểm tra dữ liệu đầu vào** | Validate chặt bằng Pydantic v2 schemas (`UserCreate`, `TripCreate`, `TripConceptRequest`…) và `Query` constraints của FastAPI → tự từ chối bằng HTTP `422`. |
+| **An toàn link chia sẻ** | Token ngẫu nhiên `secrets.token_urlsafe(16)` (128-bit), chỉ đọc, thu hồi được bằng `DELETE /share`, tự động loại bỏ ngân sách và dữ liệu riêng tư qua `_public_items()`. |
+| **Chống Prompt Injection & Hallucination** | Tách `SYSTEM_INSTRUCTION`, giới hạn `special_notes <= 500` ký tự, bắt buộc Structured Output JSON và ghi đè lại toàn bộ thuộc tính địa điểm từ catalog `places` đã kiểm chứng. |
+| **Giới hạn tần suất (Rate Limiting HTTP)** | **🚧 Chưa có** middleware rate limit theo IP cho các endpoint HTTP (auth, AI, share). Hiện mới có giới hạn nội bộ theo phút (`15 req/phút`) và `Semaphore(2)` trong `GeminiService`. |
 
-## 2. Dịch vụ Người dùng Cũ (Returning Traveler Service)
+### Checklist Bảo mật Hiện tại
 
-```javascript
-import pool from '../db/connection.js';
-
-/**
- * Kiểm tra lịch sử người dùng cũ để chào mừng và nạp sẵn form
- */
-export async function getReturningTravelerData(userId) {
-  const tripRes = await pool.query(
-    `SELECT title, days, districts, preferences, transport, pace, budget
-     FROM trips
-     WHERE user_id = $1 AND status = 'completed'
-     ORDER BY created_at DESC
-     LIMIT 1`,
-    [userId]
-  );
-
-  if (tripRes.rows.length === 0) {
-    return { is_returning: false, prefilled_form: null };
-  }
-
-  const lastTrip = tripRes.rows[0];
-  return {
-    is_returning: true,
-    welcome_message: `Chào mừng bạn quay lại! Lần trước bạn đã có chuyến đi rất tuyệt vời tại TP.HCM. Tôi đã điền sẵn các sở thích quen thuộc của bạn vào bảng yêu cầu bên dưới.`,
-    prefilled_form: {
-      days: lastTrip.days || 2,
-      districts: lastTrip.districts || ['Quận 1', 'Quận 3'],
-      preferences: lastTrip.preferences || [],
-      transport: lastTrip.transport || 'grab',
-      pace: lastTrip.pace || 'moderate',
-      budget: lastTrip.budget || 3000000
-    }
-  };
-}
-```
-
----
-
-## 6. Xử lý lỗi (Error Handling)
-
-| Tình huống | Mã lỗi nội bộ | Cách xử lý |
-| --- | --- | --- |
-| Gemini API timeout hoặc trả về lỗi | `AI_SERVICE_TIMEOUT` | Retry tự động 1-2 lần với exponential backoff (1.5s, 3s). Nếu vẫn lỗi → trả thông báo thân thiện: "AI đang bận, vui lòng thử lại sau vài giây" |
-| Gemini API hết free quota (~15 req/phút) | `AI_RATE_LIMITED` | Rate limiting phía backend (10 req/phút/IP) kết hợp gộp batch `searchPlaces` ngăn chạm trần RPM. Nếu hết quota → thông báo "Đã đạt giới hạn, vui lòng đợi 1 phút" |
-| Hết slot Gemini **toàn server** (nhiều người cùng dùng chung 1 key) | `GEMINI_BUDGET_EXHAUSTED` | Thông báo: "Hệ thống đang bận, vui lòng thử lại sau vài giây". Smart Start: **hiện form thường**. Tóm tắt profile: **bỏ qua** (chạy lại ở chuyến sau) |
-| Google Places API hết quota hoặc lỗi | `PLACES_FALLBACK_CACHE` | Fallback sang dữ liệu đã cache trong `places_cache` (tìm kiếm mờ bằng `ILIKE`). Thông báo user: "Một số thông tin có thể không phải mới nhất" |
-| User nhập địa điểm xuất phát ngoài TP.HCM | `OUT_OF_BOUNDS_ORIGIN` | Chấp nhận + AI tính thêm thời gian di chuyển tới HCM. Hoặc validate + gợi ý: "Bạn có muốn chọn điểm xuất phát trong TP.HCM không?" |
-| AI sinh lịch trình vô lý (chi phí vượt ngân sách, giờ giấc trùng nhau) | `BUDGET_OVERFLOW_WARNING` | Validation layer ở backend trong `saveItinerary` kiểm tra tổng chi phí (activities + transit) trước khi lưu DB + trả về frontend. Nếu vượt ngân sách → gắn cờ `over_budget` để Budget Bar hiện màu đỏ kèm gợi ý giảm chi phí |
-| AI không gọi tool `saveItinerary` khi user yêu cầu đổi lịch trình | `MISSING_ITINERARY_TOOL` | Nếu phát hiện câu lệnh sửa lịch trình nhưng AI chỉ trả về văn bản thuần → Backend tự động nhắc lại trong vòng lặp tool với hướng dẫn: *"Please invoke `saveItinerary` to persist the updated schedule"* |
-| Mất kết nối mạng khi đang thao tác lịch trình | `NETWORK_DISCONNECTED` | Conversation history và `itinerary_items` lưu trong DB theo `session_id` (khách) hoặc `user_id` (thành viên) → user refresh trang vẫn thấy lại toàn bộ lịch trình và dữ liệu đã lưu |
-| Input không hợp lệ (số ngày ≤ 0, ngân sách âm, text quá dài) | `VALIDATION_ERROR` | Validate cả frontend (realtime feedback) + backend (reject 400 Bad Request). Quy tắc: ngày 1-14, ngân sách > 0, text ≤ 500 ký tự |
-| Sai username hoặc mật khẩu | `AUTH_INVALID_CREDENTIALS` | `401` với **một thông báo chung** "Invalid username or password", không nói sai cái nào |
-| Username hoặc email đã được dùng | `AUTH_USERNAME_TAKEN` | `409` "Username or email already in use". Form giữ nguyên dữ liệu đã nhập |
-| Thử mật khẩu liên tục (brute force) | `AUTH_RATE_LIMITED` | `429` sau 5 lần sai/phút cho mỗi cặp IP + username: "Too many attempts, try again in a minute" |
-| JWT hết hạn hoặc không hợp lệ | `AUTH_TOKEN_EXPIRED` | Backend coi như khách và trả header `X-Auth-Status: expired`; frontend hiện "Please sign in again". Dữ liệu thành viên **không bị mất**, chỉ ẩn cho đến khi đăng nhập lại |
-| Google ID token không hợp lệ | `GOOGLE_TOKEN_INVALID` | `401`; frontend: "Google sign-in failed. Try again or use your username". Không ảnh hưởng chế độ khách |
-| Link đặt lại mật khẩu hết hạn hoặc đã dùng | `RESET_TOKEN_INVALID` | `400` "This link is no longer valid. Request a new one" |
-| Gửi email thất bại | `EMAIL_SEND_FAILED` | Vẫn trả `200` (không để lộ email có tồn tại hay không), ghi log; frontend nhắc "Check your inbox, or try again in a few minutes" |
-| quản lý chuyến đi trong tài khoản người dùng lỗi giữa chừng | `TRIP_SAVE_FAILED` | Toàn bộ transaction **rollback**: người dùng vẫn là khách, **không mất chuyến đi nào**; hiện "Something went wrong, please try again" |
-| Link chia sẻ sai hoặc đã thu hồi | `SHARE_TOKEN_INVALID` | `404` chung, không phân biệt "không tồn tại" và "đã thu hồi" |
-| Smart Start không phân tích được | `ONBOARDING_PARSE_FAILED` | Hiện **form thường** như chưa có chuyện gì xảy ra; không hiện lỗi đỏ |
-| Tóm tắt Travel Profile lỗi hoặc không hợp lệ | `PROFILE_DISTILL_FAILED` | Bỏ qua im lặng, giữ profile cũ, ghi log. Không ảnh hưởng người dùng |
-
----
-
----
-
-## 7. Security
-
-| Rủi ro | Giải thích | Cách xử lý |
-| --- | --- | --- |
-| SQL Injection | Raw SQL nối chuỗi trực tiếp từ input có thể bị chèn SQL độc hại | Dùng parameterized query của PostgreSQL (`pool.query("... WHERE id = $1 AND session_id = $2", [id, sessionId])`), không nối chuỗi. Điều kiện sở hữu do `ownerClause()` sinh ra chỉ ghép **số thứ tự placeholder**, không ghép dữ liệu người dùng |
-| API key lộ ra frontend (bao gồm URL ảnh) | Gọi thẳng Gemini/Google Places từ React hoặc gắn `key=` vào URL ảnh Places sẽ lộ key trong DevTools | Mọi API key chỉ gọi từ backend, frontend không bao giờ gọi thẳng API ngoài. Ảnh Google Places được resolve sang URL `lh3.googleusercontent.com` hoặc đi qua `/api/places/photo/:ref` |
-| Truy cập trái phép chuyến đi của người khác (IDOR) | Kẻ tấn công truyền `trip_id` bất kỳ để đọc/xóa chuyến đi của phiên hoặc tài khoản khác | Middleware `identity` + `ownerClause()`: mọi truy cập `/api/trips/:id/*` phải khớp `user_id` (thành viên) hoặc `session_id` với `user_id IS NULL` (khách). Sai quyền trả `404`, không phải `403`, để không lộ sự tồn tại |
-| Không giới hạn request | Gemini free tier chỉ ~15 request/phút — dễ sập quota khi demo | Thêm rate limiting backend (`express-rate-limit`): **10 req/phút/IP** cho các route AI (`/api/v1/ai/generate`, `/api/v1/ai/swap`), **30 req/phút/IP** cho các route khác. Thêm trần **toàn server** `geminiBudget` |
-| Input không kiểm tra | Số ngày âm, ngân sách sai kiểu có thể gây lỗi/crash | Validate input cả frontend lẫn backend bằng `zod` (xem mục 6) |
-| CORS mở toàn bộ | Domain khác gọi được API, tốn quota miễn phí | Chỉ cho phép domain frontend thật (Vercel URL) và `http://localhost:5173` qua CORS. **v2:** `allowedHeaders: ['Content-Type', 'x-session-id', 'Authorization']` và `exposedHeaders: ['X-Auth-Status']` (thiếu cái sau thì frontend không đọc được trạng thái token hết hạn) |
-| Prompt injection | User nhập text cố tình "hack" system prompt của AI | Tách rõ `systemInstruction` trong Gemini SDK vs user input; giới hạn 500 ký tự và lọc bỏ các thẻ giả mạo hệ thống. **v2:** thêm các lớp phòng thủ cho profile/persona ở mục 4.7.5 |
-| Lộ mật khẩu | Lưu mật khẩu dạng rõ hoặc hash yếu; log lộ mật khẩu | `bcryptjs` cost 12, mật khẩu 8–72 ký tự; không bao giờ log body của `/api/auth/*`; không trả `password_hash` ra response |
-| Dò tài khoản (user enumeration) | Kẻ tấn công đoán username/email nào tồn tại qua thông báo hoặc thời gian phản hồi | Thông báo đăng nhập **chung**; luôn chạy `bcrypt.compare` (với `DUMMY_HASH` nếu không có user) để thời gian giống nhau; `forgot-password` luôn trả `200` |
-| Đoán mật khẩu (brute force) | Thử hàng loạt mật khẩu | `express-rate-limit` **5 lần/phút theo cặp IP + username** cho đăng nhập, **5 lần/giờ/IP** cho đăng ký, **3 lần/giờ** cho `forgot-password` |
-| Đánh cắp JWT | Token trong `localStorage` bị XSS lấy | Không dùng `dangerouslySetInnerHTML`, CSP cơ bản, token hết hạn sau 7 ngày, payload chỉ có `sub`, `JWT_SECRET` ≥ 32 byte ngẫu nhiên trong biến môi trường. Đăng xuất xóa token **và xoay `session_id`** |
-| Giả mạo đăng nhập Google | Client gửi ID token giả hoặc của ứng dụng khác | **Backend** gọi `verifyIdToken` với `audience = GOOGLE_CLIENT_ID`, kiểm tra `email_verified`; không tin bất kỳ trường nào client gửi riêng |
-| Token đặt lại mật khẩu bị đánh cắp hoặc đoán | Chiếm tài khoản qua email | 32 byte ngẫu nhiên, DB chỉ lưu **SHA-256**, hết hạn 30 phút, dùng một lần, đổi mật khẩu xong thì vô hiệu mọi token cũ |
-| Lộ dữ liệu qua link chia sẻ | Link chuyền tay hoặc bị lộ | Token 128-bit không đoán được, **chỉ đọc**, thu hồi được (token cũ → 404), payload lược bỏ `session_id`/`user_id`/email, `X-Robots-Tag: noindex`, rate limit 30 req/phút/IP |
-| Quyền riêng tư dữ liệu | Trí nhớ AI và dữ liệu tài khoản là dữ liệu cá nhân | Chỉ lưu dữ liệu tối thiểu (không lưu SĐT), profile xem/sửa/xóa/tắt được, xóa tài khoản xóa **cascade** toàn bộ chuyến đi và profile |
-| Khách lạm dụng quota Gemini | Ai cũng dùng được nên có thể spam | Rate limit theo IP + trần toàn server `geminiBudget`; tạo lịch trình luôn được ưu tiên |
-
-**Checklist**:
-
-- [x] `.env` + `.gitignore` — không commit API key
-- [x] HTTPS tự động từ Vercel/Render
-- [ ] Parameterized query (`$1, $2...`) cho mọi truy vấn SQL PostgreSQL
-- [ ] Ẩn `GOOGLE_PLACES_API_KEY` khỏi URL ảnh bằng Photo Proxy / Redirect resolver
-- [ ] Rate limiting ở backend (`express-rate-limit`: 10 req/phút/IP cho API AI)
-- [ ] Validate input (frontend + backend) + kiểm tra `x-session-id`
-- [ ] Cấu hình CORS chỉ cho domain frontend thật (kèm `Authorization` và `X-Auth-Status`)
-- [ ] Prompt injection protection
-- [ ] *(P1)* Link chia sẻ: token ngẫu nhiên, chỉ đọc, thu hồi được, payload lược bớt
-- [ ] *(P2)* Mật khẩu hash bằng bcrypt, không log, thông báo đăng nhập chung
-- [ ] *(P2)* Rate limit đăng nhập / đăng ký / quên mật khẩu
-- [ ] *(P2)* `JWT_SECRET` ngẫu nhiên ≥ 32 byte, token có hạn
-- [ ] *(P2)* Google ID token được **backend** xác minh
-- [ ] *(P2)* Claim chạy trong transaction, `identity` + `ownerClause()` dùng cho mọi route trip
-- [ ] *(P3)* `sanitizeProfile()` + trợ lý du lịch TP.HCM chuẩn mực; PROFILE bọc `<user_profile>`
+- [x] Lưu cấu hình bí mật trong `server/.env` (có `server/.env.example`, không commit secret).
+- [x] Truy vấn 100% qua SQLAlchemy ORM tham số hoá.
+- [x] Mật khẩu băm `bcrypt` (cost 12), thông báo đăng nhập sai dạng chung (`AUTH_INVALID_CREDENTIALS`).
+- [x] Proxy ảnh Google Places qua `GET /api/v1/places/photo`, không lộ `GOOGLE_PLACES_API_KEY`.
+- [x] Validate input bằng Pydantic v2 (HTTP `422`).
+- [x] Cấu hình `CORSMiddleware` theo `CORS_ORIGINS`.
+- [x] Link chia sẻ token 128-bit chỉ đọc, thu hồi được, ẩn thông tin ngân sách và check-in.
+- [x] Grounding đầu ra Gemini vào catalog `places` cục bộ.
+- [ ] **🚧 Chưa có:** Rate limiting HTTP theo IP (bảo vệ brute-force `/auth/login`, spam `/ai/*` và `/trips/shared/*`).
+- [ ] **🚧 Chưa có:** Thay `JWT_SECRET` mặc định (`change-me-to-a-random-string`) bằng chuỗi ngẫu nhiên mạnh trên môi trường deploy.
+- [ ] **🚧 Đang triển khai (#31):** Hỗ trợ phiên khách `x-session-id` và claim chuyến đi an toàn trong transaction.
