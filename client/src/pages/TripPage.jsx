@@ -15,7 +15,7 @@ import {
   Wallet
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import ExpenseTrackerView from '../components/companion/ExpenseTrackerView.jsx';
 import LiveCompanionView from '../components/companion/LiveCompanionView.jsx';
 import TripRecapModal from '../components/companion/TripRecapModal.jsx';
@@ -61,6 +61,7 @@ function LoadingState() {
 export default function TripPage() {
   const { id } = useParams();
   const { lang, t } = useI18n();
+  const location = useLocation();
   const navigate = useNavigate();
 
   const [trip, setTrip] = useState(null);
@@ -80,6 +81,7 @@ export default function TripPage() {
   const [showRecapModal, setShowRecapModal] = useState(false);
 
   const requestIdRef = useRef(0);
+  const aiNoticeHandledRef = useRef(false);
   const tRef = useRef(t);
   tRef.current = t;
 
@@ -121,6 +123,23 @@ export default function TripPage() {
     setShowRecapModal(false);
     loadTrip();
   }, [id, loadTrip]);
+
+  useEffect(() => {
+    const { aiConceptSource, aiGenerationSource } = location.state || {};
+    if (!aiGenerationSource || aiNoticeHandledRef.current) return;
+
+    aiNoticeHandledRef.current = true;
+    const usedFallback = aiConceptSource === 'fallback' || aiGenerationSource === 'fallback';
+    setToast({
+      message: usedFallback
+        ? (lang === 'vi'
+            ? 'Gemini chưa hoàn tất một bước; lịch trình đã dùng dữ liệu dự phòng. Hãy kiểm tra cấu hình AI nếu bạn mong đợi kết quả từ Gemini.'
+            : 'Gemini could not complete one step, so this itinerary includes fallback data. Check the AI configuration if you expected a Gemini result.')
+        : (lang === 'vi' ? 'Lịch trình được tạo bằng Gemini và đã lưu thành công.' : 'Gemini created and saved your itinerary.'),
+      tone: usedFallback ? 'error' : 'success'
+    });
+    navigate(location.pathname, { replace: true, state: null });
+  }, [lang, location.key, location.pathname, location.state, navigate]);
 
   const displayTitle = useMemo(() => {
     if (!trip) return '';
