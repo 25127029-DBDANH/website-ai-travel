@@ -25,14 +25,14 @@ services:
       dockerfile: Dockerfile
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/travel_ai_hcmc
-      FRONTEND_URL: http://localhost:5173
+      CORS_ORIGINS: "http://localhost:${FRONTEND_PORT:-5173},http://127.0.0.1:${FRONTEND_PORT:-5173}"
       JWT_SECRET: ${JWT_SECRET:-local-only-change-this-secret}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-10080}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
       GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      DEMO_FALLBACK_MODE: ${DEMO_FALLBACK_MODE:-true}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
@@ -51,7 +51,7 @@ services:
       context: ./client
       dockerfile: Dockerfile
       args:
-        VITE_USE_BACKEND: "true"
+        VITE_API_BASE: "/"
     ports:
       - "${FRONTEND_PORT:-5173}:80"
     depends_on:

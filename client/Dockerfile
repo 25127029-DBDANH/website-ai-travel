@@ -5,8 +5,8 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-ARG VITE_USE_BACKEND=true
-ENV VITE_USE_BACKEND=${VITE_USE_BACKEND}
+ARG VITE_API_BASE=/
+ENV VITE_API_BASE=${VITE_API_BASE}
 RUN npm run build
 
 FROM nginx:stable-alpine AS runtime

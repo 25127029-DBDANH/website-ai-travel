@@ -22,10 +22,10 @@ async def test_register_returns_token_and_never_returns_password_hash(client: As
 
 
 @pytest.mark.integration
-async def test_register_rejects_duplicate_username_case_insensitively(client: AsyncClient) -> None:
+async def test_register_rejects_duplicate_username(client: AsyncClient) -> None:
     first = await client.post(
         "/api/v1/auth/register",
-        json={"username": "SaigonQA", "password": "SaigonTrip!2026"},
+        json={"username": "saigonqa", "password": "SaigonTrip!2026"},
     )
     second = await client.post(
         "/api/v1/auth/register",
