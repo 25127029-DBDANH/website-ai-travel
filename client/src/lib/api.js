@@ -1,12 +1,31 @@
-// Data layer with rich HCMC catalog, detailed time slots, contingency scenarios, Google Calendar sync,
-// and real backend API integration for Auth, Trip CRUD, and Gemini AI Planning.
-// Authors: Đỗ Nguyễn An Khang (Auth & Trip CRUD), Lê Hữu Lam (Gemini AI & Smart Swap)
+// Data layer & API Gateway with rich HCMC catalog, detailed time slots, contingency scenarios,
+// Google Calendar sync, and VITE_USE_BACKEND toggle between FastAPI Backend (Khang/Lam/Đạt) and Mock Data.
+// Authors: Diệp Bảo Danh (API Gateway Lead), Đỗ Nguyễn An Khang (Auth & Trip CRUD), Lê Hữu Lam (Gemini AI), Ngô Tấn Đạt (Places)
 import { getAuthToken, clearAuthToken } from './auth.js';
 
-const RAW_API_BASE = (import.meta.env.VITE_API_BASE || 'http://localhost:8000').replace(/\/$/, '');
+const RAW_API_BASE = (import.meta.env?.VITE_API_BASE || 'http://localhost:8000').replace(/\/$/, '');
 const API_ORIGIN = RAW_API_BASE.replace(/\/api\/v1$/, '');
 export const API_BASE = API_ORIGIN;
 const AI_API_BASE = `${API_ORIGIN}/api/v1`;
+
+// ---------------------------------------------------------------------------
+// VITE_USE_BACKEND Gateway Toggle (Issue #11)
+// - Default: true (calls FastAPI endpoints of Khang, Lam, Đạt)
+// - When VITE_USE_BACKEND=false: uses local Mock Data so UI never fails offline
+// ---------------------------------------------------------------------------
+const RAW_USE_BACKEND = String(import.meta.env?.VITE_USE_BACKEND ?? 'true').trim().toLowerCase();
+export const USE_BACKEND = RAW_USE_BACKEND !== 'false' && RAW_USE_BACKEND !== '0';
+
+let runtimeUseBackendOverride = null;
+
+export function setUseBackend(enabled) {
+  runtimeUseBackendOverride = typeof enabled === 'boolean' ? enabled : null;
+}
+
+export function isBackendEnabled() {
+  if (typeof runtimeUseBackendOverride === 'boolean') return runtimeUseBackendOverride;
+  return USE_BACKEND;
+}
 
 export class ApiError extends Error {
   constructor(message, code = 'LOCAL_DATA', status = 0) {
@@ -1511,18 +1530,66 @@ function cacheBackendItems(tripId, items, tripUpdates = {}) {
   return { items, budget_summary: budgetFor(trip, items) };
 }
 
+function getLocalTripData(tripId) {
+  const entry = record(tripId);
+  return {
+    trip: entry.trip,
+    itinerary_items: entry.items || [],
+    budget_summary: summarize(entry.trip, entry.items || []),
+  };
+}
+
 async function getBackendTrip(tripId) {
-  const data = await request('GET', `/api/v1/trips/${tripId}`);
-  cacheBackendTrip(data.trip, data.itinerary_items || []);
-  return data;
+  if (!isBackendEnabled()) {
+    return getLocalTripData(tripId);
+  }
+  try {
+    const data = await request('GET', `/api/v1/trips/${tripId}`);
+    cacheBackendTrip(data.trip, data.itinerary_items || []);
+    return data;
+  } catch (err) {
+    if (err?.code === 'NETWORK_ERROR' && (!tripId || tripId === 'demo' || String(tripId).startsWith('demo'))) {
+      return getLocalTripData(tripId || 'demo');
+    }
+    throw err;
+  }
 }
 
 async function saveBackendItems(tripId, items) {
+  if (!isBackendEnabled()) {
+    const entry = record(tripId);
+    const summary = summarize(entry.trip, items);
+    return cacheBackendItems(tripId, items, {
+      total_estimated: summary.total_estimated,
+      place_count: items.length,
+    });
+  }
   const trip = await request('PUT', `/api/v1/trips/${tripId}`, { itinerary_items: items });
   return cacheBackendItems(tripId, items, trip);
 }
 
 async function updateBackendItem(tripId, dayNumber, orderIndex, updates) {
+  if (!isBackendEnabled()) {
+    const entry = record(tripId);
+    const items = (entry.items || []).map((item) => {
+      if (item.day_number !== Number(dayNumber) || item.order_index !== Number(orderIndex)) {
+        return item;
+      }
+      const next = { ...item };
+      if ('visited' in updates) next.visited = Boolean(updates.visited);
+      if ('is_accepted' in updates) next.is_accepted = Boolean(updates.is_accepted);
+      if ('photo_url' in updates) {
+        if (updates.photo_url) next.checkin_photo = updates.photo_url;
+        else delete next.checkin_photo;
+      }
+      if ('note' in updates) {
+        if (updates.note) next.checkin_note = updates.note;
+        else delete next.checkin_note;
+      }
+      return next;
+    });
+    return cacheBackendItems(tripId, items);
+  }
   const result = await request(
     'PATCH',
     `/api/v1/trips/${tripId}/items/${dayNumber}/${orderIndex}`,
@@ -1638,22 +1705,52 @@ export function downloadIcsFile(trip, items) {
 
 export const api = {
   // =====================================================================
-  // AUTH — calls real backend
+  // AUTH — FastAPI Backend (Khang) when VITE_USE_BACKEND=true, Mock Data when false
   // =====================================================================
   register: async ({ username, password } = {}) => {
+    if (!isBackendEnabled()) {
+      const cleanName = String(username || '').trim();
+      if (cleanName.length < 3) {
+        throw new ApiError('Tên đăng nhập cần tối thiểu 3 ký tự.', 'INVALID_USERNAME', 400);
+      }
+      const state = readState();
+      const user = { id: `mock-user-${cleanName}`, username: cleanName, display_name: cleanName };
+      state.user = user;
+      save(state);
+      return { token: `mock-jwt-${cleanName}`, user };
+    }
     return request('POST', '/api/v1/auth/register', { username, password });
   },
   login: async ({ username, password } = {}) => {
+    if (!isBackendEnabled()) {
+      const cleanName = String(username || '').trim() || 'demo';
+      const state = readState();
+      const user = { id: `mock-user-${cleanName}`, username: cleanName, display_name: cleanName };
+      state.user = user;
+      save(state);
+      return { token: `mock-jwt-${cleanName}`, user };
+    }
     return request('POST', '/api/v1/auth/login', { username, password });
   },
   loginWithGoogle: async () => {
     throw new ApiError('Google Sign-In is not available', 'GOOGLE_NOT_CONFIGURED', 0);
   },
   getMe: async () => {
+    if (!isBackendEnabled()) {
+      const state = readState();
+      const user = state.user || { id: 'mock-user-demo', username: 'demo', display_name: 'Demo Traveler' };
+      return { user };
+    }
     return request('GET', '/api/v1/auth/me');
   },
   changePassword: async () => ({ success: true }),
   deleteAccount: async (payload) => {
+    if (!isBackendEnabled()) {
+      const state = readState();
+      state.user = null;
+      save(state);
+      return { deleted: true };
+    }
     return request('DELETE', '/api/v1/auth/me', payload);
   },
 
@@ -1669,14 +1766,108 @@ export const api = {
   },
 
   // =====================================================================
-  // AI — calls Gemini AI backend (Concept, Generate, Smart Swap)
+  // AI — FastAPI Gemini AI (Lam) when VITE_USE_BACKEND=true, Mock Data when false
   // =====================================================================
-  suggestTripConcept: (payload) => postAiRequest('/ai/concept', payload),
-  generateAiItinerary: (payload) => postAiRequest('/ai/generate', payload),
-  suggestPlaceSwaps: (payload) => postAiRequest('/ai/swap', payload),
+  suggestTripConcept: async (payload = {}) => {
+    if (!isBackendEnabled()) {
+      const days = Math.min(14, Math.max(1, Number(payload.days) || 2));
+      const budget = Number(payload.budget) || 3000000;
+      const districts = Array.isArray(payload.districts) && payload.districts.length
+        ? payload.districts.slice(0, 3)
+        : ['Quận 1', 'Quận 3'];
+      const highlights = PLACES
+        .filter((p) => districts.some((d) => p.district.toLowerCase().includes(d.replace(/^tp\.\s*/i, '').toLowerCase())))
+        .slice(0, 3)
+        .map((p) => p.place_name);
+      return {
+        summary: `Gợi ý lịch trình ${days} ngày tại TP.HCM khám phá ${districts.join(', ')} với ngân sách ${budget.toLocaleString('vi-VN')} VND.`,
+        highlights: highlights.length ? highlights : PLACES.slice(0, 3).map((p) => p.place_name),
+        recommended_districts: districts,
+        route_overview: districts.join(' → '),
+        confirmation_question: 'Bạn có đồng ý với concept lịch trình này không?',
+      };
+    }
+    return postAiRequest('/ai/concept', payload);
+  },
+  generateAiItinerary: async (payload = {}) => {
+    if (!isBackendEnabled()) {
+      const days = Math.min(14, Math.max(1, Number(payload.days) || 2));
+      const placesPerDay = Math.min(6, Math.max(3, Number(payload.places_per_day) || 4));
+      const items = makeItinerary(
+        days,
+        placesPerDay,
+        0,
+        payload.start_location || 'Quận 1, TP. Hồ Chí Minh',
+        payload.transport_mode || 'grab_bike'
+      );
+      return { itinerary_items: items };
+    }
+    return postAiRequest('/ai/generate', payload);
+  },
+  suggestPlaceSwaps: async (payload = {}) => {
+    if (!isBackendEnabled()) {
+      const current = payload.current_item || {};
+      const alternatives = PLACES
+        .filter((p) => p.place_name !== current.place_name)
+        .sort((a, b) => Number(b.district === current.district) - Number(a.district === current.district))
+        .slice(0, 3)
+        .map((p) => ({
+          ...p,
+          opening_hours: ['08:00 - 21:00'],
+          suggested_duration: 60,
+          replacement_reason: `Cùng khu vực ${p.district}; chi phí dự kiến ${(p.estimated_cost || 0).toLocaleString('vi-VN')} VND.`,
+        }));
+      return { alternatives };
+    }
+    return postAiRequest('/ai/swap', payload);
+  },
 
   // =====================================================================
-  // TRIPS — calls real backend
+  // PLACES — FastAPI Places (Đạt) when VITE_USE_BACKEND=true, Mock Data when false
+  // =====================================================================
+  searchPlaces: async ({ q = '', district = '', category = '', limit = 20 } = {}) => {
+    if (!isBackendEnabled()) {
+      const kw = String(q || '').trim().toLowerCase();
+      const dist = String(district || '').replace(/^tp\.\s*/i, '').trim().toLowerCase();
+      const cat = String(category || '').trim().toLowerCase();
+      const results = PLACES.filter((p) => {
+        if (kw && !p.place_name.toLowerCase().includes(kw) && !(p.description || '').toLowerCase().includes(kw)) return false;
+        if (dist && !p.district.toLowerCase().includes(dist)) return false;
+        if (cat && p.category.toLowerCase() !== cat) return false;
+        return true;
+      }).slice(0, Number(limit) || 20);
+      return { total: results.length, results };
+    }
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (district) params.set('district', district);
+    if (category) params.set('category', category);
+    if (limit) params.set('limit', String(limit));
+    return request('GET', `/api/v1/places/search?${params.toString()}`);
+  },
+  getNearbyPlaces: async ({ lat, lng, radius_km = 2, limit = 10 } = {}) => {
+    if (!isBackendEnabled()) {
+      const results = PLACES.slice(0, Number(limit) || 10);
+      return { total: results.length, results };
+    }
+    const params = new URLSearchParams({
+      lat: String(lat ?? 10.7769),
+      lng: String(lng ?? 106.7009),
+      radius_km: String(radius_km),
+      limit: String(limit),
+    });
+    return request('GET', `/api/v1/places/nearby?${params.toString()}`);
+  },
+  getPlaceDetail: async (placeId) => {
+    if (!isBackendEnabled()) {
+      const found = PLACES.find((p) => p.place_id === placeId || p.id === placeId) || PLACES[0];
+      return found;
+    }
+    return request('GET', `/api/v1/places/${placeId}`);
+  },
+
+  // =====================================================================
+  // TRIPS — FastAPI Trips (Khang) when VITE_USE_BACKEND=true, Mock Data when false
   // =====================================================================
   createTrip: async (payload = {}) => {
     const days = Math.min(14, Math.max(1, Number(payload.days) || 3));
@@ -1711,18 +1902,48 @@ export const api = {
       itinerary_items: items,
     };
 
+    if (!isBackendEnabled()) {
+      const id = nextId();
+      const summary = budgetFor({ budget: body.budget, days }, items);
+      const mockTrip = {
+        id,
+        ...body,
+        status: 'completed',
+        created_at: new Date().toISOString(),
+        cover_photo: items[0]?.photo_url || photo('trip-palace.jpg'),
+        cover_place_name: items[0]?.place_name || 'Sài Gòn',
+        total_estimated: summary.total_estimated,
+        place_count: items.length,
+        is_shared: false,
+      };
+      cacheBackendTrip(mockTrip, items);
+      return mockTrip;
+    }
+
     const trip = await request('POST', '/api/v1/trips/', body);
     cacheBackendTrip(trip, items);
     return trip;
   },
 
   listTrips: async () => {
+    if (!isBackendEnabled()) {
+      const state = readState();
+      const trips = Object.values(state.trips || {}).map((entry) => entry.trip);
+      return { trips };
+    }
     return request('GET', '/api/v1/trips/me');
   },
 
   getTrip: getBackendTrip,
 
   updateTrip: async (id, updates) => {
+    if (!isBackendEnabled()) {
+      const entry = record(id);
+      const updatedTrip = { ...entry.trip, ...updates };
+      const nextItems = Array.isArray(updates?.itinerary_items) ? updates.itinerary_items : entry.items;
+      cacheBackendTrip(updatedTrip, nextItems);
+      return updatedTrip;
+    }
     const trip = await request('PUT', `/api/v1/trips/${id}`, updates);
     const state = readState();
     if (state.trips?.[id]) {
@@ -1732,26 +1953,77 @@ export const api = {
   },
 
   deleteTrip: async (id) => {
+    if (!isBackendEnabled()) {
+      const state = readState();
+      if (state.trips?.[id]) {
+        delete state.trips[id];
+        save(state);
+      }
+      return { deleted: true };
+    }
     return request('DELETE', `/api/v1/trips/${id}`);
   },
 
   duplicateTrip: async (id) => {
+    if (!isBackendEnabled()) {
+      const entry = record(id);
+      const newId = nextId();
+      const clonedTrip = {
+        ...entry.trip,
+        id: newId,
+        title: `${entry.trip.title} (Bản sao)`,
+        created_at: new Date().toISOString(),
+        is_shared: false,
+      };
+      const clonedItems = (entry.items || []).map((it) => ({ ...it, visited: false }));
+      cacheBackendTrip(clonedTrip, clonedItems);
+      return { new_trip_id: newId, trip: clonedTrip };
+    }
     return request('POST', `/api/v1/trips/${id}/clone`);
   },
 
   createShareLink: async (id) => {
+    if (!isBackendEnabled()) {
+      const state = readState();
+      const entry = record(id);
+      const token = `share-${id}`;
+      entry.trip.is_shared = true;
+      entry.trip.share_token = token;
+      state.shares = { ...(state.shares || {}), [token]: id };
+      save(state);
+      return { share_token: token, share_url: `${typeof window !== 'undefined' ? window.location.origin : ''}/shared/${token}` };
+    }
     return request('POST', `/api/v1/trips/${id}/share`);
   },
 
   revokeShareLink: async (id) => {
+    if (!isBackendEnabled()) {
+      const state = readState();
+      const entry = record(id);
+      const token = entry.trip.share_token || `share-${id}`;
+      entry.trip.is_shared = false;
+      delete entry.trip.share_token;
+      if (state.shares) delete state.shares[token];
+      save(state);
+      return { revoked: true };
+    }
     return request('DELETE', `/api/v1/trips/${id}/share`);
   },
 
   getSharedTrip: async (token) => {
+    if (!isBackendEnabled()) {
+      const state = readState();
+      const tripId = state.shares?.[token] || (String(token).startsWith('share-') ? String(token).slice(6) : 'demo');
+      return getLocalTripData(tripId);
+    }
     return request('GET', `/api/v1/trips/shared/${token}`);
   },
 
   cloneSharedTrip: async (token) => {
+    if (!isBackendEnabled()) {
+      const shared = await api.getSharedTrip(token);
+      return api.duplicateTrip(shared.trip.id);
+    }
     return request('POST', `/api/v1/trips/shared/${token}/clone`);
   },
 
