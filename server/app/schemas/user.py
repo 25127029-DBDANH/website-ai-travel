@@ -13,13 +13,18 @@ from pydantic import BaseModel, Field
 # Request schemas
 # ---------------------------------------------------------------------------
 class UserCreate(BaseModel):
-    username: str = Field(..., min_length=3, max_length=30, pattern=r"^[A-Za-z0-9_]+$")
-    password: str = Field(..., min_length=8, max_length=72)
+    username: str = Field(..., max_length=64)
+    password: str = Field(..., max_length=256)
 
 
 class UserLogin(BaseModel):
     username: str
     password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 
 class DeleteAccountRequest(BaseModel):

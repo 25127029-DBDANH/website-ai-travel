@@ -4,12 +4,18 @@ Author  : Đỗ Nguyễn An Khang (Backend Lead & Auth Service)
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import delete, select
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.password_policy import validate_password, validate_username
+from app.core.rate_limit import (
+    check_login_rate_limit,
+    clear_login_failures,
+    record_login_failure,
+)
+from app.core.security import DUMMY_HASH, create_access_token, hash_password, verify_password
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.user import (
@@ -28,16 +34,19 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # ---------------------------------------------------------------------------
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)):
-    # Check if username already taken
-    result = await db.execute(select(User).where(User.username == payload.username))
-    if result.scalar_one_or_none():
+    name = validate_username(payload.username)
+    validate_password(payload.password, name)
+
+    # Check if username already taken (case-insensitive)
+    result = await db.execute(select(User).where(func.lower(User.username) == name.lower()))
+    if result.scalars().first():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="AUTH_USERNAME_TAKEN",
         )
 
     user = User(
-        username=payload.username,
+        username=name,
         hashed_password=hash_password(payload.password),
     )
     db.add(user)
@@ -56,16 +65,31 @@ async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)):
 # POST /login
 # ---------------------------------------------------------------------------
 @router.post("/login", response_model=AuthResponse)
-async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.username == payload.username))
-    user = result.scalar_one_or_none()
+async def login(payload: UserLogin, request: Request, db: AsyncSession = Depends(get_db)):
+    client_ip = request.client.host if request.client else "unknown"
+    check_login_rate_limit(payload.username, client_ip)
 
-    if user is None or not verify_password(payload.password, user.hashed_password):
+    result = await db.execute(
+        select(User).where(func.lower(User.username) == payload.username.strip().lower())
+    )
+    user = result.scalars().first()
+
+    if user is None:
+        verify_password(payload.password, DUMMY_HASH)
+        record_login_failure(payload.username, client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="AUTH_INVALID_CREDENTIALS",
         )
 
+    if not verify_password(payload.password, user.hashed_password):
+        record_login_failure(payload.username, client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="AUTH_INVALID_CREDENTIALS",
+        )
+
+    clear_login_failures(payload.username, client_ip)
     token = create_access_token({"sub": user.id})
     return AuthResponse(
         user=UserOut.model_validate(user),

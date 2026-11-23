@@ -1,4 +1,4 @@
-import { KeyRound, Loader2, Settings as SettingsIcon, ShieldCheck, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, KeyRound, Loader2, Settings as SettingsIcon, ShieldCheck, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import GoogleSignInButton from '../components/GoogleSignInButton.jsx';
 import SiteHeader from '../components/SiteHeader.jsx';
@@ -7,7 +7,9 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { DEMO, Black } from '../demo.jsx';
 import { api } from '../lib/api.js';
+import { cn } from '../lib/cn.js';
 import { translateApiError } from '../lib/errors.js';
+import { checkPassword } from '../lib/passwordPolicy.js';
 
 function SignInCard() {
   const { t } = useI18n();
@@ -39,6 +41,11 @@ export default function SettingsPage() {
   const [toast, setToast] = useState(null);
 
   const [passwords, setPasswords] = useState({ current: '', next: '', confirm: '' });
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    next: false,
+    confirm: false
+  });
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState('');
 
@@ -95,9 +102,22 @@ export default function SettingsPage() {
     }
   };
 
+  const passwordCheck = checkPassword(passwords.next, user?.username || '');
+  const visiblePasswordRules = user?.username
+    ? passwordCheck.rules
+    : passwordCheck.rules.filter((rule) => rule.id !== 'noUsername');
+
+  const togglePasswordVisibility = (field) => {
+    setShowPasswords((current) => ({ ...current, [field]: !current[field] }));
+  };
+
   const handleChangePassword = async (event) => {
     event.preventDefault();
     if (passwordSaving) return;
+    if (!passwordCheck.valid) {
+      setPasswordError(t(`error.${passwordCheck.code}`));
+      return;
+    }
     if (passwords.next !== passwords.confirm) {
       setPasswordError(t('settings.password.mismatch'));
       return;
@@ -111,6 +131,7 @@ export default function SettingsPage() {
         new_password: passwords.next
       });
       setPasswords({ current: '', next: '', confirm: '' });
+      setShowPasswords({ current: false, next: false, confirm: false });
       setToast({ message: t('settings.password.saved'), tone: 'success' });
     } catch (error) {
       setPasswordError(translateApiError(t, error));
@@ -327,53 +348,136 @@ export default function SettingsPage() {
               </div>
               {user.has_password ? (
                 <form onSubmit={handleChangePassword} className="mt-3 grid gap-3">
-                  <label className="grid gap-1.5">
-                    <span className="label !mb-0">{t('settings.password.current')}</span>
-                    <input
-                      type="password"
-                      className="input"
-                      value={passwords.current}
-                      onChange={(event) =>
-                        setPasswords((current) => ({ ...current, current: event.target.value }))
-                      }
-                      autoComplete="current-password"
-                      maxLength={72}
-                      required
-                    />
-                  </label>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="grid gap-1.5">
-                      <span className="label !mb-0">{t('settings.password.new')}</span>
+                  <div className="grid gap-1.5">
+                    <label htmlFor="settings-password-current" className="label !mb-0">
+                      {t('settings.password.current')}
+                    </label>
+                    <div className="relative">
                       <input
-                        type="password"
-                        className="input"
-                        value={passwords.next}
-                        onChange={(event) =>
-                          setPasswords((current) => ({ ...current, next: event.target.value }))
-                        }
-                        autoComplete="new-password"
-                        minLength={8}
+                        id="settings-password-current"
+                        type={showPasswords.current ? 'text' : 'password'}
+                        className="input pr-11"
+                        value={passwords.current}
+                        onChange={(event) => {
+                          setPasswords((current) => ({ ...current, current: event.target.value }));
+                          if (passwordError) setPasswordError('');
+                        }}
+                        autoComplete="current-password"
                         maxLength={72}
                         required
                       />
-                    </label>
-                    <label className="grid gap-1.5">
-                      <span className="label !mb-0">{t('settings.password.confirm')}</span>
-                      <input
-                        type="password"
-                        className="input"
-                        value={passwords.confirm}
-                        onChange={(event) =>
-                          setPasswords((current) => ({ ...current, confirm: event.target.value }))
+                      <button
+                        type="button"
+                        onClick={() => togglePasswordVisibility('current')}
+                        aria-label={
+                          showPasswords.current ? t('auth.hidePassword') : t('auth.showPassword')
                         }
-                        autoComplete="new-password"
-                        minLength={8}
-                        maxLength={72}
-                        required
-                      />
-                    </label>
+                        aria-pressed={showPasswords.current}
+                        className="touch-target absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        {showPasswords.current ? (
+                          <EyeOff className="h-4 w-4" aria-hidden="true" />
+                        ) : (
+                          <Eye className="h-4 w-4" aria-hidden="true" />
+                        )}
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-[11px] text-slate-500">{t('settings.password.body')}</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-1.5">
+                      <label htmlFor="settings-password-next" className="label !mb-0">
+                        {t('settings.password.new')}
+                      </label>
+                      <div className="relative">
+                        <input
+                          id="settings-password-next"
+                          type={showPasswords.next ? 'text' : 'password'}
+                          className="input pr-11"
+                          value={passwords.next}
+                          onChange={(event) => {
+                            setPasswords((current) => ({ ...current, next: event.target.value }));
+                            if (passwordError) setPasswordError('');
+                          }}
+                          aria-describedby="settings-password-rules"
+                          autoComplete="new-password"
+                          minLength={8}
+                          maxLength={64}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => togglePasswordVisibility('next')}
+                          aria-label={
+                            showPasswords.next ? t('auth.hidePassword') : t('auth.showPassword')
+                          }
+                          aria-pressed={showPasswords.next}
+                          className="touch-target absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                        >
+                          {showPasswords.next ? (
+                            <EyeOff className="h-4 w-4" aria-hidden="true" />
+                          ) : (
+                            <Eye className="h-4 w-4" aria-hidden="true" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid gap-1.5">
+                      <label htmlFor="settings-password-confirm" className="label !mb-0">
+                        {t('settings.password.confirm')}
+                      </label>
+                      <div className="relative">
+                        <input
+                          id="settings-password-confirm"
+                          type={showPasswords.confirm ? 'text' : 'password'}
+                          className="input pr-11"
+                          value={passwords.confirm}
+                          onChange={(event) => {
+                            setPasswords((current) => ({ ...current, confirm: event.target.value }));
+                            if (passwordError) setPasswordError('');
+                          }}
+                          autoComplete="new-password"
+                          minLength={8}
+                          maxLength={64}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => togglePasswordVisibility('confirm')}
+                          aria-label={
+                            showPasswords.confirm ? t('auth.hidePassword') : t('auth.showPassword')
+                          }
+                          aria-pressed={showPasswords.confirm}
+                          className="touch-target absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                        >
+                          {showPasswords.confirm ? (
+                            <EyeOff className="h-4 w-4" aria-hidden="true" />
+                          ) : (
+                            <Eye className="h-4 w-4" aria-hidden="true" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <ul
+                    id="settings-password-rules"
+                    aria-live="polite"
+                    className="grid gap-1 text-[11px]"
+                  >
+                    {visiblePasswordRules.map((rule) => (
+                      <li
+                        key={rule.id}
+                        className={cn(
+                          'flex items-start gap-1.5 leading-snug transition-colors',
+                          rule.ok ? 'font-medium text-brand-700' : 'text-slate-500'
+                        )}
+                      >
+                        <span aria-hidden="true" className="w-3.5 shrink-0 text-center font-bold">
+                          {rule.ok ? '✓' : '○'}
+                        </span>
+                        <span>{t(`auth.rule.${rule.id}`)}</span>
+                      </li>
+                    ))}
+                  </ul>
                   {passwordError ? (
                     <p
                       role="alert"

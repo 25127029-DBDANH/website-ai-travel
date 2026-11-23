@@ -19,6 +19,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import StaticPool
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limit() -> None:
+    from app.core import rate_limit
+
+    rate_limit.reset()
+
+
 @pytest_asyncio.fixture
 async def test_database() -> AsyncIterator[tuple[Any, async_sessionmaker[AsyncSession]]]:
     """Create a fresh SQLite database from all registered ORM models."""
