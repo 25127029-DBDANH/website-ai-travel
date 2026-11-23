@@ -133,7 +133,7 @@ function makeFallbackConcept(tripRequest, error, lang) {
 
 export default function TripForm() {
   const { lang, t } = useI18n();
-  const { user, openAuth } = useAuth();
+  const { user, loading, openAuth } = useAuth();
   const navigate = useNavigate();
 
   const [mode, setMode] = useState('form');
@@ -274,6 +274,7 @@ export default function TripForm() {
       return;
     }
 
+    if (loading) return;
     if (!user) {
       showError(
         'auth',
@@ -325,6 +326,7 @@ export default function TripForm() {
 
   const handleApproveConcept = async () => {
     if (!pendingTrip || !concept || submitting) return;
+    if (loading) return;
     if (!user) {
       showError(
         'auth',
