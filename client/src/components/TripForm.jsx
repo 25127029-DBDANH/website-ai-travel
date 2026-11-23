@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { DEMO } from '../demo.jsx';
 import { preferenceOptions } from '../i18n/translations.js';
@@ -79,8 +80,60 @@ const SPECIAL_NOTES = [
   { id: 'limited_walking', label: 'Hạn chế đi bộ xa', emoji: '🚶' }
 ];
 
+const PLACES_PER_DAY_BY_PACE = { relaxed: 3, moderate: 4, packed: 6 };
+const AI_TRANSPORT_MODE = {
+  motorbike: 'grab_bike',
+  grab_car: 'grab_car',
+  metro_walking: 'public'
+};
+
+function districtFromStartLocation(startLocation) {
+  const value = startLocation.toLocaleLowerCase('vi-VN');
+  const matches = [
+    [/thủ\s*đức|thảo\s*điền/, 'Thủ Đức'],
+    [/bình\s*thạnh/, 'Bình Thạnh'],
+    [/phú\s*nhuận/, 'Phú Nhuận'],
+    [/quận\s*7|q\.?\s*7\b/, 'Quận 7'],
+    [/quận\s*5|q\.?\s*5\b/, 'Quận 5'],
+    [/quận\s*4|q\.?\s*4\b/, 'Quận 4'],
+    [/quận\s*3|q\.?\s*3\b/, 'Quận 3'],
+    [/quận\s*1|q\.?\s*1\b/, 'Quận 1']
+  ];
+  return matches.find(([pattern]) => pattern.test(value))?.[1] || 'Quận 1';
+}
+
+function specialNotesForAi(noteIds) {
+  return noteIds
+    .map((id) => SPECIAL_NOTES.find((note) => note.id === id)?.label)
+    .filter(Boolean)
+    .join(', ');
+}
+
+function canUseLocalItineraryFallback(error) {
+  return error?.code === 'AI_UNAVAILABLE' || error?.status === 0 ||
+    [408, 429, 500, 502, 503, 504].includes(error?.status);
+}
+
+function makeFallbackConcept(tripRequest, error, lang) {
+  const district = tripRequest.districts.join(', ');
+  return {
+    source: 'fallback',
+    summary: lang === 'vi'
+      ? `Chuyến đi ${tripRequest.days} ngày, ưu tiên ${tripRequest.preferences.join(', ')} tại ${district}, trong ngân sách ${formatVnd(tripRequest.budget, lang)}.`
+      : `A ${tripRequest.days}-day trip focused on ${tripRequest.preferences.join(', ')} in ${district}, within a ${formatVnd(tripRequest.budget, lang)} budget.`,
+    highlights: [],
+    recommended_districts: tripRequest.districts,
+    route_overview: district,
+    confirmation_question: lang === 'vi'
+      ? 'Gemini hiện không khả dụng. Bạn muốn tiếp tục với lịch trình dự phòng không?'
+      : 'Gemini is unavailable. Would you like to continue with a fallback itinerary?',
+    fallback_reason: error?.message || ''
+  };
+}
+
 export default function TripForm() {
   const { lang, t } = useI18n();
+  const { user, loading, openAuth } = useAuth();
   const navigate = useNavigate();
 
   const [mode, setMode] = useState('form');
@@ -99,6 +152,9 @@ export default function TripForm() {
   const [error, setError] = useState('');
   const [errorField, setErrorField] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [submissionStage, setSubmissionStage] = useState('');
+  const [concept, setConcept] = useState(null);
+  const [pendingTrip, setPendingTrip] = useState(null);
 
   const defaultStartRef = useRef(t('form.startDefault'));
   const startRef = useRef(null);
@@ -213,30 +269,116 @@ export default function TripForm() {
       showError('budget', t('form.validation.budget'), budgetRef);
       return;
     }
+    if (payloadPreferences.length === 0) {
+      showError('preferences', lang === 'vi' ? 'Hãy chọn ít nhất một sở thích để AI tạo lịch trình.' : 'Choose at least one preference so AI can plan your trip.');
+      return;
+    }
+
+    if (loading) return;
+    if (!user) {
+      showError(
+        'auth',
+        lang === 'vi'
+          ? 'Vui lòng đăng nhập trước khi tạo lịch trình với Gemini để lưu chuyến đi.'
+          : 'Please log in before generating an itinerary with Gemini to save your trip.'
+      );
+      openAuth('login');
+      return;
+    }
 
     setSubmitting(true);
     if (DEMO) {
       navigate('/trip/demo');
       return;
     }
+    let tripRequest;
     try {
-      const trip = await api.createTrip({
+      tripRequest = {
         start_location: start,
         budget: Math.round(payloadBudget),
         days: payloadDays,
+        districts: [districtFromStartLocation(start)],
+        places_per_day: PLACES_PER_DAY_BY_PACE[pace] || 4,
+        companion: groupType,
+        member_count: groupType === 'solo' ? 1 : groupType === 'couple' ? 2 : 4,
+        transport_mode: AI_TRANSPORT_MODE[transportMode] || 'grab_bike',
         preferences: payloadPreferences,
-        group_type: groupType,
-        transport_mode: transportMode,
         pace,
+        special_notes: specialNotesForAi(specialNotes)
+      };
+      setPendingTrip(tripRequest);
+      setSubmissionStage('concept');
+      const suggestedConcept = await api.suggestTripConcept(tripRequest);
+      setConcept(suggestedConcept);
+      setError('');
+    } catch (requestError) {
+      if (canUseLocalItineraryFallback(requestError)) {
+        setPendingTrip(tripRequest);
+        setConcept(makeFallbackConcept(tripRequest, requestError, lang));
+      } else {
+        setError(requestError?.message || translateApiError(t, requestError));
+      }
+    } finally {
+      setSubmitting(false);
+      setSubmissionStage('');
+    }
+  };
+
+  const handleApproveConcept = async () => {
+    if (!pendingTrip || !concept || submitting) return;
+    if (loading) return;
+    if (!user) {
+      showError(
+        'auth',
+        lang === 'vi'
+          ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để tiếp tục.'
+          : 'Your session has expired. Please log in again to continue.'
+      );
+      openAuth('login');
+      return;
+    }
+    clearError();
+    setSubmitting(true);
+    setSubmissionStage('generate');
+    try {
+      let generated;
+      if (concept.fallback_reason) {
+        generated = { source: 'fallback', itinerary_items: null };
+      } else {
+        try {
+          generated = await api.generateAiItinerary({
+            ...pendingTrip,
+            approved_concept: concept
+          });
+        } catch (requestError) {
+          if (!canUseLocalItineraryFallback(requestError)) throw requestError;
+          generated = { source: 'fallback', itinerary_items: null };
+        }
+      }
+      setSubmissionStage('save');
+      const tripPayload = {
+        ...pendingTrip,
+        group_type: pendingTrip.companion,
+        transport_mode: transportMode,
         schedule_profile: scheduleProfile,
         special_notes: specialNotes,
         source: mode === 'sentence' ? 'sentence' : 'form'
+      };
+      if (generated.itinerary_items?.length) {
+        tripPayload.itinerary_items = generated.itinerary_items;
+      }
+      const trip = await api.createTrip(tripPayload);
+      navigate(`/trip/${trip.id}`, {
+        state: {
+          aiConceptSource: concept.source || 'gemini',
+          aiGenerationSource: generated.source || 'gemini'
+        }
       });
-      navigate(`/trip/${trip.id}`);
     } catch (requestError) {
-      setError(translateApiError(t, requestError));
+      setError(requestError?.message || translateApiError(t, requestError));
     } finally {
       setSubmitting(false);
+      setSubmissionStage('');
     }
   };
 
@@ -251,6 +393,7 @@ export default function TripForm() {
     : [];
 
   return (
+    <>
     <form
       onSubmit={handleSubmit}
       className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 shadow-soft backdrop-blur"
@@ -762,7 +905,11 @@ export default function TripForm() {
           {submitting ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Đang kiến tạo lịch trình Sài Gòn...
+              {submissionStage === 'concept'
+                ? (lang === 'vi' ? 'Gemini đang đề xuất concept (khoảng 15–30 giây)...' : 'Gemini is proposing a trip concept (approx. 15–30s)...')
+                : submissionStage === 'generate'
+                  ? (lang === 'vi' ? 'Gemini đang thiết kế chi tiết lịch trình (khoảng 30–45 giây)...' : 'Gemini is designing detailed itinerary (approx. 30–45s)...')
+                  : (lang === 'vi' ? 'Đang lưu lịch trình...' : 'Saving your itinerary...')}
             </>
           ) : (
             <>
@@ -773,5 +920,124 @@ export default function TripForm() {
         </button>
       </div>
     </form>
+    {concept && (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="trip-concept-title"
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+      >
+        <section className="w-full max-w-xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+          <header className="flex items-start justify-between gap-4 border-b border-slate-100 bg-brand-50/70 p-5 sm:p-6">
+            <div>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white px-2.5 py-1 text-[10px] font-bold text-brand-700">
+                <Sparkles className="h-3 w-3" />
+                {concept.source === 'fallback'
+                  ? (lang === 'vi' ? 'Gợi ý dự phòng' : 'Fallback suggestion')
+                  : (lang === 'vi' ? 'Đề xuất từ Gemini' : 'Gemini suggestion')}
+              </span>
+              <h2 id="trip-concept-title" className="mt-2 font-display text-xl font-extrabold text-slate-900">
+                {lang === 'vi' ? 'Concept chuyến đi của bạn' : 'Your trip concept'}
+              </h2>
+            </div>
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => { setConcept(null); setPendingTrip(null); clearError(); }}
+              className="rounded-full p-2 text-slate-500 hover:bg-white disabled:opacity-50"
+              aria-label={lang === 'vi' ? 'Đóng concept' : 'Close concept'}
+            >
+              ×
+            </button>
+          </header>
+
+          <div className="max-h-[70vh] space-y-4 overflow-y-auto p-5 sm:p-6">
+            {concept.source === 'fallback' && (
+              <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+                {concept.fallback_reason
+                  ? (lang === 'vi'
+                      ? 'Không kết nối được Gemini. Khi bạn đồng ý, hệ thống sẽ tạo lịch trình dự phòng và báo rõ nguồn kết quả.'
+                      : 'Could not reach Gemini. If you approve, the app will create a fallback itinerary and label its source.')
+                  : lang === 'vi'
+                  ? 'Gemini chưa trả lời được. Đây là concept dự phòng được tạo từ danh sách địa điểm có sẵn.'
+                  : 'Gemini did not respond. This fallback concept was created from the available place catalog.'}
+              </p>
+            )}
+            <p className="text-sm leading-relaxed text-slate-700">{concept.summary}</p>
+
+            {concept.highlights?.length > 0 && (
+              <section>
+                <h3 className="text-xs font-extrabold uppercase tracking-wide text-slate-500">{lang === 'vi' ? 'Điểm nổi bật' : 'Highlights'}</h3>
+                <ul className="mt-2 space-y-1.5">
+                  {concept.highlights.map((highlight, index) => (
+                    <li key={`${highlight}-${index}`} className="flex gap-2 text-sm text-slate-700">
+                      <span className="text-brand-600">•</span>{highlight}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {concept.recommended_districts?.length > 0 && (
+              <section>
+                <h3 className="text-xs font-extrabold uppercase tracking-wide text-slate-500">{lang === 'vi' ? 'Các quận dự kiến' : 'Recommended districts'}</h3>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {concept.recommended_districts.map((district) => (
+                    <span key={district} className="rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-bold text-brand-800">
+                      {district}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section>
+              <h3 className="text-xs font-extrabold uppercase tracking-wide text-slate-500">{lang === 'vi' ? 'Lộ trình gợi ý' : 'Suggested route'}</h3>
+              <p className="mt-1 text-sm text-slate-700">{concept.route_overview}</p>
+            </section>
+
+            <p className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-800">
+              {concept.confirmation_question}
+            </p>
+            {error && (
+              <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">
+                {error}
+              </p>
+            )}
+            {submitting && (
+              <p role="status" className="flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 p-3 text-xs font-semibold text-brand-800">
+                <Loader2 className="h-4 w-4 animate-spin text-brand-600 shrink-0" />
+                {submissionStage === 'generate'
+                  ? (lang === 'vi' ? 'Gemini đang thiết kế và sắp xếp các điểm đến (khoảng 30–45 giây)...' : 'Gemini is arranging your stops (approx. 30–45s)...')
+                  : (lang === 'vi' ? 'Đang lưu lịch trình của bạn...' : 'Saving your itinerary...')}
+              </p>
+            )}
+          </div>
+
+          <footer className="flex flex-col-reverse gap-2 border-t border-slate-100 p-5 sm:flex-row sm:justify-end sm:p-6">
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => { setConcept(null); setPendingTrip(null); clearError(); }}
+              className="btn-secondary"
+            >
+              {lang === 'vi' ? 'Để sau' : 'Not now'}
+            </button>
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={handleApproveConcept}
+              className="btn-primary"
+            >
+              {submitting
+                ? (lang === 'vi' ? 'Đang xử lý...' : 'Working...')
+                : (lang === 'vi' ? 'Đồng ý, tạo lịch trình' : 'Approve and create itinerary')}
+              {!submitting && <ArrowRight className="ml-1 h-4 w-4" />}
+            </button>
+          </footer>
+        </section>
+      </div>
+    )}
+    </>
   );
 }
