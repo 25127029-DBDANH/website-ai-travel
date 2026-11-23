@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { DEMO } from '../demo.jsx';
 import { preferenceOptions } from '../i18n/translations.js';
@@ -132,6 +133,7 @@ function makeFallbackConcept(tripRequest, error, lang) {
 
 export default function TripForm() {
   const { lang, t } = useI18n();
+  const { user, openAuth } = useAuth();
   const navigate = useNavigate();
 
   const [mode, setMode] = useState('form');
@@ -272,6 +274,17 @@ export default function TripForm() {
       return;
     }
 
+    if (!user) {
+      showError(
+        'auth',
+        lang === 'vi'
+          ? 'Vui lòng đăng nhập trước khi tạo lịch trình với Gemini để lưu chuyến đi.'
+          : 'Please log in before generating an itinerary with Gemini to save your trip.'
+      );
+      openAuth('login');
+      return;
+    }
+
     setSubmitting(true);
     if (DEMO) {
       navigate('/trip/demo');
@@ -312,6 +325,16 @@ export default function TripForm() {
 
   const handleApproveConcept = async () => {
     if (!pendingTrip || !concept || submitting) return;
+    if (!user) {
+      showError(
+        'auth',
+        lang === 'vi'
+          ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để tiếp tục.'
+          : 'Your session has expired. Please log in again to continue.'
+      );
+      openAuth('login');
+      return;
+    }
     clearError();
     setSubmitting(true);
     setSubmissionStage('generate');
@@ -881,9 +904,9 @@ export default function TripForm() {
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
               {submissionStage === 'concept'
-                ? (lang === 'vi' ? 'Đang xin concept từ Gemini (có thể mất 15–30 giây)...' : 'Asking Gemini for a trip concept (this may take 15–30 seconds)...')
+                ? (lang === 'vi' ? 'Gemini đang đề xuất concept (khoảng 15–30 giây)...' : 'Gemini is proposing a trip concept (approx. 15–30s)...')
                 : submissionStage === 'generate'
-                  ? (lang === 'vi' ? 'Đang tạo lịch trình theo concept...' : 'Creating the itinerary from the approved concept...')
+                  ? (lang === 'vi' ? 'Gemini đang thiết kế chi tiết lịch trình (khoảng 30–45 giây)...' : 'Gemini is designing detailed itinerary (approx. 30–45s)...')
                   : (lang === 'vi' ? 'Đang lưu lịch trình...' : 'Saving your itinerary...')}
             </>
           ) : (
@@ -980,10 +1003,10 @@ export default function TripForm() {
               </p>
             )}
             {submitting && (
-              <p role="status" className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-                <Loader2 className="h-4 w-4 animate-spin" />
+              <p role="status" className="flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 p-3 text-xs font-semibold text-brand-800">
+                <Loader2 className="h-4 w-4 animate-spin text-brand-600 shrink-0" />
                 {submissionStage === 'generate'
-                  ? (lang === 'vi' ? 'Gemini đang xếp các điểm tham quan...' : 'Gemini is arranging your stops...')
+                  ? (lang === 'vi' ? 'Gemini đang thiết kế và sắp xếp các điểm đến (khoảng 30–45 giây)...' : 'Gemini is arranging your stops (approx. 30–45s)...')
                   : (lang === 'vi' ? 'Đang lưu lịch trình của bạn...' : 'Saving your itinerary...')}
               </p>
             )}
