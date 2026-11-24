@@ -1,6 +1,6 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { ChevronDown, ChevronUp, Map as MapIcon, Maximize2, Navigation } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, Map as MapIcon, Maximize2 } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../i18n/I18nContext.jsx';
@@ -133,10 +133,10 @@ export default function TripMap({
 
       // Popup thông tin nhanh khi click marker
       const costStr = stop.estimated_cost > 0 ? `${Number(stop.estimated_cost).toLocaleString('vi-VN')} đ` : (lang === 'vi' ? 'Miễn phí' : 'Free');
-      const visitedBadge = isVisited ? `<span style="background:#059669;color:#fff;border-radius:4px;padding:1px 5px;font-size:9.5px;font-weight:800;margin-left:4px;">ĐÃ ĐI QUA ✓</span>` : '';
+      const visitedBadge = isVisited ? `<span style="background:#059669;color:#fff;border-radius:4px;padding:1px 5px;font-size:9.5px;font-weight:700;margin-left:4px;">Đã đến</span>` : '';
       const popupHtml = `
         <div style="font-family: inherit; min-width: 170px; padding: 2px;">
-          <div style="font-size: 10px; font-weight: 700; color: #f59e0b; text-transform: uppercase;">Chặng ${order} · ${stop.time_slot || ''} ${visitedBadge}</div>
+          <div style="font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase;">Điểm ${order} · ${stop.time_slot || ''} ${visitedBadge}</div>
           <div style="font-size: 13px; font-weight: 800; color: #0f172a; margin: 2px 0 4px;">${stop.place_name}</div>
           <div style="font-size: 11px; color: #64748b;">${stop.district || 'TP.HCM'} · <strong style="color: #2563eb;">${costStr}</strong></div>
         </div>
@@ -176,7 +176,7 @@ export default function TripMap({
 
       if (trafficMode) {
         polylineRef.current.bindPopup(
-          `<div style="font-size:12px;font-weight:700;color:#ea580c;padding:2px;">⚠️ Tuyến đường Giờ cao điểm (17h-19h)<br><span style="color:#64748b;font-weight:500;">Đã đệm thêm 20 phút kẹt xe vào lịch trình</span></div>`
+          `<div style="font-size:12px;font-weight:700;color:#ea580c;padding:2px;">Giờ cao điểm (17h–19h)<br><span style="color:#64748b;font-weight:500;">Đã cộng thêm 20 phút dự phòng kẹt xe</span></div>`
         );
       }
     }
@@ -231,16 +231,14 @@ export default function TripMap({
       aria-label={t('itinerary.map.title')}
     >
       {/* Header bản đồ */}
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/90 px-3.5 py-2.5">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/80 px-3.5 py-2.5">
         <div className="flex items-center gap-2">
-          <span className="grid h-6 w-6 place-items-center rounded-lg bg-blue-100 text-brand-600">
-            <MapIcon className="h-3.5 w-3.5" />
+          <MapIcon className="h-4 w-4 text-brand-600" aria-hidden="true" />
+          <span className="text-xs font-bold text-slate-900">
+            {lang === 'vi' ? `Bản đồ Ngày ${activeDay}` : `Day ${activeDay} Map`}
           </span>
-          <span className="text-xs font-extrabold text-slate-800">
-            {lang === 'vi' ? `Khung 1: Bản đồ Ngày ${activeDay}` : `Day ${activeDay} Map`}
-          </span>
-          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-extrabold text-brand-700 ring-1 ring-brand-200">
-            {points.length} {lang === 'vi' ? 'điểm đến' : 'stops'}
+          <span className="text-xs text-slate-500">
+            · {points.length} {lang === 'vi' ? 'điểm' : 'stops'}
           </span>
         </div>
 
@@ -249,10 +247,10 @@ export default function TripMap({
             <button
               type="button"
               onClick={handleResetZoom}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10.5px] font-bold text-slate-600 hover:border-brand-300 hover:text-brand-700"
-              title="Căn chỉnh toàn cảnh các điểm trong ngày"
+              className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 hover:border-brand-300 hover:text-brand-700"
+              title={lang === 'vi' ? 'Xem toàn bộ các điểm trong ngày' : 'Fit all stops'}
             >
-              <Maximize2 className="h-3 w-3" />
+              <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">{lang === 'vi' ? 'Toàn cảnh' : 'Fit'}</span>
             </button>
           )}
@@ -262,9 +260,10 @@ export default function TripMap({
               type="button"
               onClick={() => setCollapsed((value) => !value)}
               aria-expanded={!collapsed}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10.5px] font-bold text-slate-500 hover:text-slate-800"
+              aria-label={collapsed ? t('itinerary.map.expand') : t('itinerary.map.collapse')}
+              className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-500 hover:text-slate-800"
             >
-              {collapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+              {collapsed ? <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" /> : <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />}
             </button>
           )}
         </div>
@@ -279,9 +278,9 @@ export default function TripMap({
         ) : (
           <div className="relative flex-1 w-full h-full">
             {trafficMode && (
-              <div className="absolute top-2 left-2 z-[400] flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-500/95 px-2.5 py-1 text-[11px] font-black text-white shadow-md backdrop-blur-xs animate-pulse pointer-events-none">
-                <span>🚗</span>
-                <span>{lang === 'vi' ? 'Tuyến đường Giờ cao điểm (Màu cam · +20m kẹt xe)' : 'Rush Hour Route (+20m buffer)'}</span>
+              <div className="pointer-events-none absolute left-2 top-2 z-[400] flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
+                <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>{lang === 'vi' ? 'Giờ cao điểm (+20 phút)' : 'Rush hour (+20m)'}</span>
               </div>
             )}
             <div

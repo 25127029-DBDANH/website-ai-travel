@@ -149,56 +149,56 @@ export default function RidePickerModal({
 
         {/* Tiêu đề Modal */}
         <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3.5">
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-brand-600 to-emerald-600 text-white shadow-sm">
-            <Bike className="h-5 w-5" />
+          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-brand-600 text-white">
+            <Bike className="h-5 w-5" aria-hidden="true" />
           </span>
           <div>
-            <h3 className="font-display text-base sm:text-lg font-extrabold text-slate-900">
-              {lang === 'vi' ? 'Chọn ứng dụng đặt xe di chuyển' : 'Choose Ride Service'}
+            <h3 className="font-display text-base font-extrabold text-slate-900 sm:text-lg">
+              {lang === 'vi' ? 'Chọn ứng dụng gọi xe' : 'Choose ride app'}
             </h3>
             <p className="text-xs text-slate-500">
-              {lang === 'vi' ? 'Hỗ trợ 3 ứng dụng gọi xe phổ biến nhất tại TP.HCM' : 'Pick from the 3 most popular ride apps in Saigon'}
+              {lang === 'vi' ? 'Grab, Xanh SM hoặc Be tại TP.HCM' : 'Grab, Xanh SM, or Be in Ho Chi Minh City'}
             </p>
           </div>
         </div>
 
         {/* Thông tin điểm đến & Ước tính cước */}
-        <div className="mt-3.5 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3.5 text-xs">
+        <div className="mt-3.5 rounded-2xl border border-slate-200/80 bg-slate-50 p-3.5 text-xs">
           <div className="flex items-start gap-2">
-            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
+            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" aria-hidden="true" />
             <div className="min-w-0 flex-1">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                {lang === 'vi' ? 'Điểm đến dự kiến' : 'Destination'}
+              <span className="text-[11px] font-semibold text-slate-500">
+                {lang === 'vi' ? 'Điểm đến' : 'Destination'}
               </span>
-              <p className="truncate font-display text-sm font-extrabold text-slate-900">
+              <p className="truncate font-display text-sm font-bold text-slate-900">
                 {stop.place_name}
               </p>
               {stop.address && (
-                <p className="line-clamp-1 text-[11px] text-slate-500">
+                <p className="line-clamp-1 text-xs text-slate-500">
                   {stop.address}
                 </p>
               )}
             </div>
           </div>
 
-          <div className="mt-2.5 flex items-center justify-between border-t border-dashed border-slate-200 pt-2 text-[11.5px] font-bold text-slate-700">
-            <span>Lộ trình dự tính: ~{distanceKm} km · ~{estimatedMin} phút</span>
-            <span className="font-mono font-extrabold text-emerald-700">
-              Cước ước tính: ~{formatVnd(estimatedFare, lang)}
+          <div className="mt-2.5 flex items-center justify-between border-t border-slate-200 pt-2 text-xs font-semibold text-slate-700">
+            <span className="tabular-nums">~{distanceKm} km · ~{estimatedMin} phút</span>
+            <span className="font-mono font-bold text-emerald-700 tabular-nums">
+              ~{formatVnd(estimatedFare, lang)}
             </span>
           </div>
         </div>
 
         {openingToast && (
-          <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50 p-2.5 text-xs font-bold text-emerald-900 animate-fade-in">
-            🚀 {openingToast}
+          <div role="status" className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 text-xs font-semibold text-emerald-900">
+            {openingToast}
           </div>
         )}
 
         {/* 3 LỰA CHỌN: GRAB - XANH SM - BE */}
         <div className="mt-4 space-y-2.5">
-          <p className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
-            {lang === 'vi' ? 'Bấm vào ứng dụng bạn muốn sử dụng:' : 'Select ride-hailing app:'}
+          <p className="text-xs font-bold text-slate-600">
+            {lang === 'vi' ? 'Chọn hãng xe:' : 'Select provider:'}
           </p>
 
           {RIDE_SERVICES.map((serv) => {
@@ -207,44 +207,44 @@ export default function RidePickerModal({
               <div
                 key={serv.id}
                 onClick={() => setSelectedService(serv.id)}
-                className={`group relative flex cursor-pointer items-center justify-between gap-3 rounded-2xl border p-3.5 transition-all duration-200 ${
+                className={`group relative flex cursor-pointer items-center justify-between gap-3 rounded-2xl border p-3.5 transition-colors ${
                   isSelected
-                    ? `${serv.colorBorder} ${serv.colorBg} ring-2 ring-emerald-300/60 shadow-sm`
-                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60'
+                    ? `${serv.colorBorder} ${serv.colorBg}`
+                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                 }`}
               >
                 <div className="flex min-w-0 items-center gap-3">
                   {/* Icon ứng dụng */}
                   <div
-                    className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-white shadow-xs ${
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-white ${
                       serv.id === 'grab'
                         ? 'bg-emerald-600'
                         : serv.id === 'xanhsm'
                         ? 'bg-teal-600'
-                        : 'bg-amber-500'
+                        : 'bg-amber-600'
                     }`}
                   >
                     {serv.id === 'xanhsm' ? (
-                      <Zap className="h-5 w-5" />
+                      <Zap className="h-5 w-5" aria-hidden="true" />
                     ) : (
-                      <Bike className="h-5 w-5" />
+                      <Bike className="h-5 w-5" aria-hidden="true" />
                     )}
                   </div>
 
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h4 className="font-display text-sm font-extrabold text-slate-900">
+                      <h4 className="font-display text-sm font-bold text-slate-900">
                         {serv.title}
                       </h4>
-                      <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-extrabold ${serv.badgeClass}`}>
+                      <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${serv.badgeClass}`}>
                         {serv.badge}
                       </span>
                     </div>
                     <p className="mt-0.5 line-clamp-1 text-xs text-slate-600">
                       {serv.description}
                     </p>
-                    <p className="mt-0.5 text-[10.5px] font-semibold text-slate-400">
-                      ⚡ {serv.promoText}
+                    <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+                      {serv.promoText}
                     </p>
                   </div>
                 </div>
@@ -255,10 +255,10 @@ export default function RidePickerModal({
                     e.stopPropagation();
                     handleLaunchRide(serv.id);
                   }}
-                  className={`inline-flex shrink-0 items-center gap-1 rounded-xl px-3 py-2 text-xs font-extrabold text-white shadow-xs transition-all active:scale-95 ${serv.colorBtn}`}
+                  className={`inline-flex shrink-0 items-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold text-white transition-colors active:scale-95 ${serv.colorBtn}`}
                 >
                   <span>Mở {serv.name}</span>
-                  <ExternalLink className="h-3 w-3" />
+                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
                 </button>
               </div>
             );
@@ -270,7 +270,7 @@ export default function RidePickerModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+            className="btn-secondary !px-4 !py-2 text-xs"
           >
             {lang === 'vi' ? 'Đóng' : 'Close'}
           </button>
@@ -278,14 +278,14 @@ export default function RidePickerModal({
           <button
             type="button"
             onClick={() => handleLaunchRide(selectedService)}
-            className="btn-primary !py-2 !px-5 text-xs font-extrabold shadow-sm"
+            className="btn-primary !px-5 !py-2 text-xs"
           >
             <span>
               {lang === 'vi'
-                ? `Mở ngay ${RIDE_SERVICES.find((s) => s.id === selectedService)?.name}`
-                : `Launch ${selectedService}`}
+                ? `Mở ${RIDE_SERVICES.find((s) => s.id === selectedService)?.name}`
+                : `Open ${selectedService}`}
             </span>
-            <ExternalLink className="h-3.5 w-3.5" />
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         </div>
       </div>

@@ -4,81 +4,88 @@ import { cn } from '../../lib/cn.js';
 import { formatDistance, formatVnd } from '../../lib/format.js';
 
 export default function TransitConnector({ transit, memberCount = 1 }) {
-  const { lang, t } = useI18n();
+  const { lang } = useI18n();
   if (!transit) return null;
 
   const isWalk = transit.mode === 'walk';
   const isCar = transit.mode === 'grab_car';
   const isRain = Boolean(transit.is_rain_mode);
-  const Icon = isWalk ? Footprints : (isCar ? (isRain ? CloudRain : Car) : Navigation);
+  const Icon = isWalk ? Footprints : isCar ? (isRain ? CloudRain : Car) : Navigation;
 
   let modeLabel = 'GrabBike';
   if (isWalk) modeLabel = lang === 'vi' ? 'Đi bộ' : 'Walk';
-  else if (isCar) modeLabel = lang === 'vi' ? (isRain ? 'GrabCar (Né mưa)' : 'GrabCar / Taxi') : 'GrabCar';
+  else if (isCar) modeLabel = lang === 'vi' ? 'GrabCar' : 'GrabCar';
 
-  const timeSlot = transit.start_time && transit.end_time ? `${transit.start_time} - ${transit.end_time}` : `${transit.duration_min} phút`;
+  const timeSlot =
+    transit.start_time && transit.end_time
+      ? `${transit.start_time}–${transit.end_time}`
+      : `${transit.duration_min} ${lang === 'vi' ? 'phút' : 'min'}`;
   const baseFare = Number(transit.estimated_fare_vnd || 0);
 
   return (
-    <div className="relative my-2 flex items-center py-1 sm:pl-12">
-      <span className="absolute left-4 top-1/2 hidden h-px w-6 bg-slate-300 sm:block" />
+    <div className="relative my-2 flex items-center py-0.5 sm:pl-10">
+      <span className="absolute left-4 top-1/2 hidden h-px w-4 bg-slate-200 sm:block" aria-hidden="true" />
       <div
         className={cn(
-          'flex flex-wrap items-center gap-2 rounded-xl border px-3 py-1.5 text-[11px] font-semibold shadow-xs backdrop-blur-sm transition-all',
+          'flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border px-3 py-1.5 text-xs',
           transit.is_rush_hour
-            ? 'border-amber-300 bg-amber-50/95 text-amber-900 ring-1 ring-amber-200'
+            ? 'border-amber-200 bg-amber-50 text-amber-900'
             : isRain
-            ? 'border-sky-300 bg-sky-50/95 text-sky-900 ring-1 ring-sky-200'
-            : 'border-slate-200/90 bg-slate-50/95 text-slate-600'
+            ? 'border-sky-200 bg-sky-50 text-sky-900'
+            : 'border-slate-200/80 bg-slate-50 text-slate-600'
         )}
       >
-        <span className="flex items-center gap-1 font-bold text-slate-800">
-          <Icon className={cn('h-3.5 w-3.5', transit.is_rush_hour ? 'text-amber-600' : isRain ? 'text-sky-600' : 'text-brand-600')} />
+        <span className="inline-flex items-center gap-1 font-semibold text-slate-800">
+          <Icon
+            className={cn(
+              'h-3.5 w-3.5 shrink-0',
+              transit.is_rush_hour
+                ? 'text-amber-700'
+                : isRain
+                ? 'text-sky-700'
+                : 'text-slate-500'
+            )}
+            aria-hidden="true"
+          />
           <span>{modeLabel}</span>
         </span>
-        <span className="text-slate-300">·</span>
-        <span className={cn(transit.is_rush_hour ? 'font-bold text-amber-900' : 'text-slate-500')}>{timeSlot}</span>
-        <span className="text-slate-300">·</span>
-        <span className="text-slate-500">{formatDistance(transit.distance_km)}</span>
-        <span className="text-slate-300">·</span>
+        <span className="text-slate-300" aria-hidden="true">·</span>
+        <span className="tabular-nums">{timeSlot}</span>
+        <span className="text-slate-300" aria-hidden="true">·</span>
+        <span className="tabular-nums">{formatDistance(transit.distance_km)}</span>
+        <span className="text-slate-300" aria-hidden="true">·</span>
 
-        {/* HIỂN THỊ CHI PHÍ DI CHUYỂN LOGIC THEO SỐ THÀNH VIÊN */}
         {baseFare === 0 || isWalk ? (
-          <span className="font-extrabold text-emerald-700">{lang === 'vi' ? 'Miễn phí' : 'Free'}</span>
+          <span className="font-semibold text-emerald-700">
+            {lang === 'vi' ? 'Miễn phí' : 'Free'}
+          </span>
         ) : transit.mode === 'grab_bike' && memberCount > 1 ? (
-          <span className="inline-flex items-center gap-1 font-bold text-slate-700">
-            <span>{formatVnd(baseFare, lang)}/xe</span>
-            <span className="text-slate-300">·</span>
-            <span className="font-extrabold text-emerald-700">
-              {lang === 'vi' ? `Tổng: ${formatVnd(baseFare * memberCount, lang)} (${memberCount} xe GrabBike)` : `Total: ${formatVnd(baseFare * memberCount, lang)} (${memberCount} bikes)`}
-            </span>
+          <span className="font-semibold text-slate-800 tabular-nums">
+            {formatVnd(baseFare * memberCount, lang)} ({memberCount} {lang === 'vi' ? 'xe' : 'bikes'})
           </span>
         ) : isCar ? (
-          <span className="inline-flex items-center gap-1 font-bold text-slate-700">
-            <span className="font-extrabold text-emerald-700">{formatVnd(baseFare, lang)}/chuyến</span>
-            {memberCount > 1 && (
-              <span className="text-slate-500 font-semibold">
-                (~{formatVnd(Math.round(baseFare / memberCount), lang)}/người)
-              </span>
-            )}
+          <span className="font-semibold text-slate-800 tabular-nums">
+            {formatVnd(baseFare, lang)}/{lang === 'vi' ? 'chuyến' : 'ride'}
           </span>
         ) : (
-          <span className="font-extrabold text-emerald-700">{formatVnd(baseFare, lang)}</span>
-        )}
-
-        {transit.is_rush_hour && (
-          <span className="ml-1 inline-flex items-center gap-1 rounded-md bg-amber-500 px-2 py-0.5 text-[10px] font-black text-white shadow-xs animate-pulse">
-            <AlertTriangle className="h-3 w-3" />
-            {lang === 'vi' ? '🚗 Kẹt xe: +20m đệm' : 'Rush hour (+20m)'}
+          <span className="font-semibold text-slate-800 tabular-nums">
+            {formatVnd(baseFare, lang)}
           </span>
         )}
 
-        {isRain && (
-          <span className="ml-1 inline-flex items-center gap-1 rounded-md bg-sky-500 px-2 py-0.5 text-[10px] font-black text-white shadow-xs">
-            <CloudRain className="h-3 w-3" />
-            {lang === 'vi' ? '🌧️ Đi ô tô né mưa' : 'Rain protected'}
+        {transit.is_rush_hour ? (
+          <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900">
+            <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+            {lang === 'vi' ? '+20 phút kẹt xe' : '+20m rush hour'}
           </span>
-        )}
+        ) : null}
+
+        {isRain ? (
+          <span className="inline-flex items-center gap-1 rounded-md bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold text-sky-900">
+            <CloudRain className="h-3 w-3" aria-hidden="true" />
+            {lang === 'vi' ? 'Tránh mưa' : 'Rain mode'}
+          </span>
+        ) : null}
       </div>
     </div>
   );
