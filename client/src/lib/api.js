@@ -1736,8 +1736,15 @@ export const api = {
     }
     return request('POST', '/api/v1/auth/login', { username, password });
   },
-  loginWithGoogle: async () => {
-    throw new ApiError('Google Sign-In is not available', 'GOOGLE_NOT_CONFIGURED', 0);
+  loginWithGoogle: async (idToken) => {
+    if (!isBackendEnabled()) {
+      throw new ApiError('Google Sign-In is not available', 'GOOGLE_NOT_CONFIGURED', 0);
+    }
+    const token = typeof idToken === 'string' ? idToken.trim() : '';
+    if (!token) {
+      throw new ApiError('Google ID token is required', 'AUTH_GOOGLE_INVALID', 400);
+    }
+    return request('POST', '/api/v1/auth/google', { id_token: token });
   },
   getMe: async () => {
     if (!isBackendEnabled()) {

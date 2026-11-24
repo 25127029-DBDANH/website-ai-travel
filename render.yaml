@@ -1,0 +1,56 @@
+# Render Blueprint cho backend Sài Gòn Guide (FastAPI + Neon Postgres)
+# Tài liệu chuẩn: https://render.com/docs/blueprint-spec
+services:
+  # Dịch vụ Web API chính chạy Python / FastAPI từ thư mục server/
+  - type: web
+    name: saigon-guide-api
+    runtime: python
+    rootDir: server
+    plan: free
+    region: singapore
+
+    # Cài đặt thư viện và khởi chạy Uvicorn theo cổng $PORT do Render cấp.
+    # --proxy-headers + --forwarded-allow-ips: lấy IP thật của người dùng qua proxy Render,
+    # để rate limit đăng nhập tính theo từng người thay vì chung một IP proxy.
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
+    healthCheckPath: /health
+
+    # Chỉ tự động deploy khi toàn bộ CI checks trên nhánh liên kết (main) pass
+    autoDeployTrigger: checksPass
+
+    # Đường dẫn buildFilter tính từ gốc repository (không phụ thuộc rootDir)
+    buildFilter:
+      paths:
+        - server/**
+        - render.yaml
+
+    # Biến môi trường: giá trị nhạy cảm đặt sync: false để nhập trực tiếp trên Render Dashboard
+    envVars:
+      # Ghim phiên bản Python 3.12 dạng đầy đủ major.minor.patch theo tài liệu Render
+      - key: PYTHON_VERSION
+        value: "3.12.11"
+      # Chế độ production (bắt buộc JWT_SECRET khác giá trị mặc định)
+      - key: APP_ENV
+        value: production
+      # Render tự sinh chuỗi bí mật ngẫu nhiên cho JWT
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: JWT_EXPIRE_MINUTES
+        value: "10080"
+      # Model Gemini mặc định
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash
+      # Các biến bí mật & cấu hình theo môi trường — nhập thủ công trên dashboard
+      - key: DATABASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_PLACES_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false

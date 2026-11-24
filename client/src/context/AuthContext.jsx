@@ -73,6 +73,10 @@ export function AuthProvider({ children }) {
     async (payload) => applyAuth(await api.register(payload)),
     [applyAuth]
   );
+  const loginWithGoogle = useCallback(
+    async (credential) => applyAuth(await api.loginWithGoogle(credential)),
+    [applyAuth]
+  );
   const logout = useCallback(() => {
     clearAuthToken();
     setUser(null);
@@ -94,6 +98,7 @@ export function AuthProvider({ children }) {
       closeAuth,
       login,
       register,
+      loginWithGoogle,
       logout,
       deleteAccount
     }),
@@ -106,6 +111,7 @@ export function AuthProvider({ children }) {
       closeAuth,
       login,
       register,
+      loginWithGoogle,
       logout,
       deleteAccount
     ]

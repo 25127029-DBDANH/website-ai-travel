@@ -38,12 +38,20 @@ class User(Base):
 
     id = Column(String(32), primary_key=True, default=_new_id)
     username = Column(String(60), unique=True, nullable=False, index=True)
+    email = Column(String(254), nullable=True, index=True)
+    google_sub = Column(String(64), nullable=True, unique=True, index=True)
     hashed_password = Column(Text, nullable=False)
     full_name = Column(String(120), nullable=True)
     avatar_url = Column(Text, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    @property
+    def has_password(self) -> bool:
+        from app.core.security import is_usable_password
+
+        return is_usable_password(self.hashed_password)
 
 
 # ---------------------------------------------------------------------------
