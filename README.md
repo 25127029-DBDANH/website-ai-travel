@@ -86,9 +86,16 @@ Các file `CHAY-DEMO.bat`, `run_all.bat`, `run_backend.bat`, `run_frontend.bat` 
 
 *(Trên macOS/Linux có thể chạy trực tiếp bằng lệnh thủ công ở mục 2 & 3, hoặc dùng `start-preview.sh` / `start-preview.command` để mở preview tĩnh.)*
 
-### 6. Docker Compose — 🚧 Đang triển khai (#9)
-> [!NOTE]
-> **🚧 Đang triển khai (#9):** File `docker-compose.yml` hiện đang trống (0 byte), chưa có `server/Dockerfile` và `client/Dockerfile`. Vui lòng khởi chạy thủ công theo mục 2 & 3 ở trên.
+### 6. Khởi chạy Fullstack bằng Docker Compose (PostgreSQL 16 + FastAPI + Nginx)
+1. *(Tùy chọn)* Tạo file `.env` ở thư mục gốc dự án (tham khảo `.env.example`) để truyền `GEMINI_API_KEY`, `VITE_GOOGLE_CLIENT_ID` hoặc mật khẩu Postgres.
+2. Chạy toàn bộ 3 container chỉ với 1 lệnh:
+   ```bash
+   docker compose up --build -d
+   ```
+   - **Frontend (Nginx SPA + `/api/` reverse proxy):** **`http://localhost:5173`**
+   - **Backend FastAPI & Swagger UI:** **`http://localhost:8000/docs`**
+   - **PostgreSQL 16 Database:** cổng **`5432`** (tự tạo 4 bảng ORM và auto-seed **327 địa điểm TP.HCM**)
+3. Dừng toàn bộ container khi xong: `docker compose down`. *(Lưu ý: tính năng truyền `VITE_GOOGLE_CLIENT_ID` cho Docker và fix `DateTime` Postgres đang được hoàn thiện ở **🚧 #39, #52**).*
 
 ---
 
@@ -108,29 +115,29 @@ Các file `CHAY-DEMO.bat`, `run_all.bat`, `run_backend.bat`, `run_frontend.bat` 
 | Phân hệ / Hạng mục | Danh mục File Mã nguồn (Code Files) | Thành viên chịu trách nhiệm |
 | :--- | :--- | :---: |
 | **Frontend: Điều phối Workspace & Bản đồ Leaflet** | `client/src/pages/TripPage.jsx`, `client/src/components/itinerary/TripMap.jsx` | **Diệp Bảo Danh** |
-| **Frontend: Lịch trình Timeline 3 tầng & Thanh điều hướng** | `client/src/components/itinerary/TimelineItem.jsx`, `client/src/components/itinerary/ItineraryPanel.jsx` | **Diệp Bảo Danh** |
+| **Frontend: Lịch trình Timeline 3 tầng, Menu `⋯` & Thanh điều hướng** | `client/src/components/itinerary/TimelineItem.jsx`, `ItineraryPanel.jsx`, `OverflowMenu.jsx` | **Diệp Bảo Danh** |
 | **Frontend: Chế độ Đi thực tế & Modal Check-in ảnh** | `client/src/components/companion/LiveCompanionView.jsx`, `client/src/components/companion/CheckinModal.jsx` | **Diệp Bảo Danh** |
-| **Frontend: Cấu trúc Client API Gateway & Server Demo** | `client/src/lib/api.js`, `client/server.py` | **Diệp Bảo Danh** |
+| **Frontend: Cấu trúc Client API Gateway (`VITE_USE_BACKEND`), Vite Split & Server Demo** | `client/src/lib/api.js`, `client/vite.config.js`, `client/server.py`, `client/test/api-gateway.test.js` | **Diệp Bảo Danh** |
 | **Frontend: Sổ chi tiêu, Cước xe inline & Báo cáo Tổng kết** | `client/src/components/companion/ExpenseTrackerView.jsx`, `client/src/components/companion/TripSummaryView.jsx` | **Phạm Gia Hưng** |
 | **Frontend: Xuất Thẻ kỷ niệm Story Card & Popup Recap** | `client/src/components/companion/TripRecapModal.jsx` *(tích hợp sẵn Story Card Canvas)* | **Phạm Gia Hưng** |
-| **Frontend: Form khảo sát 8 tiêu chí & Landing Page 3D** | `client/src/components/TripForm.jsx`, `client/src/pages/LandingPage.jsx`, `client/src/components/landing/*` | **Phạm Gia Hưng** |
-| **Frontend: Quản lý Chuyến của tôi & Cài đặt Tài khoản** | `client/src/pages/MyTripsPage.jsx`, `client/src/pages/SettingsPage.jsx` | **Phạm Gia Hưng** |
-| **Frontend: Hệ thống Đa ngôn ngữ Song ngữ Anh - Việt & Test FE** | `client/src/i18n/I18nContext.jsx`, `client/src/i18n/translations.js`, `client/test/translations.test.js` | **Phạm Gia Hưng** |
-| **Frontend: Tích hợp Đăng nhập, Đăng ký Tài khoản & Auth State** | `client/src/components/AuthModal.jsx`, `client/src/context/AuthContext.jsx`, `client/src/lib/auth.js` | **Đỗ Nguyễn An Khang** *(Tự tích hợp)* |
+| **Frontend: Form khảo sát 6 bước + Nhập 1 câu & Landing Page 3D** | `client/src/components/TripForm.jsx`, `client/src/components/tripForm/*`, `client/src/pages/LandingPage.jsx`, `client/src/components/landing/*` | **Phạm Gia Hưng** |
+| **Frontend: Quản lý Chuyến của tôi & Cài đặt Tài khoản** | `client/src/pages/MyTripsPage.jsx`, `client/src/pages/SettingsPage.jsx` *(toast claim & đổi mật khẩu: 🚧 #38)* | **Phạm Gia Hưng** |
+| **Frontend: Hệ thống Đa ngôn ngữ Song ngữ Anh - Việt & Bộ Test FE (56 tests)** | `client/src/i18n/I18nContext.jsx`, `client/src/i18n/translations.js`, `client/test/*.test.js` | **Phạm Gia Hưng** |
+| **Frontend: Tích hợp Đăng nhập (Password NIST + Google OAuth), Đăng ký & Auth State** | `client/src/components/AuthModal.jsx`, `GoogleSignInButton.jsx`, `client/src/context/AuthContext.jsx`, `client/src/lib/auth.js` | **Đỗ Nguyễn An Khang & Phạm Gia Hưng** |
 | **Frontend: Tích hợp Trang xem chuyến đi công khai** | `client/src/pages/SharedTripPage.jsx`, `client/src/components/ShareDialog.jsx` | **Đỗ Nguyễn An Khang** *(Tự tích hợp)* |
-| **Frontend: Tích hợp Modal Chi tiết địa điểm TP.HCM** | `client/src/components/itinerary/PlaceDetailModal.jsx` | **Ngô Tấn Đạt** *(Tự tích hợp)* |
-| **Frontend: Tích hợp Cước xe 3 hãng & Khối di chuyển chặng** | `client/src/components/itinerary/TransitConnector.jsx`, `client/src/components/common/RidePickerModal.jsx` | **Đàng Minh Hạo & Diệp Bảo Danh** |
+| **Frontend: Ngăn kéo Chi tiết địa điểm TP.HCM & Địa điểm lân cận** | `client/src/components/place/PlaceDrawer.jsx`, `PlaceFacts.jsx`, `NearbyPlaces.jsx`, `client/src/context/PlaceDrawerContext.jsx` *(nối `GET /places/{id}`: 🚧 #36)* | **Ngô Tấn Đạt & Phạm Gia Hưng** |
+| **Frontend: Tích hợp Cước xe 3 hãng & Khối di chuyển chặng** | `client/src/components/itinerary/TransitConnector.jsx`, `client/src/components/common/RidePickerModal.jsx` *(nối API Transit/ICS FE: 🚧 #35)* | **Đàng Minh Hạo & Diệp Bảo Danh** |
 | **Backend: Khung FastAPI, Core Security & JWT Dependency** | `server/main.py`, `server/app/api/v1/api.py`, `server/app/core/security.py`, `server/app/core/config.py`, `server/app/core/dependencies.py` | **Đỗ Nguyễn An Khang** |
-| **Backend: Pydantic Schemas & Endpoints Auth / Trips** | `server/app/schemas/user.py`, `server/app/schemas/trip.py`, `server/app/api/v1/endpoints/auth.py`, `server/app/api/v1/endpoints/trips.py` *(phiên khách `x-session-id` & claim: 🚧 #31)* | **Đỗ Nguyễn An Khang** |
-| **Backend: ORM SQLite/PostgreSQL, Session & Data 327 địa điểm TP.HCM** | `server/app/db/models.py`, `server/app/db/schema.sql`, `server/app/db/session.py`, `server/app/db/hcmc_data.py` | **Ngô Tấn Đạt** |
+| **Backend: Pydantic Schemas & Endpoints Auth / Trips** | `server/app/schemas/user.py`, `server/app/schemas/trip.py`, `server/app/api/v1/endpoints/auth.py`, `server/app/api/v1/endpoints/trips.py` *(phiên khách `x-session-id` & đổi mật khẩu: 🚧 #31; Postgres DateTime: 🚧 #52)* | **Đỗ Nguyễn An Khang** |
+| **Backend: ORM SQLite/PostgreSQL, Session & Data 327 địa điểm TP.HCM** | `server/app/db/models.py`, `server/app/db/schema.sql`, `server/app/db/session.py`, `server/app/db/hcmc_data.py` *(ảnh thật, `total` phân trang & fix UTC Postgres: 🚧 #36, #52)* | **Ngô Tấn Đạt** |
 | **Backend: Places Cache TTL 7 ngày, Endpoints & Test Places** | `server/app/services/places_service.py`, `server/app/api/v1/endpoints/places.py`, `server/app/tests/test_places.py` | **Ngô Tấn Đạt** |
-| **Backend: SDK Gemini (`google-genai`, mặc định `gemini-3.5-flash`) & Endpoints AI** | `server/app/services/gemini_service.py`, `server/app/schemas/ai.py`, `server/app/api/v1/endpoints/ai.py` *(nối form FE: 🚧 #25; xử lý lỗi: 🚧 #23)* | **Lê Hữu Lam** |
-| **Backend: Thuật toán Haversine, Cước xe Grab/XanhSM/Be** | `server/app/utils/transit_calculator.py` — **🚧 Đang triển khai (#8/#18)** *(file hiện rỗng trên `main`)* | **Đàng Minh Hạo** |
-| **Backend: Động cơ Kịch bản Thích ứng Trời mưa & Kẹt xe** | `server/app/services/contingency_service.py` — **🚧 Đang triển khai (#8/#18)** *(file hiện rỗng trên `main`)* | **Đàng Minh Hạo** |
-| **Backend: Dịch vụ Calendar .ICS & Endpoints Calendar** | `server/app/services/calendar_service.py`, `server/app/schemas/calendar.py`, `server/app/api/v1/endpoints/calendar.py` — **🚧 Đang triển khai (#8/#18)** *(file hiện rỗng trên `main`)* | **Đàng Minh Hạo** |
-| **DevOps: Docker Compose & Dockerfiles Multi-stage** | `docker-compose.yml` *(hiện rỗng)*, `client/Dockerfile`, `server/Dockerfile` — **🚧 Đang triển khai (#9)** | **Đoàn Hải Đăng** |
-| **DevOps: Pipeline CI/CD GitHub Actions Tự động hóa** | `.github/workflows/ci.yml` — **🚧 Đang triển khai (#9)** | **Đoàn Hải Đăng** |
-| **QA/Test: Bộ mã nguồn Kiểm thử tự động Pytest** | `server/app/tests/test_places.py` *(đã có)*; `conftest.py`, `test_auth.py`, `test_trips.py`, `test_ai.py`, `test_transit.py`, `test_calendar.py` — **🚧 Đang triển khai (#9)** | **Đoàn Hải Đăng** |
+| **Backend: SDK Gemini (`google-genai`, mặc định `gemini-3.5-flash`), Prompt & Tự động điền `transit_info`** | `server/app/services/gemini_service.py`, `server/app/schemas/ai.py`, `server/app/api/v1/endpoints/ai.py` | **Lê Hữu Lam** |
+| **Backend: Thuật toán Haversine, Cước xe Grab/XanhSM/Be** | `server/app/utils/transit_calculator.py` *(mở khóa `calculate_transit` & API `/transit`: 🚧 #35)* | **Đàng Minh Hạo** |
+| **Backend: Động cơ Kịch bản Thích ứng Trời mưa & Kẹt xe** | `server/app/services/contingency_service.py` *(nối API `/transit/adapt` & FE: 🚧 #35)* | **Đàng Minh Hạo** |
+| **Backend: Dịch vụ Calendar .ICS & Endpoints Calendar** | `server/app/services/calendar_service.py`, `server/app/schemas/calendar.py`, `server/app/api/v1/endpoints/calendar.py` *(nối nút FE: 🚧 #35)* | **Đàng Minh Hạo** |
+| **DevOps: Docker Compose & Dockerfiles Multi-stage** | `docker-compose.yml`, `client/Dockerfile`, `client/nginx.conf`, `server/Dockerfile`, `render.yaml`, `client/vercel.json` *(Google Client ID Docker & Cloud deploy: 🚧 #39)* | **Đoàn Hải Đăng & Phạm Gia Hưng** |
+| **DevOps: Pipeline CI/CD GitHub Actions Tự động hóa** | `.github/workflows/ci.yml`, `server/scripts/smoke_db.py` *(mở rộng smoke User/Trip: 🚧 #39; Branch Protection: 🚧 #50)* | **Đoàn Hải Đăng** |
+| **QA/Test: Bộ mã nguồn Kiểm thử tự động Pytest (107 passed / 3 skipped)** | `server/app/tests/conftest.py`, `test_auth.py`, `test_auth_google.py`, `test_password_policy.py`, `test_trips.py`, `test_places.py`, `test_ai.py`, `test_calendar.py`, `test_contingency.py`, `test_transit_calculator.py`, `test_transit.py`, `test_health.py` | **Đoàn Hải Đăng** |
 | **DevOps: Hệ thống Script Windows (chỉ dành cho Windows)** | `CHAY-DEMO.bat`, `run_all.bat`, `run_frontend.bat`, `run_backend.bat` | **Đoàn Hải Đăng & Diệp Bảo Danh** |
 
 ---
@@ -146,7 +153,8 @@ Các file `CHAY-DEMO.bat`, `run_all.bat`, `run_backend.bat`, `run_frontend.bat` 
   * `client/src/components/itinerary/ItineraryPanel.jsx` (Thanh điều khiển lịch trình tối ưu, dọn nút trùng lặp)
   * `client/src/components/companion/LiveCompanionView.jsx` (Tab 2 Chế độ Đi thực tế thời gian thực, thẻ Hero Next Stop, hoàn thành chuyến đi)
   * `client/src/components/companion/CheckinModal.jsx` (Modal check-in chặng, tải ảnh lưu niệm, ghi chú)
-  * `client/src/lib/api.js` (Cấu trúc Gateway API trung tâm kết nối Backend qua `VITE_API_BASE`)
+  * `client/src/lib/api.js` (Cấu trúc API Gateway trung tâm kết nối Backend qua `VITE_API_BASE` & công tắc `VITE_USE_BACKEND`)
+  * `client/vite.config.js` (Cấu hình tách chunk `manualChunks` tối ưu < 500 kB)
   * `client/server.py` & `CHAY-DEMO.bat` *(chỉ dành cho Windows)* (Server phục vụ Single Page Demo và script khởi chạy nhanh)
 * **Nhiệm vụ cụ thể:**
   1. *Quản trị Repository GitHub:* Phân chia nhánh tính năng (`feature/*`), review Pull Request, giải quyết xung đột mã nguồn (merge conflict).
@@ -173,8 +181,8 @@ Các file `CHAY-DEMO.bat`, `run_all.bat`, `run_backend.bat`, `run_frontend.bat` 
   1. *Tab 3 Sổ chi tiêu & Quản lý di chuyển:* Hiển thị chi tiết tiền vé tham quan, ăn uống và **từng chặng xe di chuyển**; tính năng bấm sửa cước xe trực tiếp (*Inline fare editing*); bộ lọc danh mục và thanh tiến độ ngân sách.
   2. *Tab 4 Giao diện Tổng kết chuyến đi:* Thống kê 4 chỉ số KPI cốt lõi (Tổng chi phí, Chênh lệch ngân sách, Số điểm đã ghé, Tổng cự ly); biểu đồ cơ cấu chi tiêu 3 nhóm; album ảnh check-in thực tế.
   3. *Xuất Thẻ kỷ niệm (Story Card trong `TripRecapModal.jsx`):* Lập trình sinh ảnh đồ họa tổng kết chuyến đi cho phép tải ảnh về máy để chia sẻ mạng xã hội.
-  4. *Form khảo sát 8 tiêu chí chuyên sâu:* Xây dựng giao diện thu thập nhu cầu du khách (kết nối gọi trực tiếp AI Generator: **🚧 Đang triển khai (#25)**).
-  5. *Trang My Trips & Settings:* Lập trình giao diện quản lý các chuyến đi đã lưu, nhân bản chuyến đi, xem thông tin tài khoản và xóa tài khoản.
+  4. *Form khảo sát 6 bước & Nhập nhanh 1 câu:* Xây dựng giao diện thu thập nhu cầu du khách, đã nối trực tiếp gọi `POST /api/v1/ai/concept` & `POST /api/v1/ai/generate`.
+  5. *Trang My Trips & Settings:* Lập trình giao diện quản lý các chuyến đi đã lưu, nhân bản chuyến đi, xem thông tin tài khoản, đổi mật khẩu (hoàn thiện gọi thật & thông báo claim: **🚧 #38**) và xóa tài khoản.
   6. *Hệ thống Đa ngôn ngữ (VI/EN) & Responsive Mobile:* Đảm bảo 100% nhãn giao diện chuẩn ngữ nghĩa Anh - Việt (kiểm thử tự động qua `node --test`); tối ưu giao diện trên Smartphone ngoài trời.
 * **Tiêu chí hoàn thành (DoD):** Sổ chi tiêu tính toán tiền chính xác; xuất ảnh Story Card sắc nét; test i18n pass; giao diện responsive mượt mà trên iPhone/Android.
 
@@ -216,7 +224,7 @@ Các file `CHAY-DEMO.bat`, `run_all.bat`, `run_backend.bat`, `run_frontend.bat` 
   * `server/app/services/places_service.py` (Truy vấn ORM, bộ đệm Cache TTL 7 ngày & Fallback Google Places API)
   * `server/app/api/v1/endpoints/places.py` (API `/places/search`, `/places/nearby`, `/places/photo`, `/places/{id}`)
   * `server/app/tests/test_places.py` (Kiểm thử tự động Pytest cho dữ liệu 327 địa điểm, Haversine, `PlaceCache` TTL và thứ tự route `/photo`)
-  * `client/src/components/itinerary/PlaceDetailModal.jsx` *(Tự tích hợp)*
+  * `client/src/components/place/PlaceDrawer.jsx`, `PlaceFacts.jsx`, `NearbyPlaces.jsx` *(Ngăn kéo chi tiết địa điểm TP.HCM — nối API chi tiết & sửa lỗi `total` phân trang: **🚧 #36**)*
 * **Nhiệm vụ cụ thể:**
   1. *Kiến trúc CSDL chuẩn SQLAlchemy Async ORM (mặc định SQLite `sqlite+aiosqlite:///./travel.db`, hỗ trợ PostgreSQL qua `DATABASE_URL`):* `Base.metadata.create_all` tự động tạo đủ 4 bảng (`users`, `trips`, `places`, `places_cache`); tự động nạp 327 địa điểm từ `hcmc_data.py` trong `lifespan` khi khởi động lần đầu.
   2. *Bộ đệm Địa điểm (Places Cache TTL 7 ngày):* Lưu cache trong bảng `places_cache`; ưu tiên trả dữ liệu từ CSDL cục bộ; chỉ gọi Google Places API New khi cấu hình `GOOGLE_PLACES_API_KEY` và cache miss hoặc quá hạn 7 ngày.
@@ -226,7 +234,7 @@ Các file `CHAY-DEMO.bat`, `run_all.bat`, `run_backend.bat`, `run_frontend.bat` 
      * **Bộ trường dữ liệu chuẩn hóa:** Tên tiếng Việt & tiếng Anh, địa chỉ, quận, tọa độ GPS (`latitude`, `longitude`), danh mục (`category`), `is_indoor`, giờ mở/đóng cửa (`open_time`, `close_time`), mức giá vé dự kiến (`entry_fee_vnd`), điểm đánh giá, `tags` JSON và đường dẫn ảnh `photo_url`.
   4. *YÊU CẦU TỰ TÍCH HỢP & TEST E2E:*
      * Đảm bảo dữ liệu từ DB hiển thị đầy đủ trên Bản đồ Leaflet (`TripMap.jsx`).
-     * Tự kết nối API chi tiết địa điểm vào `PlaceDetailModal.jsx` (ảnh, mô tả, giờ mở cửa).
+     * Tự kết nối API chi tiết địa điểm vào `PlaceDrawer.jsx` (ảnh, mô tả, giờ mở cửa — **🚧 #36**).
      * Tự test truy vấn dữ liệu địa điểm hiển thị chính xác trên giao diện Frontend.
 * **Tiêu chí hoàn thành (DoD):** Đồng bộ 100% sang SQLAlchemy ORM chạy mượt trên cả SQLite (`travel.db`) lẫn PostgreSQL/Supabase; nạp đủ 327 địa điểm TP.HCM; `pytest server/app/tests/test_places.py` pass toàn bộ; API `GET /api/v1/places/search` phản hồi nhanh.
 
@@ -237,63 +245,55 @@ Các file `CHAY-DEMO.bat`, `run_all.bat`, `run_backend.bat`, `run_frontend.bat` 
 * **Vai trò chuyên môn:** Kỹ sư Trí tuệ Nhân tạo & Kỹ thuật Prompt (Google Gemini Integration)
 * **Thư mục & File sở hữu chính:**
   * `server/app/schemas/ai.py` (Pydantic Schema ràng buộc Gemini Structured Output JSON)
-  * `server/app/services/gemini_service.py` (SDK `google-genai`, model đọc từ biến môi trường `GEMINI_MODEL` — mặc định `gemini-3.5-flash`, Prompt Engineering & fallback cục bộ)
+  * `server/app/services/gemini_service.py` (SDK `google-genai`, model đọc từ `GEMINI_MODEL` — mặc định `gemini-3.5-flash`, Prompt Engineering, fallback cục bộ & tự động điền `transit_info`)
   * `server/app/api/v1/endpoints/ai.py` (API `POST /api/v1/ai/concept`, `POST /api/v1/ai/generate` và `POST /api/v1/ai/swap`)
 * **Nhiệm vụ cụ thể:**
-  1. *Tích hợp Google Gemini API:* Cấu hình thư viện `google-genai`, đọc model từ biến môi trường `GEMINI_MODEL` (mặc định `gemini-3.5-flash`), quản lý `GEMINI_API_KEY` an toàn qua `.env`, có cơ chế retry và fallback cục bộ trên catalog địa điểm TP.HCM khi gặp lỗi. *(🚧 Đang triển khai (#23): hiển thị/báo lỗi rõ ràng thay vì nuốt im lặng lỗi Gemini.)*
+  1. *Tích hợp Google Gemini API:* Cấu hình thư viện `google-genai`, đọc model từ biến môi trường `GEMINI_MODEL` (mặc định `gemini-3.5-flash`), quản lý `GEMINI_API_KEY` an toàn qua `.env`, có cơ chế retry, log cảnh báo rõ ràng và fallback cục bộ trên catalog địa điểm TP.HCM khi gặp lỗi.
   2. *Kỹ thuật Prompt Chuyên gia Bản địa:* Soạn thảo System Instruction định vị AI am hiểu văn hóa, ẩm thực Sài Gòn, chỉ chọn địa điểm trong catalog local đã kiểm chứng (không tự bịa địa điểm/tọa độ/giá), tôn trọng múi giờ `Asia/Ho_Chi_Minh`.
   3. *Gemini Structured Outputs:* Ràng buộc chặt chẽ JSON Schema đầu ra bằng Pydantic (`ConceptResponse`, `TripGenerationResponse`, `SmartSwapResponse`).
-  4. *Động cơ Đề xuất Concept & Sinh Lịch trình:* `POST /api/v1/ai/concept` đề xuất định hướng chuyến đi; `POST /api/v1/ai/generate` lựa chọn địa điểm theo cụm quận và phân bổ ngân sách hợp lý theo ngày.
+  4. *Động cơ Đề xuất Concept, Sinh Lịch trình & Tự động điền `transit_info`:* `POST /api/v1/ai/concept` đề xuất định hướng; `POST /api/v1/ai/generate` lựa chọn địa điểm theo cụm quận, phân bổ ngân sách hợp lý và tự động điền khoảng cách + cước xe `transit_info` giữa các chặng.
   5. *Logic AI Đổi địa điểm thông minh (Smart Swap):* `POST /api/v1/ai/swap` phân tích lý do đổi điểm và đề xuất 2–3 địa điểm thay thế tương đương cùng khu vực và chi phí.
-  6. *Tích hợp AI vào giao diện Frontend & Test E2E — **🚧 Đang triển khai (#25)** :*
-     * Kết nối `TripForm.jsx` gọi trực tiếp `POST /api/v1/ai/concept` và `POST /api/v1/ai/generate` (hiện form tạo lịch trình chưa gọi API AI).
-     * Kết nối luồng Smart Swap (`POST /api/v1/ai/swap`) với `TimelineItem.jsx` / `SwapPlaceModal.jsx`.
-     * Kiểm thử luồng sinh lịch trình và đổi điểm end-to-end trên giao diện, kèm báo lỗi rõ ràng (**🚧 #23**).
-* **Tiêu chí hoàn thành (DoD):** Gemini trả về 100% chuẩn JSON trên catalog 327 địa điểm; thời gian phản hồi trung bình 3–5 giây; lịch trình gợi ý hợp lý về địa lý TP.HCM; form tạo lịch trình gọi AI thật và xử lý lỗi minh bạch (`#25`, `#23`).
+  6. *Tích hợp AI vào giao diện Frontend & Test E2E:* Đã kết nối trực tiếp `TripForm.jsx` với `/ai/concept` + `/ai/generate` và `TimelineItem.jsx` với `/ai/swap` (22 tests `test_ai.py` pass).
+* **Tiêu chí hoàn thành (DoD):** Gemini trả về 100% chuẩn JSON trên catalog 327 địa điểm; tự động điền `transit_info`; lịch trình gợi ý hợp lý về địa lý TP.HCM; form tạo lịch trình gọi AI thật và xử lý lỗi minh bạch.
 
 ---
 
 ### 6. ĐÀNG MINH HẠO — BACKEND DEVELOPER (ROUTING, TRANSIT & ADAPTIVE)
 * **Họ và tên:** **Đàng Minh Hạo**
 * **Vai trò chuyên môn:** Backend Developer — Kỹ sư Thuật toán Tuyến đường, Cước xe & Động cơ Thích ứng
-* **Trạng thái trên `main`:** **🚧 Đang triển khai (#8/#18)** *(các file backend bên dưới hiện đang rỗng 0 byte trên nhánh `main`; PR `#18` đang mở để review & merge)*
+* **Trạng thái trên `main`:** Đã hoàn thành 100% 3 module Backend + 35 unit tests (`PR #18`); đang hoàn thiện tích hợp Frontend & endpoint `/transit` (**🚧 #35**).
 * **Thư mục & File sở hữu chính:**
-  * `server/app/utils/transit_calculator.py` — **🚧 Đang triển khai (#8/#18)** (Thuật toán Haversine & Biểu giá cước xe 3 hãng)
-  * `server/app/services/contingency_service.py` — **🚧 Đang triển khai (#8/#18)** (Động cơ Kịch bản Thích ứng Trời mưa & Kẹt xe)
-  * `server/app/services/calendar_service.py` — **🚧 Đang triển khai (#8/#18)** (Dịch vụ xuất lịch iCalendar `.ICS`)
-  * `server/app/schemas/calendar.py` — **🚧 Đang triển khai (#8/#18)** (Pydantic Schema cho Calendar)
-  * `server/app/api/v1/endpoints/calendar.py` — **🚧 Đang triển khai (#8/#18)** (API xuất lịch)
-  * `client/src/components/itinerary/TransitConnector.jsx`, `client/src/components/common/RidePickerModal.jsx` *(Hợp tác cùng Danh)*
+  * `server/app/utils/transit_calculator.py` (Thuật toán Haversine & Biểu giá cước xe 3 hãng — mở khóa `calculate_transit`: **🚧 #35**)
+  * `server/app/services/contingency_service.py` (Động cơ Kịch bản Thích ứng Trời mưa & Kẹt xe idempotent)
+  * `server/app/services/calendar_service.py` (Dịch vụ xuất lịch iCalendar `.ICS` chuẩn RFC 5545 kèm `VTIMEZONE` & `VALARM -PT30M`)
+  * `server/app/schemas/calendar.py` & `server/app/api/v1/endpoints/calendar.py` (API `GET /calendar/ics/{trip_id}`, `POST /export-ics`, `GET /preview/{trip_id}`)
+  * `client/src/components/itinerary/TransitConnector.jsx`, `client/src/components/common/RidePickerModal.jsx` *(Hợp tác cùng Danh — **🚧 #35**)*
 * **Nhiệm vụ cụ thể:**
-  1. *Thuật toán Tuyến đường (Haversine Formula):* Tính cự ly đường chim bay và ước lượng khoảng cách đường bộ thực tế giữa các cặp tọa độ GPS chặng đi và chặng đến.
-  2. *Thuật toán Ước tính Cước xe 3 Hãng:* Biểu giá Grab (GrabBike/GrabCar), Xanh SM (Bike/Taxi), Be (BeBike/BeCar) theo km và tạo deep-link mở ứng dụng trên điện thoại.
-  3. *Động cơ Kịch bản Thích ứng (Adaptive Engine):*
-     * **Kịch bản Trời mưa Sài Gòn:** Lọc thay thế các điểm ngoài trời (`is_indoor=False`) sang điểm trong nhà (`is_indoor=True`) cùng quận; chuyển phương thức di chuyển sang xe có mái che.
-     * **Kịch bản Giờ cao điểm (17h00 – 19h00):** Cộng thời gian đệm di chuyển và ưu tiên giữ các chặng trong cùng quận.
-  4. *Xuất Lịch trình (`.ICS` Calendar):* Xuất file iCalendar `.ICS` chuẩn RFC 5545 kèm thông báo nhắc trước 30 phút để nhập vào Google Calendar, Apple Calendar, Outlook.
-  5. *YÊU CẦU TỰ TÍCH HỢP & TEST E2E:*
-     * Kết nối API cước xe vào `TransitConnector.jsx`, `RidePickerModal.jsx` và `ExpenseTrackerView.jsx`.
-     * Tự test các nút Kịch bản Thích ứng và xuất lịch trên giao diện Web sau khi merge PR `#18`.
-* **Tiêu chí hoàn thành (DoD):** Khoảng cách tính toán có sai số dưới 5%; cước ước tính sát thực tế; chuyển đổi kịch bản thích ứng linh hoạt; file `.ICS` nhập vào điện thoại hiển thị chuẩn xác.
+  1. *Thuật toán Tuyến đường (Haversine Formula):* Tính cự ly đường chim bay và ước lượng khoảng cách + thời gian di chuyển giữa các cặp tọa độ GPS.
+  2. *Thuật toán Ước tính Cước xe 3 Hãng:* Biểu giá Grab (GrabBike/GrabCar), Xanh SM (Bike/Taxi điện), Be (BeBike/BeCar) theo km (**🚧 #35:** bổ sung `calculate_transit` + `deep_link` & endpoint `/api/v1/transit/estimate`).
+  3. *Động cơ Kịch bản Thích ứng (Adaptive Engine):* Kịch bản Trời mưa Sài Gòn (lọc `is_indoor=True`, chuyển xe có mái che) và Kịch bản Giờ cao điểm 17h00–19h00 (+20 phút đệm kẹt xe).
+  4. *Xuất Lịch trình (`.ICS` Calendar):* Xuất file iCalendar `.ICS` chuẩn RFC 5545 kèm thông báo nhắc trước 30 phút.
+  5. *YÊU CẦU TỰ TÍCH HỢP & TEST E2E (**🚧 #35**):* Nối nút Xuất lịch `.ICS` (`ItineraryPanel.jsx`), Kịch bản Mưa/Kẹt xe và Cước 3 hãng (`RidePickerModal.jsx`) gọi thật xuống Backend khi `VITE_USE_BACKEND=true`.
+* **Tiêu chí hoàn thành (DoD):** `test_transit_calculator.py`, `test_transit.py` (0 skipped), `test_contingency.py`, `test_calendar.py` pass 100%; luồng E2E `.ICS`/cước xe trên Web gọi thật xuống Backend.
 
 ---
 
 ### 7. ĐOÀN HẢI ĐĂNG — DEVOPS, QA LEAD & THUYẾT TRÌNH DỰ ÁN
 * **Họ và tên:** **Đoàn Hải Đăng**
 * **Vai trò chuyên môn:** DevOps Engineer, QA Lead & Diễn giả Thuyết trình Dự án
-* **Trạng thái trên `main`:** **🚧 Đang triển khai (#9)** *(Docker, CI/CD và phần lớn bộ test Pytest chưa hoàn thiện trên `main`; hiện mới có `server/app/tests/test_places.py` của Đạt và 4 file `.bat` cho Windows)*
+* **Trạng thái trên `main`:** Đã hoàn thành hạ tầng Docker Compose, CI/CD GitHub Actions (3 jobs: Frontend, Backend, Postgres Smoke) và bộ test Pytest (`PR #17`, `#49`); còn hoàn thiện cấu hình Docker Google OAuth / Nginx `/health` & deploy live (**🚧 #39**).
 * **Thư mục & File sở hữu chính:**
-  * `docker-compose.yml` *(hiện rỗng 0 byte)*, `client/Dockerfile`, `server/Dockerfile` — **🚧 Đang triển khai (#9)**
-  * `.github/workflows/ci.yml` — **🚧 Đang triển khai (#9)** (Pipeline CI/CD GitHub Actions tự động hóa)
-  * `server/app/tests/` — **🚧 Đang triển khai (#9)**: `conftest.py`, `test_auth.py`, `test_trips.py`, `test_ai.py`, `test_transit.py`, `test_calendar.py` *(riêng `server/app/tests/test_places.py` đã có sẵn)*
+  * `docker-compose.yml`, `client/Dockerfile`, `client/nginx.conf`, `server/Dockerfile`, `.env.example` *(bổ sung `VITE_GOOGLE_CLIENT_ID` & `/health` proxy: **🚧 #39**)*
+  * `.github/workflows/ci.yml`, `server/scripts/smoke_db.py`, `render.yaml`, `client/vercel.json`
+  * `server/app/tests/` (`conftest.py`, `test_auth.py`, `test_auth_google.py`, `test_password_policy.py`, `test_trips.py`, `test_places.py`, `test_ai.py`, `test_calendar.py`, `test_contingency.py`, `test_transit_calculator.py`, `test_transit.py`, `test_health.py`)
   * `CHAY-DEMO.bat`, `run_all.bat`, `run_frontend.bat`, `run_backend.bat` *(chỉ dành cho Windows — hợp tác cùng Danh)*
 * **Nhiệm vụ cụ thể:**
-  1. *Hạ tầng Docker Hóa & Triển khai Cloud (DevOps — **🚧 #9**):* Viết `client/Dockerfile` (multi-stage build), `server/Dockerfile` (Python Uvicorn) và `docker-compose.yml`; hỗ trợ triển khai Cloud (Frontend: Vercel, Backend: Render, Database: Supabase PostgreSQL).
-  2. *Đường ống CI/CD Tự động hóa (`.github/workflows/ci.yml` — **🚧 #9**):* Thiết lập GitHub Actions tự động kích hoạt khi có Pull Request để build Frontend, chạy `node --test` (FE) và `pytest` (BE).
-  3. *Xây dựng Bộ Mã nguồn Kiểm thử Tự động (Pytest Test Suite — **🚧 #9**):* Bổ sung các file test còn thiếu trong `server/app/tests/` bao phủ Auth, Trips, AI, Transit, Calendar.
+  1. *Hạ tầng Docker Hóa & Triển khai Cloud (DevOps):* Duy trì `client/Dockerfile`, `server/Dockerfile`, `docker-compose.yml`, triển khai Cloud (Vercel + Render + Neon PostgreSQL) và fix truyền `VITE_GOOGLE_CLIENT_ID` + proxy `/health` (**🚧 #39**).
+  2. *Đường ống CI/CD Tự động hóa (`.github/workflows/ci.yml`):* Chạy song song `Frontend build` (`npm test` + `npm run build`), `Backend lint and tests` (`ruff` + `pytest --cov=app`) và `Postgres startup smoke` (mở rộng test `User`/`Trip`: **🚧 #39**).
+  3. *Bộ Mã nguồn Kiểm thử Tự động (Pytest Test Suite):* Hiện đạt **107 passed / 3 skipped** (kích hoạt 3 tests `test_transit.py` sau `#35`).
   4. *Hoàn thiện Báo cáo Kỹ thuật & Tài liệu Đồ án:* Soạn thảo và chuẩn hóa Báo cáo Kỹ thuật Đồ án theo quy chuẩn Khoa CNTT — ĐHKHTN.
   5. *Thiết kế Slide Thuyết trình & Video Demo:* Biên tập bộ Slide thuyết trình, soạn kịch bản demo 5 phút & bộ câu hỏi phản biện (Q&A), quay Video Demo backup Full HD.
-* **Tiêu chí hoàn thành (DoD):** Docker Compose chạy mượt; CI/CD pipeline xanh; toàn bộ bộ test Pytest + `node --test` pass; Báo cáo, Slide và Video demo đạt chuẩn.
+* **Tiêu chí hoàn thành (DoD):** Docker Compose chạy mượt; CI/CD pipeline xanh 3/3 jobs; toàn bộ bộ test Pytest (0 skipped) + `node --test` (56 tests) pass; Báo cáo, Slide và Video demo đạt chuẩn.
 
 ---
 
@@ -302,84 +302,86 @@ Các file `CHAY-DEMO.bat`, `run_all.bat`, `run_backend.bat`, `run_frontend.bat` 
 ```
 website-ai-travel/
 ├── .gitignore                     # Loại trừ .env, travel.db, node_modules, .venv, cache
-├── docker-compose.yml             # 🚧 Đang triển khai (#9) — hiện đang trống (0 byte)
+├── .env.example                   # Mẫu biến môi trường root cho Docker Compose
+├── docker-compose.yml             # Điều phối Fullstack: PostgreSQL 16 + FastAPI + Nginx SPA
+├── render.yaml                    # Blueprint deploy Backend lên Render
 ├── CHAY-DEMO.bat                  # Script khởi chạy demo nhanh (chỉ dành cho Windows)
 ├── run_all.bat                    # Script chạy đồng thời Frontend + Backend (chỉ dành cho Windows)
 ├── run_frontend.bat               # Script chạy Frontend (chỉ dành cho Windows)
 ├── run_backend.bat                # Script chạy Backend FastAPI (chỉ dành cho Windows)
-├── start-preview.sh               # Script mở nhanh bản preview trên macOS/Linux
 ├── README.md                      # Tài liệu tổng quan, hướng dẫn chạy & phân công 7 thành viên
 │
-├── docs/                          # HỆ THỐNG TÀI LIỆU ĐẶC TẢ (5 FILE)
+├── .github/workflows/
+│   └── ci.yml                     # CI/CD: Frontend (npm test + build), Backend (ruff + pytest), Postgres smoke
+│
+├── docs/                          # HỆ THỐNG TÀI LIỆU ĐẶC TẢ (6 FILE)
 │   ├── 01-project-spec.md         # Tổng quan, Phạm vi, User Flow & Roadmap
 │   ├── 02-architecture-db-ai.md   # Kiến trúc hệ thống, CSDL, Dịch vụ lõi, AI Prompt & Bảo mật
 │   ├── 03-ui-ux-design.md         # UI Design System, Wireframes & Responsive
 │   ├── 04-testing-deploy-demo.md  # Kiểm thử (Testing), Triển khai (Deploy), Rủi ro & Demo Q&A
+│   ├── 05-deploy.md               # Hướng dẫn Deploy Production (Neon + Render + Vercel + Branch Protection)
 │   └── openapi.yaml               # Đặc tả OpenAPI xuất tự động từ FastAPI (/openapi.json)
 │
 ├── client/                        # ỨNG DỤNG FRONTEND (REACT 18 + VITE + TAILWIND + LEAFLET)
+│   ├── Dockerfile                 # Multi-stage Node 22 build → Nginx stable alpine
+│   ├── nginx.conf                 # Reverse proxy /api/ → server:8000 & SPA fallback
+│   ├── vercel.json                # Cấu hình rewrite SPA trên Vercel
+│   ├── .env.example               # Mẫu VITE_USE_BACKEND, VITE_API_BASE, VITE_GOOGLE_CLIENT_ID
 │   ├── index.html                 # File HTML gốc (font Be Vietnam Pro)
 │   ├── package.json               # Thư viện & scripts (dev, build, test: node --test)
-│   ├── vite.config.js             # Cấu hình Vite build
-│   ├── tailwind.config.js         # Cấu hình Tailwind CSS theme (#2563EB / #F97316)
+│   ├── vite.config.js             # Cấu hình Vite build + manualChunks tối ưu < 500 kB
+│   ├── tailwind.config.js         # Cấu hình Tailwind CSS theme
 │   ├── server.py                  # Máy chủ Python phục vụ SPA tĩnh độc lập (cổng 5173)
-│   ├── test/
-│   │   └── translations.test.js   # Unit test i18n (chạy bằng: cd client && npm test)
+│   ├── dist/                      # Bản build production tối ưu sẵn sàng chạy tức thì
+│   ├── test/                      # 10 file test FE (56 tests — chạy bằng: cd client && npm test)
+│   │   ├── api-gateway.test.js    # Test API Gateway toggle VITE_USE_BACKEND
+│   │   ├── google-login.test.js   # Test Google Sign-In & error codes
+│   │   ├── marquee-photos.test.js # Test chọn ảnh trang chủ từ DB
+│   │   ├── overflow-menu.test.js  # Test menu thao tác phụ
+│   │   ├── password-policy.test.js# Test quy tắc mật khẩu/username NIST 800-63B-4
+│   │   ├── place-detail.test.js   # Test chuẩn hóa PlaceDrawer
+│   │   ├── session-id.test.js     # Test x-session-id khách vãng lai
+│   │   ├── translations.test.js   # Test song ngữ VI/EN
+│   │   ├── trip-form-logic.test.js# Test parser câu tiếng Việt & validate TripForm
+│   │   └── trip-wizard-logic.test.js # Test luồng Form Wizard 6 bước
 │   └── src/
 │       ├── main.jsx               # Entry point ứng dụng
 │       ├── App.jsx                # Định tuyến React Router v7 (/, /trips, /trip/:id, /s/:token, /settings)
 │       ├── styles.css             # CSS tùy biến & tối ưu Responsive Mobile
-│       ├── context/
-│       │   └── AuthContext.jsx    # Quản lý trạng thái đăng nhập JWT
-│       ├── i18n/
-│       │   ├── I18nContext.jsx    # Context đa ngôn ngữ VI/EN
-│       │   └── translations.js    # Từ điển song ngữ Anh - Việt
-│       ├── pages/
-│       │   ├── LandingPage.jsx    # Trang giới thiệu & bắt đầu lập lịch trình
-│       │   ├── TripPage.jsx       # Workspace chính 4 Chế độ (Timeline, Đi thực tế, Chi tiêu, Tổng kết)
-│       │   ├── MyTripsPage.jsx    # Quản lý danh sách chuyến đi của tôi
-│       │   ├── SharedTripPage.jsx # Xem lịch trình được chia sẻ công khai (/s/:token)
-│       │   ├── SettingsPage.jsx   # Cài đặt tài khoản & xóa tài khoản
-│       │   └── NotFoundPage.jsx   # Trang 404
+│       ├── hooks/                 # useFocusTrap.js
+│       ├── context/               # AuthContext.jsx, PlaceDrawerContext.jsx
+│       ├── i18n/                  # I18nContext.jsx, translations.js
+│       ├── pages/                 # LandingPage.jsx, TripPage.jsx, MyTripsPage.jsx, SharedTripPage.jsx, SettingsPage.jsx, NotFoundPage.jsx
 │       ├── components/
-│       │   ├── TripForm.jsx       # Form khảo sát 8 tiêu chí
-│       │   ├── AuthModal.jsx      # Modal Đăng nhập / Đăng ký
-│       │   ├── ShareDialog.jsx    # Hộp thoại tạo / thu hồi link chia sẻ
-│       │   ├── landing/           # Hero3D, MagneticButton, PhotoMarquee, SpotlightCard
-│       │   ├── itinerary/
-│       │   │   ├── TripMap.jsx          # Bản đồ Leaflet (OpenStreetMap France), marker ✓
-│       │   │   ├── TimelineItem.jsx     # Thẻ lịch trình 3 tầng chống tràn chữ
-│       │   │   ├── ItineraryPanel.jsx   # Bảng điều khiển lịch trình
-│       │   │   ├── PlaceDetailModal.jsx # Modal chi tiết địa điểm TP.HCM
-│       │   │   ├── SwapPlaceModal.jsx   # Modal đổi địa điểm thay thế
-│       │   │   └── TransitConnector.jsx # Khối hiển thị chặng di chuyển
-│       │   ├── companion/
-│       │   │   ├── LiveCompanionView.jsx  # Tab 2 Đi thực tế (Hero Card, chỉ đường, check-in)
-│       │   │   ├── CheckinModal.jsx       # Modal check-in chụp ảnh & ghi chú
-│       │   │   ├── ExpenseTrackerView.jsx # Tab 3 Sổ chi tiêu & sửa cước xe inline
-│       │   │   ├── TripSummaryView.jsx    # Tab 4 Tổng kết chuyến đi (4 KPI, album ảnh)
-│       │   │   └── TripRecapModal.jsx     # Popup Recap & xuất Thẻ ảnh kỷ niệm Story Card Canvas
-│       │   └── common/
-│       │       └── RidePickerModal.jsx    # Pop-up đặt xe 3 hãng: Grab, Xanh SM, Be
-│       └── lib/
-│           ├── api.js             # Client API kết nối Backend (VITE_API_BASE)
-│           ├── auth.js            # Lưu/đọc JWT token
-│           └── session.js         # Quản lý session ID phía trình duyệt
+│       │   ├── TripForm.jsx       # Form khảo sát 6 bước Wizard + Nhập nhanh 1 câu
+│       │   ├── tripForm/          # ConceptDialog, WizardProgress, StepTrip/Group/Budget/Style/Constraints/Review
+│       │   ├── place/             # PlaceDrawer.jsx, PlaceFacts.jsx, NearbyPlaces.jsx
+│       │   ├── AuthModal.jsx, GoogleSignInButton.jsx, ShareDialog.jsx, CuratedTripCard.jsx...
+│       │   ├── landing/           # MagneticButton, PhotoMarquee, SpotlightCard
+│       │   ├── itinerary/         # TripMap, TimelineItem, ItineraryPanel, ItineraryToolbar, OverflowMenu, SwapPlaceModal, StopSwapModal, TransitConnector
+│       │   ├── companion/         # LiveCompanionView, CheckinModal, ExpenseTrackerView, TripSummaryView, TripRecapModal
+│       │   └── common/            # RidePickerModal.jsx
+│       └── lib/                   # api.js (Gateway toggle), auth.js, passwordPolicy.js, sentenceParser.js, tripWizardLogic.js, placeDetail.js...
 │
 └── server/                        # MÁY CHỦ BACKEND (PYTHON FASTAPI + SQLITE/POSTGRESQL)
+    ├── Dockerfile                 # Python 3.12-slim non-root appuser chạy Uvicorn
     ├── main.py                    # Khởi tạo FastAPI App, lifespan, CORS, gắn Router /api/v1
-    ├── requirements.txt           # Thư viện Python (FastAPI, Uvicorn, SQLAlchemy, google-genai...)
+    ├── pyproject.toml             # Cấu hình Pytest & Ruff
+    ├── requirements.txt           # Thư viện Python production
+    ├── requirements-dev.txt       # Thư viện Python kiểm thử & lint
     ├── .env.example               # Mẫu biến môi trường (copy → server/.env, KHÔNG commit)
+    ├── scripts/
+    │   └── smoke_db.py            # Smoke test khởi tạo & seed trên PostgreSQL cho CI
     └── app/
-        ├── core/                  # config.py, security.py (bcrypt/JWT), dependencies.py
+        ├── core/                  # config.py, security.py (bcrypt/JWT), dependencies.py, rate_limit.py
         ├── db/                    # models.py (4 bảng ORM), session.py, schema.sql, hcmc_data.py (327 điểm)
-        ├── schemas/               # user.py, trip.py, ai.py; calendar.py (🚧 #8/#18)
-        ├── services/              # gemini_service.py, places_service.py; contingency_service.py & calendar_service.py (🚧 #8/#18)
-        ├── utils/                 # transit_calculator.py (🚧 #8/#18)
-        ├── tests/                 # test_places.py (đã có); các bộ test còn lại (🚧 #9)
+        ├── schemas/               # user.py, trip.py, ai.py, calendar.py
+        ├── services/              # gemini_service.py, places_service.py, contingency_service.py, calendar_service.py
+        ├── utils/                 # transit_calculator.py
+        ├── tests/                 # 12 file Pytest (conftest, auth, auth_google, password_policy, trips, places, ai, calendar, contingency, transit_calculator, transit, health)
         └── api/v1/
             ├── api.py             # Tổng hợp router prefix /api/v1
-            └── endpoints/         # auth.py, trips.py, places.py, ai.py; calendar.py (🚧 #8/#18)
+            └── endpoints/         # auth.py, trips.py, places.py, ai.py, calendar.py
 ```
 
 ---
@@ -387,12 +389,6 @@ website-ai-travel/
 ## 🌿 Quy Chuẩn Phối Hợp Nhóm Trên GitHub
 
 Để đảm bảo quá trình phát triển không xảy ra xung đột mã nguồn:
-1. **Nhánh `main`:** Được bảo vệ (*Protected Branch*), chỉ chứa mã nguồn đã kiểm thử ổn định.
+1. **Nhánh `main`:** Được bảo vệ (*Protected Branch* qua GitHub Ruleset), bắt buộc PR và vượt qua 3 checks CI (`Frontend build`, `Backend lint and tests`, `Postgres startup smoke`).
 2. **Nhánh tính năng cá nhân (*Feature Branches*):**
-   * `feature/fe-companion-v2-full` — **Danh** & **Hưng** (Mã nguồn Frontend hoàn chỉnh)
-   * `feature/be-auth-trip` — **Khang** (Backend Auth, CRUD Chuyến đi & phiên khách/claim `#31`)
-   * `feature/db-schema-seed` — **Đạt** (SQLAlchemy ORM, SQLite/PostgreSQL, 327 địa điểm & Cache)
-   * `feature/ai-gemini-flow` — **Lam** (Gemini AI, tích hợp form `#25` & xử lý lỗi `#23`)
-   * `feature/be-transit-adaptive` — **Hạo** (Routing cước 3 xe, Kịch bản thích ứng & Calendar `#8/#18`)
-   * `feature/devops-docker-ci` — **Đăng** (Docker, CI/CD, Pytest & Triển khai Cloud `#9`)
-3. **Quy tắc Merge:** Mọi thành viên sau khi hoàn thành tính năng phải mở Pull Request (PR) vào nhánh `main` và được Trưởng nhóm (Danh) phê duyệt sau khi đã test không xung đột.
+   * `feature/*` tách trực tiếp từ `main` và mở Pull Request (PR) vào `main` để Trưởng nhóm (Danh) review và phê duyệt merge.
