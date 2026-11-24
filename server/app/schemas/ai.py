@@ -1,6 +1,19 @@
-from typing import Literal
+import re
+from datetime import date, datetime, timedelta, timezone
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+_VN_TZ = timezone(timedelta(hours=7))
+_TIME_24H_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
+_MIN_DAY_WINDOW_MINUTES = 4 * 60
+
+
+def _parse_hhmm_minutes(value: str) -> int:
+    match = _TIME_24H_RE.fullmatch(value)
+    if match is None:
+        raise ValueError("Time must be in 24-hour HH:MM format (00:00-23:59).")
+    return int(match.group(1)) * 60 + int(match.group(2))
 
 
 class TripConceptRequest(BaseModel):
@@ -17,6 +30,53 @@ class TripConceptRequest(BaseModel):
     preferences: list[str] = Field(min_length=1)
     pace: Literal["relaxed", "moderate", "packed"]
     special_notes: str = Field(default="", max_length=500)
+    # Giới hạn để chuỗi người dùng nhập không phình prompt Gemini (chống prompt injection dài).
+    dietary: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list, max_length=5)
+    avoid_districts: list[Annotated[str, Field(max_length=40)]] = Field(
+        default_factory=list, max_length=3
+    )
+    travel_date: date | None = None
+    day_start: str | None = None
+    day_end: str | None = None
+    has_children: bool = False
+    has_elderly: bool = False
+    mobility: Literal["normal", "limited"] = "normal"
+    prefer_indoor: bool = False
+    must_visit_ids: list[Annotated[str, Field(max_length=64)]] = Field(
+        default_factory=list, max_length=5
+    )
+
+    @field_validator("travel_date")
+    @classmethod
+    def _validate_travel_date(cls, value: date | None) -> date | None:
+        if value is None:
+            return None
+        today_vn = datetime.now(_VN_TZ).date()
+        min_date = today_vn - timedelta(days=1)
+        max_date = today_vn + timedelta(days=365)
+        if value < min_date or value > max_date:
+            raise ValueError(
+                "travel_date must be within 1 day before today and 365 days ahead "
+                "(Asia/Ho_Chi_Minh)."
+            )
+        return value
+
+    @field_validator("day_start", "day_end")
+    @classmethod
+    def _validate_day_time(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        _parse_hhmm_minutes(value)
+        return value
+
+    @model_validator(mode="after")
+    def _validate_day_window(self) -> "TripConceptRequest":
+        if self.day_start is not None and self.day_end is not None:
+            start_min = _parse_hhmm_minutes(self.day_start)
+            end_min = _parse_hhmm_minutes(self.day_end)
+            if end_min - start_min < _MIN_DAY_WINDOW_MINUTES:
+                raise ValueError("day_end must be at least 4 hours after day_start.")
+        return self
 
 
 class ConceptResponse(BaseModel):

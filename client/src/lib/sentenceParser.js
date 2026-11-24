@@ -1,4 +1,5 @@
 import { preferenceOptions } from '../i18n/translations.js';
+import { addDateDays, AI_TRANSPORT_MODE, COMPANION_ALIAS, hcmcDate } from './tripOptions.js';
 
 function normalize(value) {
   return String(value || '')
@@ -16,14 +17,17 @@ const PREFERENCE_KEYWORDS = {
     'food',
     'eat',
     'noodle',
-    'pho',
     'banh mi',
     'am thuc',
     'do an',
     'an uong',
     'mon an',
     'an vat',
-    'quan an'
+    'quan an',
+    'pho bo',
+    'pho ga',
+    'com tam',
+    'hai san'
   ],
   culture: [
     'culture',
@@ -38,9 +42,10 @@ const PREFERENCE_KEYWORDS = {
     'lich su',
     'bao tang',
     'dia danh',
-    'chua',
     'kien truc',
-    'di tich'
+    'di tich',
+    'di chua',
+    'tham quan'
   ],
   cafe: ['cafe', 'cà phê', 'ca phe', 'coffee', 'espresso', 'caphe', 'brunch', 'tra sua'],
   shopping: [
@@ -50,9 +55,12 @@ const PREFERENCE_KEYWORDS = {
     'boutique',
     'souvenir',
     'mua sam',
-    'cho',
     'trung tam thuong mai',
-    'quan ao'
+    'quan ao',
+    'di cho',
+    'cho dem',
+    'cho ben thanh',
+    'cho binh tay'
   ],
   nature: [
     'nature',
@@ -63,9 +71,10 @@ const PREFERENCE_KEYWORDS = {
     'green',
     'cong vien',
     'thien nhien',
-    'song',
     'cay xanh',
-    'ngoai troi'
+    'ngoai troi',
+    'bo song',
+    'ven song'
   ],
   nightlife: [
     'nightlife',
@@ -79,8 +88,18 @@ const PREFERENCE_KEYWORDS = {
     've dem',
     'quan bar',
     'hop dem',
-    'bia'
+    'bia',
+    'bui vien'
   ]
+};
+
+// Diacritic-sensitive Vietnamese words that collide with common words once stripped
+// (chợ/cho, chùa/chưa, phở/phố, sông/sống).
+const DIACRITIC_PREFERENCE_PATTERNS = {
+  food: /(^|[^\p{L}])phở([^\p{L}]|$)/iu,
+  culture: /(^|[^\p{L}])chùa([^\p{L}]|$)/iu,
+  shopping: /(^|[^\p{L}])chợ([^\p{L}]|$)/iu,
+  nature: /(^|[^\p{L}])sông([^\p{L}]|$)/iu
 };
 
 const NORMALIZED_KEYWORDS = Object.fromEntries(
@@ -97,8 +116,8 @@ function hasKeyword(text, keyword) {
 
 function parseDays(text) {
   const dayMatch =
-    text.match(/(\d{1,2})\s*(?:[a-z]+\s+){0,2}?(?:day|days|ngay)\b/i) ||
-    text.match(/\b(?:day|days|ngay)\s*(\d{1,2})\b/i);
+    text.match(/(?<!\/)\b(\d{1,2})\s*(?:[a-z]+\s+){0,2}?(?:day|days|ngay)\b/i) ||
+    text.match(/\b(?:day|days|ngay)\s*(\d{1,2})(?!\s*\/\s*\d)\b/i);
   if (dayMatch) {
     const value = Number(dayMatch[1]);
     if (value >= 1 && value <= 14) return value;
@@ -112,11 +131,18 @@ function parseDays(text) {
     if (value >= 1) return value;
   }
 
-  if (/\b(weekend)\b/i.test(text)) return 2;
+  if (/\b(weekend|cuoi tuan)\b/i.test(text)) return 2;
   return null;
 }
 
 function parseBudget(text) {
+  // Shorthand Vietnamese millions such as "2tr5", "1 triệu 5", "2tr500".
+  const splitMillions = text.match(/(\d{1,3})\s*(?:tr|trieu)\s*(\d{1,3})\b/);
+  if (splitMillions) {
+    const value = Math.round(Number(`${splitMillions[1]}.${splitMillions[2]}`) * 1_000_000);
+    if (value > 0 && value <= 1_000_000_000) return value;
+  }
+
   const millions = text.match(
     /(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:tr\b|trieu\b|million\b|mil\b|m\b)/
   );
@@ -125,7 +151,7 @@ function parseBudget(text) {
     if (value > 0 && value <= 1_000_000_000) return value;
   }
 
-  const thousands = text.match(/(\d{1,4}(?:[.,]\d{1,2})?)\s*(?:k\b|nghin\b|thousand\b)/);
+  const thousands = text.match(/(\d{1,4}(?:[.,]\d{1,2})?)\s*(?:k\b|nghin\b|ngan\b|thousand\b)/);
   if (thousands) {
     const value = Math.round(Number(thousands[1].replace(',', '.')) * 1_000);
     if (value >= 100_000 && value <= 1_000_000_000) return value;
@@ -146,15 +172,213 @@ function parseBudget(text) {
   return null;
 }
 
-export function parseTripSentence(sentence) {
-  const normalized = normalize(sentence);
-  const preferences = preferenceOptions.filter((preference) =>
-    NORMALIZED_KEYWORDS[preference].some((keyword) => hasKeyword(normalized, keyword))
+const COMPANION_PATTERNS = {
+  solo: /\b(one person|solo|alone|by myself|mot minh|1 minh)\b/,
+  couple: /\b(couple|partner|girlfriend|boyfriend|wife|husband|cap doi|ban gai|ban trai|vo chong|nguoi yeu|romantic|lang man)\b/,
+  family: /\b(family|kids?|children|gia dinh|tre em|con nho|em be|bo me|ba me|ong ba)\b/,
+  colleagues: /\b(colleagues?|coworkers?|company|dong nghiep|cong ty|team building)\b/,
+  friends: /\b(friends?|squad|ban be|nhom ban|hoi ban|ban than)\b/
+};
+
+const HAS_CHILDREN_PATTERN =
+  /\b(co con nho|con nho|em be|tre em|tre nho|be nho|with kids?|with children|young kids?|toddler|baby|babies)\b/;
+const NO_CHILDREN_PATTERN =
+  /\b(khong co|khong|no|without)\s+(con nho|em be|tre em|tre nho|kids?|children)\b/;
+const HAS_ELDERLY_PATTERN =
+  /\b(ong ba|bo me lon tuoi|ba me lon tuoi|cha me lon tuoi|nguoi gia|nguoi lon tuoi|elderly|senior citizens?|grandparents?)\b/;
+const NO_ELDERLY_PATTERN =
+  /\b(khong co|khong|no|without)\s+(ong ba|nguoi gia|nguoi lon tuoi|elderly|grandparents?)\b/;
+
+// Check grab_car before grab_bike so "grab car" / "grabcar" does not fall through to "grab".
+const TRANSPORT_PATTERNS = {
+  grab_car: /\b(grab\s*car|taxi|car|driving|o to|oto|xe hoi)\b/,
+  public: /\b(metro|tau dien|bus|buses|xe buyt|cong cong)\b/,
+  walk: /\b(walking|walk|on foot|di bo)\b/,
+  grab_bike: /\b(grab\s*bike|motorbike|motorcycle|scooter|xe may|xe om|grab)\b/
+};
+
+const PACE_PATTERNS = {
+  relaxed: /\b(relaxed|slow|chill|thong tha|thu gian|nhe nhang|cham rai)\b/,
+  packed: /\b(packed|intense|busy|day dac|kham pha toi da|di nhieu|kin lich)\b/,
+  moderate: /\b(moderate|balanced|can bang|vua phai)\b/
+};
+
+const DIETARY_PATTERNS = {
+  vegan: /\b(vegan|thuan chay)\b/,
+  vegetarian: /\b(vegetarian|an chay)\b/,
+  no_seafood: /\b(no seafood|without seafood|khong (?:an )?hai san|kieng hai san)\b/,
+  no_spicy: /\b(no spicy|not spicy|khong (?:an )?cay|kieng cay|it cay)\b/,
+  halal: /\bhalal\b/,
+  nut_allergy: /\b(nut allergy|allergic to (?:nuts|peanuts)|di ung (?:dau phong|lac|hat))\b/
+};
+
+const DISTRICT_MATCHERS = [
+  { name: 'Thủ Đức', startLabel: 'Thảo Điền, TP. Thủ Đức', pattern: /\bthao dien\b/g },
+  { name: 'Thủ Đức', startLabel: 'Thủ Đức, TP. Hồ Chí Minh', pattern: /\b(?:tp\.?\s*thu duc|thu duc|quan\s*2|q\.?\s*2|district\s*2|quan\s*9|q\.?\s*9)\b/g },
+  { name: 'Bình Thạnh', startLabel: 'Bình Thạnh, TP. Hồ Chí Minh', pattern: /\b(?:binh thanh|landmark\s*81|ba chieu)\b/g },
+  { name: 'Phú Nhuận', startLabel: 'Phú Nhuận, TP. Hồ Chí Minh', pattern: /\b(?:phu nhuan|phan xich long)\b/g },
+  { name: 'Quận 7', startLabel: 'Quận 7, TP. Hồ Chí Minh', pattern: /\b(?:quan\s*7|q\.?\s*7|district\s*7|phu my hung)\b/g },
+  { name: 'Quận 5', startLabel: 'Quận 5, TP. Hồ Chí Minh', pattern: /\b(?:quan\s*5|q\.?\s*5|district\s*5|cho lon)\b/g },
+  { name: 'Quận 4', startLabel: 'Quận 4, TP. Hồ Chí Minh', pattern: /\b(?:quan\s*4|q\.?\s*4|district\s*4|vinh khanh)\b/g },
+  { name: 'Quận 3', startLabel: 'Quận 3, TP. Hồ Chí Minh', pattern: /\b(?:quan\s*3|q\.?\s*3|district\s*3|ho con rua|tan dinh)\b/g },
+  { name: 'Quận 1', startLabel: 'Quận 1, TP. Hồ Chí Minh', pattern: /\b(?:quan\s*1|q\.?\s*1|district\s*1|ben thanh|nguyen hue|bui vien)\b/g }
+];
+
+const AVOID_CLAUSE_PATTERN =
+  /\b(?:tranh|khong\s+(?:muon\s+)?(?:di|den|ghe)|bo\s+qua|avoid|skip)\s+([^.,;!?\n]+)/g;
+
+function firstMatching(text, patterns) {
+  return Object.entries(patterns).find(([, pattern]) => pattern.test(text))?.[0] ?? null;
+}
+
+function parseGroupSize(text) {
+  const match =
+    text.match(
+      /\b(\d{1,2})\s*(?:people|persons?|travelers?|travellers?|guests?|members?|nguoi|thanh vien|dong nghiep|khach)\b/
+    ) || text.match(/\bnhom\s*(\d{1,2})\b/);
+  if (!match) return null;
+  const size = Number(match[1]);
+  return size >= 1 && size <= 20 ? size : null;
+}
+
+function parseDistricts(text) {
+  const avoidDistricts = [];
+  let remaining = text;
+
+  for (const match of text.matchAll(AVOID_CLAUSE_PATTERN)) {
+    const clause = match[1];
+    let foundInClause = false;
+    for (const matcher of DISTRICT_MATCHERS) {
+      matcher.pattern.lastIndex = 0;
+      if (matcher.pattern.test(clause)) {
+        foundInClause = true;
+        if (!avoidDistricts.includes(matcher.name)) avoidDistricts.push(matcher.name);
+      }
+    }
+    if (foundInClause) {
+      remaining = remaining.replace(match[0], ' ');
+    }
+  }
+
+  let district = null;
+  let start_location = null;
+  let earliestIndex = Infinity;
+  for (const matcher of DISTRICT_MATCHERS) {
+    matcher.pattern.lastIndex = 0;
+    const hit = matcher.pattern.exec(remaining);
+    if (hit && hit.index < earliestIndex) {
+      earliestIndex = hit.index;
+      district = matcher.name;
+      start_location = matcher.startLabel;
+    }
+  }
+
+  return {
+    district,
+    start_location,
+    avoid_districts: avoidDistricts.slice(0, 3)
+  };
+}
+
+function formatCalendarDate(year, month, day) {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const candidate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    candidate.getUTCFullYear() !== year ||
+    candidate.getUTCMonth() + 1 !== month ||
+    candidate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function nextWeekdayDate(todayStr, targetDow) {
+  const base = new Date(`${todayStr}T00:00:00Z`);
+  const diff = (targetDow - base.getUTCDay() + 7) % 7;
+  return addDateDays(todayStr, diff);
+}
+
+const THIS_WEEKDAY_PATTERNS = [
+  [/\b(cuoi tuan nay|this weekend)\b/, 6],
+  [/\b(thu\s*7\s*nay|thu\s*bay\s*nay|t7\s*nay|this saturday)\b/, 6],
+  [/\b(chu nhat nay|cn\s*nay|this sunday)\b/, 0],
+  [/\b(thu\s*2\s*nay|thu\s*hai\s*nay|this monday)\b/, 1],
+  [/\b(thu\s*3\s*nay|thu\s*ba\s*nay|this tuesday)\b/, 2],
+  [/\b(thu\s*4\s*nay|thu\s*tu\s*nay|this wednesday)\b/, 3],
+  [/\b(thu\s*5\s*nay|thu\s*nam\s*nay|this thursday)\b/, 4],
+  [/\b(thu\s*6\s*nay|thu\s*sau\s*nay|this friday)\b/, 5]
+];
+
+function parseTravelDate(text, now) {
+  const todayStr = hcmcDate(now);
+
+  const iso = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (iso) {
+    return formatCalendarDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+  }
+
+  const localFull = text.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
+  if (localFull) {
+    return formatCalendarDate(Number(localFull[3]), Number(localFull[2]), Number(localFull[1]));
+  }
+
+  const localShort = text.match(/(?:^|[^0-9/])(?:ngay\s*)?(\d{1,2})\/(\d{1,2})(?!\s*\/\s*\d)\b/);
+  if (localShort) {
+    const day = Number(localShort[1]);
+    const month = Number(localShort[2]);
+    const todayYear = Number(todayStr.slice(0, 4));
+    const thisYearDate = formatCalendarDate(todayYear, month, day);
+    if (thisYearDate) {
+      return thisYearDate >= todayStr ? thisYearDate : formatCalendarDate(todayYear + 1, month, day);
+    }
+    const nextYearDate = formatCalendarDate(todayYear + 1, month, day);
+    if (nextYearDate) return nextYearDate;
+  }
+
+  for (const [pattern, dow] of THIS_WEEKDAY_PATTERNS) {
+    if (pattern.test(text)) return nextWeekdayDate(todayStr, dow);
+  }
+
+  if (/\b(tomorrow|ngay mai)\b/.test(text)) return addDateDays(todayStr, 1);
+  if (/\b(today|hom nay)\b/.test(text)) return todayStr;
+  return null;
+}
+
+export function parseTripSentence(sentence, now = new Date()) {
+  const raw = String(sentence || '');
+  const normalized = normalize(raw);
+  const preferences = preferenceOptions.filter(
+    (preference) =>
+      NORMALIZED_KEYWORDS[preference].some((keyword) => hasKeyword(normalized, keyword)) ||
+      Boolean(DIACRITIC_PREFERENCE_PATTERNS[preference]?.test(raw))
   );
+
+  const rawCompanion = firstMatching(normalized, COMPANION_PATTERNS);
+  const companions = rawCompanion ? COMPANION_ALIAS[rawCompanion] || 'friends' : null;
+  const rawTransport = firstMatching(normalized, TRANSPORT_PATTERNS);
+  const transportation = rawTransport ? AI_TRANSPORT_MODE[rawTransport] || rawTransport : null;
+  const { district, start_location, avoid_districts } = parseDistricts(normalized);
+  const has_children = HAS_CHILDREN_PATTERN.test(normalized) && !NO_CHILDREN_PATTERN.test(normalized);
+  const has_elderly = HAS_ELDERLY_PATTERN.test(normalized) && !NO_ELDERLY_PATTERN.test(normalized);
 
   return {
     days: parseDays(normalized),
     budget: parseBudget(normalized),
-    preferences
+    preferences,
+    companions,
+    transportation,
+    pace: firstMatching(normalized, PACE_PATTERNS),
+    travel_date: parseTravelDate(normalized, now),
+    has_children,
+    has_elderly,
+    group_size: parseGroupSize(normalized),
+    dietary: Object.entries(DIETARY_PATTERNS)
+      .filter(([, pattern]) => pattern.test(normalized))
+      .map(([key]) => key),
+    district,
+    start_location,
+    avoid_districts
   };
 }

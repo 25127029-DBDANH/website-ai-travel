@@ -11,6 +11,7 @@ import re
 import time
 from collections import deque
 from collections.abc import Sequence
+from datetime import date
 from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel
@@ -26,7 +27,6 @@ from app.schemas.ai import (
     TripGenerationRequest,
     TripGenerationResponse,
 )
-
 
 logger = logging.getLogger(__name__)
 ModelT = TypeVar("ModelT", bound=BaseModel)
@@ -73,6 +73,19 @@ _PREFERENCE_CATEGORIES = {
     "nightlife": "entertainment",
 }
 _RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
+_WEEKDAYS_VI = (
+    "Thứ Hai",
+    "Thứ Ba",
+    "Thứ Tư",
+    "Thứ Năm",
+    "Thứ Sáu",
+    "Thứ Bảy",
+    "Chủ Nhật",
+)
+_HHMM_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
+_OPENING_RANGE_RE = re.compile(
+    r"(\d{1,2}):(\d{2})(?::\d{2})?\s*[-–—]\s*(\d{1,2}):(\d{2})(?::\d{2})?"
+)
 
 
 def _normalize_district(district: str) -> str:
@@ -80,6 +93,53 @@ def _normalize_district(district: str) -> str:
     if normalized.casefold().startswith("tp. "):
         normalized = normalized[4:].strip()
     return normalized.casefold()
+
+
+def _parse_hhmm(value: str | None) -> int | None:
+    if not value:
+        return None
+    match = _HHMM_RE.fullmatch(value.strip())
+    if match is None:
+        return None
+    return int(match.group(1)) * 60 + int(match.group(2))
+
+
+def _parse_opening_intervals(opening_hours: Sequence[str]) -> list[tuple[int, int]]:
+    intervals: list[tuple[int, int]] = []
+    for entry in opening_hours:
+        if not isinstance(entry, str):
+            continue
+        for match in _OPENING_RANGE_RE.finditer(entry):
+            h1, m1, h2, m2 = (int(group) for group in match.groups())
+            valid_start = 0 <= h1 <= 23 and 0 <= m1 <= 59
+            valid_end = (0 <= h2 <= 23 and 0 <= m2 <= 59) or (h2 == 24 and m2 == 0)
+            if not (valid_start and valid_end):
+                continue
+            open_min = h1 * 60 + m1
+            close_min = h2 * 60 + m2
+            if open_min == close_min:
+                intervals.append((0, 24 * 60))
+            elif open_min < close_min:
+                intervals.append((open_min, close_min))
+            else:
+                intervals.append((open_min, 24 * 60))
+                intervals.append((0, close_min))
+    return intervals
+
+
+def _is_open_during_window(
+    place: PlaceResponse,
+    window_start: int | None,
+    window_end: int | None,
+) -> bool:
+    if window_start is None and window_end is None:
+        return True
+    intervals = _parse_opening_intervals(place.opening_hours)
+    if not intervals:
+        return True
+    start = 0 if window_start is None else window_start
+    end = 24 * 60 if window_end is None else window_end
+    return any(start < close_min and open_min < end for open_min, close_min in intervals)
 
 
 class GeminiServiceError(RuntimeError):
@@ -165,7 +225,11 @@ class GeminiService:
         request: TripConceptRequest,
         available_places: Sequence[PlaceResponse],
     ) -> ConceptResponse:
-        places = self._require_places(available_places)
+        places = self._apply_constraints(
+            self._require_places(available_places),
+            request,
+            min_count=1,
+        )
         prompt = self._prompt(
             "Suggest a trip concept before the traveler approves a detailed plan.",
             request,
@@ -195,7 +259,11 @@ class GeminiService:
         request: TripGenerationRequest,
         available_places: Sequence[PlaceResponse],
     ) -> TripGenerationResponse:
-        places = self._require_places(available_places)
+        places = self._apply_constraints(
+            self._require_places(available_places),
+            request,
+            min_count=request.days * request.places_per_day,
+        )
         prompt = self._prompt(
             "Create the detailed trip after the traveler approved the concept.",
             request,
@@ -377,6 +445,60 @@ class GeminiService:
         return normalized
 
     @staticmethod
+    def _apply_constraints(
+        places: Sequence[PlaceResponse],
+        request: TripConceptRequest,
+        min_count: int = 0,
+    ) -> list[PlaceResponse]:
+        base_places = list(places)
+        catalog_ids = {place.place_id for place in base_places}
+
+        raw_must_visit_ids = list(dict.fromkeys(getattr(request, "must_visit_ids", None) or []))
+        must_visit_set: set[str] = set()
+        for place_id in raw_must_visit_ids:
+            if place_id in catalog_ids:
+                must_visit_set.add(place_id)
+            else:
+                logger.debug("Ignoring unknown must_visit_id %r not in place catalog.", place_id)
+
+        avoid_districts = getattr(request, "avoid_districts", None) or []
+        normalized_avoid = {
+            _normalize_district(d) for d in avoid_districts if d and d.strip()
+        }
+
+        window_start = _parse_hhmm(getattr(request, "day_start", None))
+        window_end = _parse_hhmm(getattr(request, "day_end", None))
+        has_time_window = window_start is not None or window_end is not None
+
+        filtered = [
+            place
+            for place in base_places
+            if place.place_id in must_visit_set
+            or (
+                _normalize_district(place.district) not in normalized_avoid
+                and (
+                    not has_time_window
+                    or _is_open_during_window(place, window_start, window_end)
+                )
+            )
+        ]
+
+        if len(filtered) < min_count and has_time_window:
+            filtered = [
+                place
+                for place in base_places
+                if place.place_id in must_visit_set
+                or _normalize_district(place.district) not in normalized_avoid
+            ]
+        if len(filtered) < min_count:
+            filtered = base_places
+
+        if getattr(request, "prefer_indoor", False):
+            filtered = sorted(filtered, key=lambda place: not place.is_indoor)
+
+        return filtered
+
+    @staticmethod
     def _prompt(
         task: str,
         request: BaseModel,
@@ -384,11 +506,88 @@ class GeminiService:
         instructions: str,
     ) -> str:
         catalog = [_model_dict(place) for place in places]
+        catalog_by_id = {place.place_id: place for place in places}
         example = GeminiService._few_shot_example(places)
+        request_data = _model_dict(request)
+
+        valid_must_visits = [
+            catalog_by_id[pid]
+            for pid in dict.fromkeys(getattr(request, "must_visit_ids", None) or [])
+            if pid in catalog_by_id
+        ]
+        if "must_visit_ids" in request_data:
+            request_data["must_visit_ids"] = [place.place_id for place in valid_must_visits]
+
+        constraints: list[str] = []
+        dietary = getattr(request, "dietary", None) or []
+        avoid_districts = getattr(request, "avoid_districts", None) or []
+        if dietary:
+            constraints.append(
+                "DIETARY REQUIREMENTS (strictly respect for food and cafe stops): "
+                + ", ".join(str(item) for item in dietary)
+            )
+        if avoid_districts:
+            constraints.append(
+                "DISTRICTS TO AVOID (do not recommend or schedule stops here): "
+                + ", ".join(str(item) for item in avoid_districts)
+            )
+
+        travel_date = getattr(request, "travel_date", None)
+        if isinstance(travel_date, date):
+            weekday_vi = _WEEKDAYS_VI[travel_date.weekday()]
+            constraints.append(f"Ngày đi: {travel_date.isoformat()} ({weekday_vi})")
+
+        day_start = getattr(request, "day_start", None)
+        day_end = getattr(request, "day_end", None)
+        valid_start = day_start if _parse_hhmm(day_start) is not None else None
+        valid_end = day_end if _parse_hhmm(day_end) is not None else None
+        if valid_start and valid_end:
+            constraints.append(
+                f"Khung giờ mỗi ngày: {valid_start} - {valid_end} "
+                "(xếp các điểm trong khung giờ này)"
+            )
+        elif valid_start:
+            constraints.append(f"Khung giờ mỗi ngày: bắt đầu từ {valid_start}")
+        elif valid_end:
+            constraints.append(f"Khung giờ mỗi ngày: kết thúc trước {valid_end}")
+
+        if getattr(request, "has_children", False):
+            constraints.append(
+                "Có trẻ nhỏ: chọn ít điểm hơn, nhịp nhẹ nhàng và có chỗ nghỉ ngơi phù hợp"
+            )
+
+        has_elderly = bool(getattr(request, "has_elderly", False))
+        mobility_limited = getattr(request, "mobility", "normal") == "limited"
+        if has_elderly and mobility_limited:
+            constraints.append(
+                "Có người lớn tuổi và hạn chế đi bộ: hạn chế đi bộ xa, ưu tiên các điểm gần nhau"
+            )
+        elif has_elderly:
+            constraints.append("Có người lớn tuổi: hạn chế đi bộ xa, ưu tiên các điểm gần nhau")
+        elif mobility_limited:
+            constraints.append(
+                "Hạn chế đi bộ (mobility=limited): hạn chế đi bộ xa, ưu tiên các điểm gần nhau"
+            )
+
+        if getattr(request, "prefer_indoor", False):
+            constraints.append("Ưu tiên địa điểm trong nhà (is_indoor=true) khi sắp lịch")
+
+        if valid_must_visits:
+            formatted = ", ".join(
+                f"{place.place_name} ({place.place_id})" for place in valid_must_visits
+            )
+            constraints.append(f"BẮT BUỘC đưa vào lịch: {formatted}")
+
+        constraints_block = (
+            "ADDITIONAL CONSTRAINTS:\n" + "\n".join(f"- {line}" for line in constraints) + "\n\n"
+            if constraints
+            else ""
+        )
         return (
             f"{SYSTEM_INSTRUCTION}\nTASK: {task}\n\n"
             f"LOCAL FEW-SHOT EXAMPLE (format guidance only):\n{example}\n\n"
-            f"TRAVELER REQUEST:\n{json.dumps(_model_dict(request), ensure_ascii=False)}\n\n"
+            f"TRAVELER REQUEST:\n{json.dumps(request_data, ensure_ascii=False)}\n\n"
+            f"{constraints_block}"
             f"VERIFIED PLACE CATALOG:\n{json.dumps(catalog, ensure_ascii=False)}\n\n"
             f"TASK RULES:\n{instructions}"
         )
@@ -421,19 +620,30 @@ class GeminiService:
             _normalize_district(place.district): place.district for place in places
         }
         available_districts = list(dict.fromkeys(place.district for place in places))
-        districts = list(
+        catalog_by_id = {place.place_id: place for place in places}
+        must_visit_places = [
+            catalog_by_id[pid]
+            for pid in dict.fromkeys(request.must_visit_ids)
+            if pid in catalog_by_id
+        ]
+        must_visit_districts = list(dict.fromkeys(place.district for place in must_visit_places))
+        requested_districts = list(
             dict.fromkeys(
                 available_by_norm[_normalize_district(district)]
                 for district in request.districts
                 if _normalize_district(district) in available_by_norm
             )
         )
-        districts.extend(district for district in available_districts if district not in districts)
-        districts = districts[: min(request.days, 3)]
-        highlights = list(dict.fromkeys(
-            place.place_name for place in places if place.district in districts
-        ))[:3]
-        route = " → ".join(districts[: min(request.days, 3)])
+        districts = list(
+            dict.fromkeys([*must_visit_districts, *requested_districts, *available_districts])
+        )
+        district_limit = max(min(request.days, 3), len(must_visit_districts))
+        districts = districts[:district_limit]
+        other_highlights = [place.place_name for place in places if place.district in districts]
+        highlights = list(
+            dict.fromkeys([*(place.place_name for place in must_visit_places), *other_highlights])
+        )[: max(3, len(must_visit_places))]
+        route = " → ".join(districts)
         return ConceptResponse(
             summary=(
                 f"Gợi ý chuyến đi {request.days} ngày tại TP.HCM, ưu tiên "
@@ -441,7 +651,7 @@ class GeminiService:
                 f"với nhịp độ {request.pace}, trong ngân sách nhóm {request.budget:,} VND."
             ),
             highlights=highlights,
-            recommended_districts=districts[: min(request.days, 3)],
+            recommended_districts=districts,
             route_overview=route or "Khám phá các điểm phù hợp trong TP.HCM.",
             confirmation_question="Bạn có đồng ý với concept này không?",
         )
@@ -459,27 +669,53 @@ class GeminiService:
             _PREFERENCE_CATEGORIES.get(preference, preference)
             for preference in request.preferences
         }
+        must_visit_rank = {
+            pid: idx for idx, pid in enumerate(dict.fromkeys(request.must_visit_ids))
+        }
         ordered_places = sorted(
             places,
             key=lambda place: (
+                place.place_id not in must_visit_rank,
+                must_visit_rank.get(place.place_id, 0),
+                (not place.is_indoor) if request.prefer_indoor else False,
                 _normalize_district(place.district) not in districts,
                 place.category not in preferred_categories,
                 place.estimated_cost,
             ),
         )
+        total_slots = request.days * request.places_per_day
         selected: list[PlaceResponse] = []
         used_place_ids: set[str] = set()
         for _day in range(request.days):
             day_places: list[PlaceResponse] = []
             for order_index in range(1, request.places_per_day + 1):
-                candidates = [place for place in ordered_places if place.place_id not in used_place_ids]
+                candidates = [
+                    place for place in ordered_places if place.place_id not in used_place_ids
+                ]
+                remaining_slots_after = total_slots - len(selected) - len(day_places) - 1
+                remaining_must_visits = [
+                    place for place in candidates if place.place_id in must_visit_rank
+                ]
                 if order_index == 3:
-                    food = next((place for place in candidates if place.category == "food"), None)
-                    place = food or (candidates[0] if candidates else None)
+                    must_visit_food = next(
+                        (place for place in remaining_must_visits if place.category == "food"),
+                        None,
+                    )
+                    if must_visit_food is not None:
+                        place = must_visit_food
+                    elif len(remaining_must_visits) > remaining_slots_after:
+                        place = remaining_must_visits[0]
+                    else:
+                        food = next(
+                            (place for place in candidates if place.category == "food"), None
+                        )
+                        place = food or (candidates[0] if candidates else None)
                 else:
                     place = candidates[0] if candidates else None
                 if place is None:
-                    raise GeminiServiceError("The verified catalog has too few unique places for this itinerary.")
+                    raise GeminiServiceError(
+                        "The verified catalog has too few unique places for this itinerary."
+                    )
                 used_place_ids.add(place.place_id)
                 day_places.append(place)
             selected.extend(day_places)
@@ -565,6 +801,16 @@ class GeminiService:
             schedule = _model_dict(item, exclude=_PLACE_FIELDS)
             schedule["transit_info"] = None
             items.append(ItineraryItemResponse(**_model_dict(place), **schedule))
+        expected_must_visits = [
+            pid for pid in dict.fromkeys(request.must_visit_ids) if pid in canonical
+        ]
+        scheduled_ids = {item.place_id for item in items}
+        missing_must_visits = [pid for pid in expected_must_visits if pid not in scheduled_ids]
+        if missing_must_visits:
+            logger.warning(
+                "Gemini itinerary omitted must_visit_ids: %s",
+                ", ".join(missing_must_visits),
+            )
         return TripGenerationResponse(itinerary_items=items)
 
     @staticmethod
@@ -616,6 +862,27 @@ class GeminiService:
         )
         if not recommended:
             raise ValueError("Gemini returned no district represented in the verified catalog.")
+        catalog_by_id = {place.place_id: place for place in places}
+        expected_must_visits = [
+            catalog_by_id[pid]
+            for pid in dict.fromkeys(request.must_visit_ids)
+            if pid in catalog_by_id
+        ]
+        if expected_must_visits:
+            haystack = "\n".join(
+                [result.summary, result.route_overview, *result.highlights]
+            ).casefold()
+            missing_must_visits = [
+                place.place_id
+                for place in expected_must_visits
+                if place.place_name.casefold() not in haystack
+                and place.place_id.casefold() not in haystack
+            ]
+            if missing_must_visits:
+                logger.warning(
+                    "Gemini concept omitted must_visit_ids: %s",
+                    ", ".join(missing_must_visits),
+                )
         return ConceptResponse(
             summary=result.summary,
             highlights=result.highlights,
