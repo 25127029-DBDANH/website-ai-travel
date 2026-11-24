@@ -27,8 +27,13 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
+class GoogleAuthRequest(BaseModel):
+    id_token: str = Field(..., min_length=1, max_length=4096)
+
+
 class DeleteAccountRequest(BaseModel):
-    password: str
+    password: str | None = None
+    id_token: str | None = Field(None, max_length=4096)
 
 
 # ---------------------------------------------------------------------------
@@ -37,8 +42,10 @@ class DeleteAccountRequest(BaseModel):
 class UserOut(BaseModel):
     id: str
     username: str
+    email: str | None = None
     full_name: str | None = None
     avatar_url: str | None = None
+    has_password: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}

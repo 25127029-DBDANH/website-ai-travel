@@ -4,12 +4,14 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { cn } from '../lib/cn.js';
 import { translateApiError } from '../lib/errors.js';
+import { hasGoogleSignIn } from '../lib/google.js';
 import { checkPassword, checkUsername } from '../lib/passwordPolicy.js';
+import GoogleSignInButton from './GoogleSignInButton.jsx';
 import Modal from './Modal.jsx';
 
 export default function AuthModal() {
   const { t } = useI18n();
-  const { isAuthOpen, authMode, closeAuth, login, register } = useAuth();
+  const { isAuthOpen, authMode, closeAuth, login, register, loginWithGoogle } = useAuth();
 
   const [mode, setMode] = useState(authMode);
   const [username, setUsername] = useState('');
@@ -18,6 +20,7 @@ export default function AuthModal() {
   const [error, setError] = useState('');
   const [errorField, setErrorField] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const usernameRef = useRef(null);
   const passwordRef = useRef(null);
 
@@ -29,6 +32,7 @@ export default function AuthModal() {
     setShowPassword(false);
     setError('');
     setErrorField('');
+    submittingRef.current = false;
     setSubmitting(false);
   }, [isAuthOpen, authMode]);
 
@@ -45,6 +49,7 @@ export default function AuthModal() {
   };
 
   const switchMode = (nextMode) => {
+    if (submitting || submittingRef.current) return;
     setMode(nextMode);
     clearError();
   };
@@ -56,9 +61,26 @@ export default function AuthModal() {
   const isLogin = mode === 'login';
   const passwordCheck = !isLogin ? checkPassword(password, username.trim()) : null;
 
+  const handleGoogleCredential = async (credential) => {
+    if (submitting || submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    clearError();
+    try {
+      await loginWithGoogle(credential);
+      closeAuth();
+    } catch (requestError) {
+      setErrorField('');
+      setError(translateApiError(t, requestError));
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (submitting) return;
+    if (submitting || submittingRef.current) return;
     const name = username.trim();
     if (!name) {
       showError('username', t('error.VALIDATION_ERROR'));
@@ -82,6 +104,7 @@ export default function AuthModal() {
       }
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     clearError();
     try {
@@ -94,6 +117,7 @@ export default function AuthModal() {
     } catch (requestError) {
       setError(translateApiError(t, requestError));
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -147,6 +171,21 @@ export default function AuthModal() {
               {t('auth.tab.register')}
             </button>
           </div>
+
+          {hasGoogleSignIn ? (
+            <div className="mt-4 grid gap-3">
+              <GoogleSignInButton
+                text="continue_with"
+                disabled={submitting}
+                onCredential={handleGoogleCredential}
+              />
+              <div className="flex items-center gap-3">
+                <span aria-hidden="true" className="h-px flex-1 bg-slate-200" />
+                <span className="text-xs font-medium text-slate-500">{t('auth.or')}</span>
+                <span aria-hidden="true" className="h-px flex-1 bg-slate-200" />
+              </div>
+            </div>
+          ) : null}
 
           <form
             id="auth-form"

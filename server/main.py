@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+    settings.validate_runtime_config()
     application.state.gemini_service = GeminiService(
         api_key=os.getenv("GEMINI_API_KEY"),
         model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
