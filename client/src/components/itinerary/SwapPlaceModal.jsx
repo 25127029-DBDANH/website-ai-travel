@@ -84,7 +84,7 @@ export default function SwapPlaceModal({
                 : 'text-slate-500 hover:text-slate-800'
             )}
           >
-            Quán xá tương tự ({alternatives.length})
+            Quán tương tự ({alternatives.length})
           </button>
           <button
             type="button"
@@ -97,7 +97,7 @@ export default function SwapPlaceModal({
             )}
           >
             <Sparkles className="h-3 w-3" />
-            Gợi ý theo yêu cầu riêng
+            Tìm theo yêu cầu
           </button>
         </div>
 
@@ -105,7 +105,7 @@ export default function SwapPlaceModal({
           <div className="space-y-2.5">
             {alternatives.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-500">
-                Chưa có thêm điểm tương tự trong danh sách. Bạn thử gõ yêu cầu riêng ở tab bên cạnh nhé!
+                Chưa có điểm tương tự trong danh mục. Hãy thử nhập yêu cầu ở tab bên cạnh.
               </div>
             ) : (
               alternatives.map((alt) => (

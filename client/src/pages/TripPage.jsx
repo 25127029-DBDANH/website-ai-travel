@@ -1,17 +1,13 @@
 import {
   AlertCircle,
   Award,
-  Calendar,
   CalendarDays,
   Camera,
   Compass,
   Copy,
   Loader2,
   MapPin,
-  Navigation,
   Share2,
-  Sparkles,
-  Users,
   Wallet
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -21,12 +17,12 @@ import LiveCompanionView from '../components/companion/LiveCompanionView.jsx';
 import TripRecapModal from '../components/companion/TripRecapModal.jsx';
 import TripSummaryView from '../components/companion/TripSummaryView.jsx';
 import ItineraryPanel from '../components/itinerary/ItineraryPanel.jsx';
+import OverflowMenu from '../components/itinerary/OverflowMenu.jsx';
 import SaveTripPrompt from '../components/SaveTripPrompt.jsx';
 import ShareDialog from '../components/ShareDialog.jsx';
 import SiteHeader from '../components/SiteHeader.jsx';
 import Toast from '../components/Toast.jsx';
 import { useI18n } from '../i18n/I18nContext.jsx';
-import { DEMO } from '../demo.jsx';
 import { api, ApiError } from '../lib/api.js';
 import { cn } from '../lib/cn.js';
 import { translateApiError } from '../lib/errors.js';
@@ -50,7 +46,7 @@ function LoadingState() {
       <div className="mb-4 h-6 w-56 animate-pulse rounded-lg bg-slate-200" />
       <div className="grid h-[65vh] place-items-center rounded-3xl border border-slate-200 bg-white shadow-card">
         <div className="flex flex-col items-center gap-2 text-xs font-semibold text-slate-500">
-          <Loader2 className="h-6 w-6 animate-spin text-brand-600" />
+          <Loader2 className="h-6 w-6 animate-spin text-brand-600" aria-hidden="true" />
           {t('itinerary.loading')}
         </div>
       </div>
@@ -76,7 +72,7 @@ export default function TripPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
 
-  // 4 Chế độ hiển thị: 'itinerary' (Lịch trình) | 'live' (Đi thực tế) | 'expense' (Sổ chi tiêu)
+  // Chế độ xem: 'itinerary' | 'live' | 'expense' | 'summary'
   const [viewMode, setViewMode] = useState('itinerary');
   const [showRecapModal, setShowRecapModal] = useState(false);
 
@@ -132,10 +128,12 @@ export default function TripPage() {
     const usedFallback = aiConceptSource === 'fallback' || aiGenerationSource === 'fallback';
     setToast({
       message: usedFallback
-        ? (lang === 'vi'
-            ? 'Gemini chưa hoàn tất một bước; lịch trình đã dùng dữ liệu dự phòng. Hãy kiểm tra cấu hình AI nếu bạn mong đợi kết quả từ Gemini.'
-            : 'Gemini could not complete one step, so this itinerary includes fallback data. Check the AI configuration if you expected a Gemini result.')
-        : (lang === 'vi' ? 'Lịch trình được tạo bằng Gemini và đã lưu thành công.' : 'Gemini created and saved your itinerary.'),
+        ? lang === 'vi'
+          ? 'Gemini chưa hoàn tất một bước nên lịch trình đang dùng dữ liệu dự phòng.'
+          : 'Gemini could not complete one step, so this itinerary uses fallback data.'
+        : lang === 'vi'
+        ? 'Đã tạo và lưu lịch trình.'
+        : 'Itinerary created and saved.',
       tone: usedFallback ? 'error' : 'success'
     });
     navigate(location.pathname, { replace: true, state: null });
@@ -155,7 +153,10 @@ export default function TripPage() {
       setItems([...res.items]);
       setBudget(res.budget_summary);
       setToast({
-        message: lang === 'vi' ? `✓ Đã đổi thành "${replacement.place_name}" thành công!` : `✓ Swapped to ${replacement.place_name}!`,
+        message:
+          lang === 'vi'
+            ? `Đã đổi sang "${replacement.place_name}".`
+            : `Swapped to ${replacement.place_name}.`,
         tone: 'success'
       });
     } catch (error) {
@@ -173,8 +174,12 @@ export default function TripPage() {
       setBudget(res.budget_summary);
       setToast({
         message: enable
-          ? (lang === 'vi' ? '🌧️ Đã bật Chế độ Trời mưa: Chuyển các điểm ngoài trời sang điểm trong nhà, đi GrabCar.' : '🌧️ Rain Mode active.')
-          : (lang === 'vi' ? 'Đã tắt chế độ trời mưa.' : 'Rain mode disabled.'),
+          ? lang === 'vi'
+            ? 'Đã bật chế độ trời mưa: ưu tiên điểm trong nhà và GrabCar.'
+            : 'Rain mode enabled.'
+          : lang === 'vi'
+          ? 'Đã tắt chế độ trời mưa.'
+          : 'Rain mode disabled.',
         tone: 'success'
       });
     } catch (err) {
@@ -190,8 +195,12 @@ export default function TripPage() {
       setBudget(res.budget_summary);
       setToast({
         message: enable
-          ? (lang === 'vi' ? '🚗 Tuyến đường chuyển sang màu cam, đã cộng 20 phút đệm kẹt xe.' : '🚗 Rush Hour mode active.')
-          : (lang === 'vi' ? 'Đã tắt chế độ giờ cao điểm.' : 'Rush Hour mode disabled.'),
+          ? lang === 'vi'
+            ? 'Đã bật chế độ giờ cao điểm và cộng 20 phút dự phòng.'
+            : 'Rush hour mode enabled.'
+          : lang === 'vi'
+          ? 'Đã tắt chế độ giờ cao điểm.'
+          : 'Rush hour mode disabled.',
         tone: 'success'
       });
     } catch (err) {
@@ -206,7 +215,10 @@ export default function TripPage() {
       setItems([...res.items]);
       setBudget(res.budget_summary);
       setToast({
-        message: lang === 'vi' ? '💰 AI đã đổi sang Cơm Tấm Ba Ghiền (55.000 đ), giảm 40.000 đ chi phí thực tế!' : '💰 Budget optimized with local gem!',
+        message:
+          lang === 'vi'
+            ? 'Đã đổi sang Cơm Tấm Ba Ghiền (55.000 đ), tiết kiệm 40.000 đ.'
+            : 'Budget optimized.',
         tone: 'success'
       });
     } catch (err) {
@@ -221,8 +233,12 @@ export default function TripPage() {
       setItems([...res.items]);
       setToast({
         message: item.visited
-          ? (lang === 'vi' ? `Đã bỏ đánh dấu ${item.place_name}` : `Unchecked ${item.place_name}`)
-          : (lang === 'vi' ? `✓ Đã check-in ${item.place_name} thành công!` : `✓ Checked-in ${item.place_name}!`),
+          ? lang === 'vi'
+            ? `Đã bỏ đánh dấu "${item.place_name}".`
+            : `Unchecked ${item.place_name}.`
+          : lang === 'vi'
+          ? `Đã đánh dấu đến "${item.place_name}".`
+          : `Checked in at ${item.place_name}.`,
         tone: 'success'
       });
     } catch (err) {
@@ -240,8 +256,12 @@ export default function TripPage() {
       );
       setToast({
         message: updated?.is_accepted
-          ? (lang === 'vi' ? `✓ Đã chốt điểm "${item.place_name}" vào lịch trình!` : `✓ Accepted ${item.place_name}!`)
-          : (lang === 'vi' ? `Đã bỏ chốt điểm "${item.place_name}"` : `Unaccepted ${item.place_name}`),
+          ? lang === 'vi'
+            ? `Đã chốt "${item.place_name}".`
+            : `Confirmed ${item.place_name}.`
+          : lang === 'vi'
+          ? `Đã bỏ chốt "${item.place_name}".`
+          : `Unconfirmed ${item.place_name}.`,
         tone: 'success'
       });
     } catch (err) {
@@ -255,7 +275,10 @@ export default function TripPage() {
       const res = await api.saveCheckin(id, item.day_number, item.order_index, data);
       setItems([...res.items]);
       setToast({
-        message: lang === 'vi' ? `📸 Đã lưu ảnh check-in tại ${item.place_name}!` : `📸 Saved check-in photo for ${item.place_name}!`,
+        message:
+          lang === 'vi'
+            ? `Đã lưu ảnh check-in tại "${item.place_name}".`
+            : `Saved check-in photo for ${item.place_name}.`,
         tone: 'success'
       });
     } catch (err) {
@@ -275,35 +298,31 @@ export default function TripPage() {
     }
   };
 
-  const itineraryActions = (
-    <>
-      <button
-        type="button"
-        onClick={() => setShareOpen(true)}
-        aria-label={t('trip.actions.share')}
-        className="control-pill !px-3 !py-1.5 !text-xs font-bold"
-      >
-        <Share2 className="h-3.5 w-3.5 text-slate-500" />
-        <span className="hidden sm:inline">{t('trip.actions.share')}</span>
-      </button>
-      <button
-        type="button"
-        onClick={handleDuplicate}
-        disabled={duplicating}
-        aria-label={duplicating ? t('trip.actions.duplicating') : t('trip.actions.duplicate')}
-        className="control-pill !px-3 !py-1.5 !text-xs font-bold disabled:opacity-60"
-      >
-        {duplicating ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <Copy className="h-3.5 w-3.5 text-slate-500" />
-        )}
-        <span className="hidden sm:inline">
-          {duplicating ? t('trip.actions.duplicating') : t('trip.actions.duplicate')}
-        </span>
-      </button>
-    </>
-  );
+  const pageOverflowItems = [
+    {
+      id: 'photobook',
+      label: t('trip.actions.photobook'),
+      icon: Camera,
+      onSelect: () => setShowRecapModal(true)
+    },
+    ...(viewMode !== 'itinerary'
+      ? [
+          {
+            id: 'share',
+            label: t('trip.actions.share'),
+            icon: Share2,
+            onSelect: () => setShareOpen(true)
+          }
+        ]
+      : []),
+    {
+      id: 'duplicate',
+      label: duplicating ? t('trip.actions.duplicating') : t('trip.actions.duplicate'),
+      icon: Copy,
+      disabled: duplicating,
+      onSelect: handleDuplicate
+    }
+  ];
 
   if (loading) return <LoadingState />;
 
@@ -312,14 +331,12 @@ export default function TripPage() {
       <PageShell>
         <div className="mx-auto mt-12 flex max-w-md flex-col items-center rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-card sm:mt-16">
           <span className="grid h-16 w-16 place-items-center rounded-3xl bg-brand-50 text-brand-700">
-            <MapPin className="h-7 w-7" />
+            <MapPin className="h-7 w-7" aria-hidden="true" />
           </span>
           <h1 className="mt-5 font-display text-xl font-extrabold text-slate-900">
             {t('itinerary.notFound.title')}
           </h1>
-          <p className="mt-2 text-sm text-slate-500">
-            {t('itinerary.notFound.body')}
-          </p>
+          <p className="mt-2 text-sm text-slate-500">{t('itinerary.notFound.body')}</p>
           <Link to="/" className="btn-primary mt-6">
             {t('nav.backHome')}
           </Link>
@@ -333,7 +350,7 @@ export default function TripPage() {
       <PageShell>
         <div className="mx-auto mt-12 flex max-w-md flex-col items-center rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-card sm:mt-16">
           <span className="grid h-16 w-16 place-items-center rounded-3xl bg-rose-50 text-rose-600">
-            <AlertCircle className="h-7 w-7" />
+            <AlertCircle className="h-7 w-7" aria-hidden="true" />
           </span>
           <h1 className="mt-5 font-display text-xl font-extrabold text-slate-900">
             {t('chat.error')}
@@ -347,121 +364,115 @@ export default function TripPage() {
     );
   }
 
+  const memberLabel =
+    Number(trip.member_count) > 1
+      ? lang === 'vi'
+        ? `${trip.member_count} người`
+        : `${trip.member_count} people`
+      : lang === 'vi'
+      ? '1 người'
+      : '1 person';
+
   return (
-    <div data-lenis-prevent className="flex min-h-screen flex-col bg-slate-100/70 pb-12">
+    <div data-lenis-prevent className="flex min-h-screen flex-col bg-slate-100/70 pb-10">
       <SiteHeader />
       <main className="mx-auto flex w-full max-w-[1360px] flex-1 flex-col px-3 pt-3 sm:px-6 lg:px-8 lg:pt-5">
         <SaveTripPrompt hasItinerary={items.length > 0} />
 
-        {/* Tiêu đề & Tóm tắt chuyến đi */}
-        <div className="mb-3 flex shrink-0 items-center justify-between gap-3 lg:mb-4">
+        {/* Tiêu đề gọn + 1 dòng tóm tắt chuyến đi */}
+        <div className="relative z-30 mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              <Sparkles className="h-3 w-3 text-brand-500" />
-              {t('brand.name')} · TP. Hồ Chí Minh
-            </p>
             <h1 className="truncate font-display text-lg font-extrabold tracking-tight text-slate-900 sm:text-2xl">
               {displayTitle}
             </h1>
+            <p className="mt-0.5 text-xs font-medium text-slate-500">
+              {t('common.days', { count: Number(trip.days) || 1 })} · {memberLabel} ·{' '}
+              <span className="tabular-nums">{formatVnd(trip.budget, lang)}</span>
+            </p>
           </div>
+
+          {/* 4 tab chế độ đồng nhất + menu "⋯" cho thao tác phụ */}
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600 shadow-xs">
-              <CalendarDays className="h-3.5 w-3.5 text-brand-600" />
-              {t('common.days', { count: Number(trip.days) || 1 })}
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-extrabold text-brand-700 shadow-xs">
-              <Users className="h-3.5 w-3.5 text-brand-600" />
-              {Number(trip.member_count) > 1 ? `${trip.member_count} người` : '1 người (Solo)'}
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-600 shadow-xs">
-              <Wallet className="h-3.5 w-3.5 text-accent-500" />
-              {formatVnd(trip.budget, lang)}
-            </span>
+            <div
+              role="tablist"
+              aria-label={lang === 'vi' ? 'Chế độ xem chuyến đi' : 'Trip views'}
+              className="scrollbar-thin flex items-center gap-1 overflow-x-auto rounded-2xl border border-slate-200/90 bg-white p-1"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === 'itinerary'}
+                onClick={() => setViewMode('itinerary')}
+                className={cn(
+                  'inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors',
+                  viewMode === 'itinerary'
+                    ? 'bg-brand-600 text-white'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                )}
+              >
+                <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>{t('trip.tabs.itinerary')}</span>
+              </button>
+
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === 'live'}
+                onClick={() => setViewMode('live')}
+                className={cn(
+                  'inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors',
+                  viewMode === 'live'
+                    ? 'bg-brand-600 text-white'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                )}
+              >
+                <Compass className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>{t('trip.tabs.live')}</span>
+              </button>
+
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === 'expense'}
+                onClick={() => setViewMode('expense')}
+                className={cn(
+                  'inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors',
+                  viewMode === 'expense'
+                    ? 'bg-brand-600 text-white'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                )}
+              >
+                <Wallet className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>{t('trip.tabs.expense')}</span>
+              </button>
+
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === 'summary'}
+                onClick={() => setViewMode('summary')}
+                className={cn(
+                  'inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors',
+                  viewMode === 'summary'
+                    ? 'bg-brand-600 text-white'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                )}
+              >
+                <Award className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>{t('trip.tabs.summary')}</span>
+              </button>
+            </div>
+
+            <OverflowMenu
+              items={pageOverflowItems}
+              label={t('trip.actions.more')}
+            />
           </div>
         </div>
 
-        {/* 4 TAB CHUYỂN ĐỔI CHẾ ĐỘ TRẢI NGHIỆM CHÍNH (ĐỒNG HÀNH & GIỮ CHÂN NGƯỜI DÙNG) */}
-        {/* 4 TAB CHUYỂN ĐỔI CHẾ ĐỘ TRẢI NGHIỆM CHÍNH (TÔ MÀU ĐẶC TRƯNG TỪNG CHẾ ĐỘ DỄ THAO TÁC) */}
-        <div className="mb-3.5 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200/90 bg-white p-2 shadow-xs">
-          {/* TAB 1: LỊCH TRÌNH TIMELINE (MÀU XANH DƯƠNG - BLUE) */}
-          <button
-            type="button"
-            onClick={() => setViewMode('itinerary')}
-            className={cn(
-              'flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-extrabold transition-all',
-              viewMode === 'itinerary'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-300'
-                : 'border border-blue-200/80 bg-blue-50/50 text-blue-700 hover:bg-blue-100 hover:text-blue-900'
-            )}
-          >
-            <CalendarDays className={cn('h-3.5 w-3.5', viewMode === 'itinerary' ? 'text-white' : 'text-blue-600')} />
-            <span>{lang === 'vi' ? '1. Lịch trình Timeline' : '1. Timeline'}</span>
-          </button>
-
-          {/* TAB 2: CHẾ ĐỘ ĐI THỰC TẾ (MÀU XANH LÁ - EMERALD) */}
-          <button
-            type="button"
-            onClick={() => setViewMode('live')}
-            className={cn(
-              'flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-extrabold transition-all',
-              viewMode === 'live'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/25 ring-2 ring-emerald-300'
-                : 'border border-emerald-200/80 bg-emerald-50/50 text-emerald-800 hover:bg-emerald-100 hover:text-emerald-950'
-            )}
-          >
-            <Compass className={cn('h-3.5 w-3.5', viewMode === 'live' ? 'text-white' : 'text-emerald-600')} />
-            <span>{lang === 'vi' ? '2. Chế độ Đi thực tế (Companion)' : '2. Live Companion'}</span>
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-            </span>
-          </button>
-
-          {/* TAB 3: SỔ CHI TIÊU & CƯỚC DI CHUYỂN (MÀU VÀNG CAM - AMBER) */}
-          <button
-            type="button"
-            onClick={() => setViewMode('expense')}
-            className={cn(
-              'flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-extrabold transition-all',
-              viewMode === 'expense'
-                ? 'bg-amber-600 text-white shadow-md shadow-amber-500/25 ring-2 ring-amber-300'
-                : 'border border-amber-200/80 bg-amber-50/50 text-amber-800 hover:bg-amber-100 hover:text-amber-950'
-            )}
-          >
-            <Wallet className={cn('h-3.5 w-3.5', viewMode === 'expense' ? 'text-white' : 'text-amber-600')} />
-            <span>{lang === 'vi' ? '3. Sổ chi tiêu & Di chuyển' : '3. Expense Tracker'}</span>
-          </button>
-
-          {/* TAB 4: TỔNG KẾT CHUYẾN ĐI (MÀU TÍM HOÀNG GIA - PURPLE) */}
-          <button
-            type="button"
-            onClick={() => setViewMode('summary')}
-            className={cn(
-              'flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-extrabold transition-all',
-              viewMode === 'summary'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-500/25 ring-2 ring-purple-300'
-                : 'border border-purple-200/80 bg-purple-50/50 text-purple-800 hover:bg-purple-100 hover:text-purple-950'
-            )}
-          >
-            <Award className={cn('h-3.5 w-3.5', viewMode === 'summary' ? 'text-white' : 'text-purple-600')} />
-            <span>{lang === 'vi' ? '4. Tổng kết chuyến đi' : '4. Trip Summary'}</span>
-          </button>
-
-          {/* NÚT XUẤT THẺ ẢNH KỶ NIỆM */}
-          <button
-            type="button"
-            onClick={() => setShowRecapModal(true)}
-            className="ml-auto flex items-center gap-1.5 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 px-4 py-2 text-xs font-extrabold text-amber-900 hover:from-amber-100 hover:to-orange-100 transition-all shadow-xs active:scale-97"
-          >
-            <Camera className="h-3.5 w-3.5 text-amber-600" />
-            <span>{lang === 'vi' ? 'Photobook Kỷ niệm' : 'Trip Photobook'}</span>
-            <Sparkles className="h-3 w-3 text-amber-500" />
-          </button>
-        </div>
-
-        {/* NỘI DUNG TƯƠNG ỨNG THEO CHẾ ĐỘ ĐANG CHỌN */}
+        {/* Nội dung theo chế độ đang chọn */}
         {viewMode === 'itinerary' && (
-          <div className="h-[calc(100vh-215px)] min-h-[580px] w-full">
+          <div className="h-[calc(100dvh-190px)] min-h-[560px] w-full">
             <ItineraryPanel
               trip={trip}
               items={items}
@@ -479,9 +490,11 @@ export default function TripPage() {
               onOpenLiveMode={() => setViewMode('live')}
               onOpenExpenseTracker={() => setViewMode('expense')}
               onOpenRecap={() => setShowRecapModal(true)}
+              onShare={() => setShareOpen(true)}
+              onDuplicate={handleDuplicate}
+              duplicating={duplicating}
               swappingKey={swappingKey}
               loading={false}
-              actions={itineraryActions}
             />
           </div>
         )}
@@ -503,10 +516,7 @@ export default function TripPage() {
 
         {viewMode === 'expense' && (
           <div className="w-full">
-            <ExpenseTrackerView
-              trip={trip}
-              items={items}
-            />
+            <ExpenseTrackerView trip={trip} items={items} />
           </div>
         )}
 
@@ -522,7 +532,6 @@ export default function TripPage() {
         )}
       </main>
 
-      {/* MODAL THẺ ẢNH KỶ NIỆM (RECAP STORY) */}
       {showRecapModal && (
         <TripRecapModal
           trip={trip}

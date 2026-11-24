@@ -9,15 +9,13 @@ import {
   MapPin,
   Navigation,
   RefreshCw,
-  Sparkles,
   Utensils,
   Wallet,
   X
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../i18n/I18nContext.jsx';
-import { api, assetUrl, openGrabTransport } from '../../lib/api.js';
-import { getCategoryMeta } from '../../lib/categories.jsx';
+import { api, assetUrl } from '../../lib/api.js';
 import { cn } from '../../lib/cn.js';
 import { formatVnd } from '../../lib/format.js';
 import { osmPlaceUrl } from '../../lib/maps.js';
@@ -26,6 +24,7 @@ import RidePickerModal from '../common/RidePickerModal.jsx';
 
 export default function PlaceDetailModal({
   stop,
+  memberCount = 1,
   isOpen,
   onClose,
   onToggleAccept,
@@ -34,6 +33,9 @@ export default function PlaceDetailModal({
   swapping = false
 }) {
   const { lang, t } = useI18n();
+  const titleId = useId();
+  const closeBtnRef = useRef(null);
+  const previousFocusRef = useRef(null);
   const [showSwapList, setShowSwapList] = useState(false);
   const [selectedReplacement, setSelectedReplacement] = useState(null);
   const [imageFailed, setImageFailed] = useState(false);
@@ -45,15 +47,23 @@ export default function PlaceDetailModal({
     setImageFailed(false);
   }, [stop?.place_id, isOpen]);
 
-  // ESC to close
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) return undefined;
+    previousFocusRef.current = document.activeElement;
+    closeBtnRef.current?.focus();
+
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && !showRideModal) onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      if (previousFocusRef.current instanceof HTMLElement) {
+        previousFocusRef.current.focus();
+      }
+      previousFocusRef.current = null;
+    };
+  }, [isOpen, onClose, showRideModal]);
 
   const alternatives = useMemo(() => {
     if (!stop) return [];
@@ -62,14 +72,16 @@ export default function PlaceDetailModal({
 
   if (!isOpen || !stop) return null;
 
-  const meta = getCategoryMeta(stop.category);
   const photo = !imageFailed && stop.photo_url ? assetUrl(stop.photo_url) : null;
   const displayPhoto = stop.checkin_photo || photo;
   const mapsUrl = osmPlaceUrl(stop.latitude, stop.longitude);
   const isAccepted = Boolean(stop.is_accepted);
   const isVisited = Boolean(stop.visited);
   const editorialScore = Number(stop.editorial_score) > 0 ? Number(stop.editorial_score) : 4.6;
-  const openingHours = Array.isArray(stop.opening_hours) ? stop.opening_hours[0] : (stop.opening_hours || '08:00 - 18:00');
+  const openingHours = Array.isArray(stop.opening_hours)
+    ? stop.opening_hours[0]
+    : stop.opening_hours || '08:00 - 18:00';
+  const tags = Array.isArray(stop.tags) ? stop.tags : [];
 
   const handleConfirmSwap = () => {
     if (!selectedReplacement || !onSwap) return;
@@ -82,431 +94,417 @@ export default function PlaceDetailModal({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-3 sm:p-4 backdrop-blur-xs animate-fade-in"
+      aria-labelledby={titleId}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-xs sm:p-4"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl animate-scale-up"
+        className="relative flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft"
       >
-        {/* Nút đóng modal góc trên bên phải */}
         <button
+          ref={closeBtnRef}
           type="button"
           onClick={onClose}
-          aria-label="Đóng"
-          className="absolute right-3.5 top-3.5 z-20 grid h-8 w-8 place-items-center rounded-full bg-slate-900/60 text-white backdrop-blur transition-all hover:bg-slate-900 hover:scale-105 active:scale-95"
+          aria-label={t('common.close')}
+          className="absolute right-3.5 top-3.5 z-20 grid h-9 w-9 place-items-center rounded-full bg-slate-900/70 text-white transition-colors hover:bg-slate-900"
         >
-          <X className="h-4 w-4" />
+          <X className="h-4 w-4" aria-hidden="true" />
         </button>
 
-        {/* Header ảnh lớn & huy hiệu */}
-        <div className="relative h-48 w-full shrink-0 overflow-hidden bg-slate-900 sm:h-60">
+        {/* Ảnh tiêu đề + lớp phủ tối để giữ tương phản chữ */}
+        <div className="relative h-48 w-full shrink-0 overflow-hidden bg-slate-900 sm:h-56">
           {displayPhoto ? (
             <img
               src={displayPhoto}
               alt={stop.place_name}
               onError={() => setImageFailed(true)}
-              className="h-full w-full object-cover transition-transform duration-700 hover:scale-105"
+              className="h-full w-full object-cover"
             />
           ) : (
-            <div className={cn('h-full w-full bg-gradient-to-br opacity-80', meta.gradient)} />
+            <div className="grid h-full w-full place-items-center bg-slate-800">
+              <CategoryTile category={stop.category} size="lg" />
+            </div>
           )}
 
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
 
-          {/* Badges trên ảnh */}
-          <div className="absolute left-4 top-4 flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1 text-xs font-extrabold text-slate-800 shadow-sm backdrop-blur">
-              <CategoryTile category={stop.category} size="sm" />
+          <div className="absolute left-4 top-4 flex flex-wrap items-center gap-1.5 pr-12">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-slate-800">
               <span>{t(`category.${stop.category}`)}</span>
             </span>
-            {stop.district && (
-              <span className="rounded-full bg-slate-900/80 px-2.5 py-1 text-xs font-bold text-white backdrop-blur">
-                📍 {stop.district}
+            {stop.district ? (
+              <span className="rounded-full bg-slate-900/80 px-2.5 py-1 text-xs font-semibold text-white">
+                {stop.district}
               </span>
-            )}
-            {stop.is_lunch && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500 px-2.5 py-1 text-xs font-extrabold text-white shadow-sm">
-                <Utensils className="h-3 w-3" />
-                {lang === 'vi' ? 'Bữa trưa đặc sản' : 'Lunch'}
+            ) : null}
+            {stop.is_lunch ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-600 px-2.5 py-1 text-xs font-semibold text-white">
+                <Utensils className="h-3 w-3" aria-hidden="true" />
+                {lang === 'vi' ? 'Bữa trưa' : 'Lunch'}
               </span>
-            )}
+            ) : null}
           </div>
 
-          {/* Điểm đánh giá / Huy hiệu check-in */}
-          <div className="absolute right-4 bottom-4">
+          <div className="absolute bottom-3.5 right-4">
             {stop.checkin_photo ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1 text-xs font-extrabold text-white shadow-md">
-                <Camera className="h-3.5 w-3.5" />
-                {lang === 'vi' ? '📸 Đã check-in thực tế' : 'Checked-in'}
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-700 px-2.5 py-1 text-xs font-semibold text-white">
+                <Camera className="h-3.5 w-3.5" aria-hidden="true" />
+                {lang === 'vi' ? 'Đã check-in' : 'Checked in'}
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/90 px-3 py-1 text-xs font-extrabold text-white shadow-md backdrop-blur">
-                ★ {editorialScore.toFixed(1)} / 5.0
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-900/80 px-2.5 py-1 text-xs font-semibold text-white tabular-nums">
+                ★ {editorialScore.toFixed(1)}
               </span>
             )}
           </div>
 
-          {/* Tên địa điểm & Giờ trên banner */}
-          <div className="absolute left-4 right-20 bottom-3">
-            <span className="font-mono text-xs font-bold tracking-wider text-amber-300">
+          <div className="absolute bottom-3.5 left-4 right-24">
+            <span className="font-mono text-xs font-semibold text-slate-200 tabular-nums">
               {stop.time_slot || `${stop.start_time || '08:30'} - ${stop.end_time || '10:15'}`}
             </span>
-            <h2 className="mt-0.5 line-clamp-2 font-display text-lg font-extrabold text-white sm:text-2xl drop-shadow-sm">
+            <h2
+              id={titleId}
+              className="mt-0.5 line-clamp-2 font-display text-lg font-extrabold text-white sm:text-2xl"
+            >
               {stop.place_name}
             </h2>
           </div>
         </div>
 
-        {/* Nội dung cuộn chi tiết */}
-        <div className="scrollbar-thin flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
-          {/* BANNER THÔNG BÁO KHÓA CHỨC NĂNG KHI ĐỊA ĐIỂM ĐÃ HOÀN THÀNH */}
-          {isVisited && (
-            <div className="rounded-2xl border-2 border-emerald-400 bg-emerald-50/90 p-3.5 text-emerald-950 shadow-xs animate-fade-in">
-              <div className="flex items-start gap-2.5">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-xs">
-                  <CheckCircle2 className="h-4 w-4" />
-                </span>
-                <div>
-                  <h4 className="font-display text-sm font-extrabold text-emerald-950">
-                    {lang === 'vi' ? '✓ ĐỊA ĐIỂM ĐÃ HOÀN THÀNH (ĐÃ CHECK-IN)' : '✓ COMPLETED STOP (CHECKED IN)'}
-                  </h4>
-                  <p className="mt-0.5 text-xs text-emerald-800 leading-relaxed">
-                    {lang === 'vi'
-                      ? 'Bạn đã hoàn tất ghé thăm điểm này trong hành trình thực tế. Các thao tác thay đổi lịch trình (đổi điểm, chốt điểm) đã được khóa để bảo toàn dữ liệu hành trình đã đi.'
-                      : 'You have visited this location. Route changes are locked (view-only mode).'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Trạng thái duyệt / Accept Badge */}
-          <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3">
-            <div className="flex items-center gap-2">
-              <span className={cn('flex h-7 w-7 items-center justify-center rounded-xl text-white shadow-xs', isVisited || isAccepted ? 'bg-emerald-600' : 'bg-slate-200 text-slate-600')}>
-                <CheckCircle2 className="h-4 w-4" />
-              </span>
+        {/* Nội dung chi tiết (thông tin phụ: giờ mở cửa, chi phí chi tiết, không gian, địa chỉ, tags, ghi chú) */}
+        <div className="scrollbar-thin flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
+          {/* Trạng thái ngắn gọn */}
+          {isVisited ? (
+            <div className="flex items-start gap-2.5 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" />
               <div>
-                <p className="text-xs font-extrabold text-slate-900">
-                  {isVisited
-                    ? (lang === 'vi' ? 'Đã hoàn thành ghé thăm ✓' : 'Visited & Completed')
-                    : isAccepted
-                    ? (lang === 'vi' ? 'Đã chốt vào lịch trình chính thức' : 'Accepted in Itinerary')
-                    : (lang === 'vi' ? 'Điểm dự kiến (Chưa chốt)' : 'Tentative Stop')}
+                <p className="font-bold">
+                  {lang === 'vi' ? 'Điểm đã hoàn thành' : 'Completed stop'}
                 </p>
-                <p className="text-[11px] text-slate-500">
-                  {isVisited
-                    ? (lang === 'vi' ? 'Chặng này đã thực hiện xong, chỉ xem thông tin.' : 'Completed stop (view-only).')
-                    : isAccepted
-                    ? (lang === 'vi' ? 'Điểm đến này đã được xác nhận sẵn sàng trải nghiệm.' : 'This stop is confirmed.')
-                    : (lang === 'vi' ? 'Bạn có thể bấm Accept để chốt hoặc Đổi sang điểm khác.' : 'Click Accept to confirm or Swap.')}
+                <p className="mt-0.5 text-emerald-800">
+                  {lang === 'vi'
+                    ? 'Chặng này đã được đánh dấu hoàn tất nên tạm khóa thao tác đổi điểm.'
+                    : 'This stop is marked visited and locked from edits.'}
                 </p>
               </div>
             </div>
+          ) : isAccepted ? (
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-xs font-semibold text-emerald-800">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+              <span>
+                {lang === 'vi'
+                  ? 'Đã chốt điểm này vào lịch trình.'
+                  : 'Confirmed in your itinerary.'}
+              </span>
+            </div>
+          ) : null}
 
-            {!isVisited ? (
-              <button
-                type="button"
-                onClick={() => onToggleAccept && onToggleAccept(stop)}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-extrabold shadow-xs transition-all active:scale-97',
-                  isAccepted
-                    ? 'border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                    : 'bg-emerald-600 text-white hover:bg-emerald-700'
+          {/* Thông tin nhanh: Giờ mở cửa, Chi phí chi tiết, Không gian */}
+          <dl className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+            <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3">
+              <dt className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+                <Clock className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                {lang === 'vi' ? 'Giờ mở cửa' : 'Opening hours'}
+              </dt>
+              <dd className="mt-1 text-xs font-bold text-slate-900">{openingHours}</dd>
+            </div>
+
+            <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3">
+              <dt className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+                <Wallet className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                {lang === 'vi' ? 'Chi phí dự kiến' : 'Estimated cost'}
+              </dt>
+              <dd className="mt-1 text-xs font-bold text-slate-900 tabular-nums">
+                {stop.estimated_cost > 0 ? (
+                  <>
+                    <span>
+                      {formatVnd(stop.estimated_cost, lang)}
+                      {memberCount > 1 ? `/${lang === 'vi' ? 'người' : 'pp'}` : ''}
+                    </span>
+                    {memberCount > 1 ? (
+                      <span className="mt-0.5 block text-[11px] font-medium text-slate-500">
+                        {lang === 'vi'
+                          ? `Nhóm ${memberCount} người: ${formatVnd(stop.estimated_cost * memberCount, lang)}`
+                          : `Group (${memberCount}): ${formatVnd(stop.estimated_cost * memberCount, lang)}`}
+                      </span>
+                    ) : null}
+                  </>
+                ) : (
+                  <span className="text-emerald-700">
+                    {lang === 'vi' ? 'Miễn phí' : 'Free'}
+                  </span>
                 )}
-              >
-                <Check className="h-3.5 w-3.5" />
-                <span>{isAccepted ? (lang === 'vi' ? 'Đã duyệt ✓' : 'Accepted') : (lang === 'vi' ? 'Accept (Chốt điểm)' : 'Accept')}</span>
-              </button>
-            ) : (
-              <span className="rounded-xl border border-emerald-300 bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-900">
-                {lang === 'vi' ? 'Đã khóa thao tác' : 'Locked'}
-              </span>
-            )}
-          </div>
-
-          {/* Grid thông tin nhanh: Địa chỉ, giờ, chi phí */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            <div className="flex items-center gap-2.5 rounded-xl border border-slate-200/70 bg-white p-2.5">
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-600">
-                <Clock className="h-4 w-4" />
-              </span>
-              <div className="min-w-0">
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  {lang === 'vi' ? 'Giờ mở cửa' : 'Hours'}
-                </span>
-                <span className="truncate text-xs font-bold text-slate-800">
-                  {openingHours}
-                </span>
-              </div>
+              </dd>
             </div>
 
-            <div className="flex items-center gap-2.5 rounded-xl border border-slate-200/70 bg-white p-2.5">
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-600">
-                <Wallet className="h-4 w-4" />
-              </span>
-              <div className="min-w-0">
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  {lang === 'vi' ? 'Dự kiến / người' : 'Cost / person'}
-                </span>
-                <span className="truncate text-xs font-bold text-slate-800">
-                  {stop.estimated_cost > 0 ? formatVnd(stop.estimated_cost, lang) : (lang === 'vi' ? 'Miễn phí vé' : 'Free')}
-                </span>
-              </div>
+            <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3">
+              <dt className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+                <Compass className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                {lang === 'vi' ? 'Không gian' : 'Setting'}
+              </dt>
+              <dd className="mt-1 text-xs font-bold text-slate-900">
+                {stop.is_indoor
+                  ? lang === 'vi'
+                    ? 'Trong nhà'
+                    : 'Indoor'
+                  : lang === 'vi'
+                  ? 'Ngoài trời'
+                  : 'Outdoor'}
+              </dd>
             </div>
+          </dl>
 
-            <div className="flex items-center gap-2.5 rounded-xl border border-slate-200/70 bg-white p-2.5">
-              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-purple-50 text-purple-600">
-                <Compass className="h-4 w-4" />
-              </span>
-              <div className="min-w-0">
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  {lang === 'vi' ? 'Không gian' : 'Setting'}
-                </span>
-                <span className="truncate text-xs font-bold text-slate-800">
-                  {stop.is_indoor ? (lang === 'vi' ? 'Trong nhà (Né mưa)' : 'Indoor') : (lang === 'vi' ? 'Ngoài trời' : 'Outdoor')}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Địa chỉ chi tiết & Bản đồ */}
-          {stop.address && (
-            <div className="flex items-start justify-between gap-3 rounded-xl border border-slate-200/80 bg-slate-50/60 p-3 text-xs text-slate-700">
+          {/* Địa chỉ & mở bản đồ ngoài */}
+          {stop.address ? (
+            <div className="flex items-start justify-between gap-3 rounded-xl border border-slate-200/80 bg-white p-3 text-xs text-slate-700">
               <div className="flex items-start gap-2">
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" aria-hidden="true" />
                 <div>
-                  <strong className="text-slate-900">{lang === 'vi' ? 'Địa chỉ:' : 'Address:'}</strong> {stop.address}
+                  <span className="font-semibold text-slate-900">
+                    {lang === 'vi' ? 'Địa chỉ: ' : 'Address: '}
+                  </span>
+                  {stop.address}
                 </div>
               </div>
-              {mapsUrl && (
+              {mapsUrl ? (
                 <a
                   href={mapsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex shrink-0 items-center gap-1 font-bold text-brand-600 hover:underline"
+                  className="inline-flex shrink-0 items-center gap-1 font-semibold text-brand-600 hover:underline"
                 >
-                  <Navigation className="h-3 w-3" />
+                  <Navigation className="h-3 w-3" aria-hidden="true" />
                   <span>Maps</span>
-                  <ExternalLink className="h-2.5 w-2.5" />
+                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
                 </a>
-              )}
+              ) : null}
             </div>
-          )}
+          ) : null}
 
-          {/* Giới thiệu chi tiết địa điểm */}
+          {/* Giới thiệu & ghi chú */}
           <div>
-            <h3 className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-slate-500">
-              <Sparkles className="h-3.5 w-3.5 text-brand-500" />
-              <span>{lang === 'vi' ? 'Giới thiệu chi tiết điểm đến' : 'Place Overview'}</span>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              {lang === 'vi' ? 'Giới thiệu' : 'Overview'}
             </h3>
-            <p className="mt-2 text-xs sm:text-sm leading-relaxed text-slate-700">
-              {stop.description || 'Địa điểm tham quan nổi tiếng tại TP. Hồ Chí Minh mang đậm dấu ấn văn hóa, ẩm thực và đời sống Sài Gòn.'}
+            <p className="mt-1.5 text-sm leading-relaxed text-slate-700">
+              {stop.description ||
+                (lang === 'vi'
+                  ? 'Địa điểm tham quan và trải nghiệm tại TP.HCM.'
+                  : 'Local stop in Ho Chi Minh City.')}
             </p>
+            {stop.notes ? (
+              <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <strong className="font-semibold text-slate-800">
+                  {lang === 'vi' ? 'Ghi chú: ' : 'Note: '}
+                </strong>
+                {stop.notes}
+              </p>
+            ) : null}
           </div>
 
-          {/* Nếu người dùng đã check-in thực tế */}
-          {stop.checkin_photo && (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3.5 text-xs">
-              <div className="flex items-center gap-2 font-extrabold text-emerald-900">
-                <Camera className="h-4 w-4 text-emerald-600" />
-                <span>{lang === 'vi' ? 'Ảnh kỷ niệm check-in của bạn' : 'Your Check-in Memory'}</span>
-                {stop.checkin_time && <span className="text-[11px] font-normal text-emerald-700">({stop.checkin_time})</span>}
+          {tags.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-medium text-slate-600"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Kỷ niệm check-in nếu có */}
+          {stop.checkin_photo ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 text-xs">
+              <div className="flex items-center gap-2 font-bold text-emerald-900">
+                <Camera className="h-4 w-4 text-emerald-700" aria-hidden="true" />
+                <span>{lang === 'vi' ? 'Ảnh check-in của bạn' : 'Your check-in photo'}</span>
+                {stop.checkin_time ? (
+                  <span className="font-normal text-emerald-700">({stop.checkin_time})</span>
+                ) : null}
               </div>
-              {stop.checkin_note && (
-                <p className="mt-1.5 italic text-emerald-800">
-                  “{stop.checkin_note}”
+              {stop.checkin_note ? (
+                <p className="mt-1 italic text-emerald-800">“{stop.checkin_note}”</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Danh sách gợi ý đổi điểm (chỉ mở khi người dùng bấm Đổi địa điểm) */}
+          {!isVisited && showSwapList ? (
+            <div className="space-y-2.5 rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="font-display text-sm font-bold text-slate-900">
+                  {lang === 'vi' ? 'Chọn địa điểm thay thế' : 'Choose an alternative'}
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => setShowSwapList(false)}
+                  className="text-xs font-semibold text-slate-500 hover:text-slate-800"
+                >
+                  {lang === 'vi' ? 'Thu gọn' : 'Hide'}
+                </button>
+              </div>
+
+              {alternatives.length === 0 ? (
+                <p className="text-xs text-slate-500">
+                  {lang === 'vi'
+                    ? 'Hiện chưa có điểm thay thế cùng tiêu chí.'
+                    : 'No similar alternatives available.'}
                 </p>
+              ) : (
+                <>
+                  <div className="max-h-56 space-y-2 overflow-y-auto pr-0.5">
+                    {alternatives.map((alt) => {
+                      const isSelected = selectedReplacement?.place_id === alt.place_id;
+                      return (
+                        <button
+                          key={alt.place_id}
+                          type="button"
+                          onClick={() => setSelectedReplacement(alt)}
+                          aria-pressed={isSelected}
+                          className={cn(
+                            'flex w-full items-center justify-between gap-3 rounded-xl border p-2.5 text-left transition-colors',
+                            isSelected
+                              ? 'border-brand-500 bg-brand-50/50 ring-1 ring-brand-200'
+                              : 'border-slate-200 bg-white hover:border-slate-300'
+                          )}
+                        >
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                'grid h-5 w-5 shrink-0 place-items-center rounded-full border',
+                                isSelected
+                                  ? 'border-brand-600 bg-brand-600 text-white'
+                                  : 'border-slate-300 bg-white text-transparent'
+                              )}
+                            >
+                              <Check className="h-3 w-3" strokeWidth={3} />
+                            </span>
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-bold text-slate-900">
+                                {alt.place_name}
+                              </p>
+                              <p className="text-[11px] text-slate-500">
+                                {alt.district} ·{' '}
+                                {alt.estimated_cost > 0
+                                  ? formatVnd(alt.estimated_cost, lang)
+                                  : lang === 'vi'
+                                  ? 'Miễn phí'
+                                  : 'Free'}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                            {t(`category.${alt.category}`)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowSwapList(false)}
+                      className="btn-secondary !px-3 !py-1.5 text-xs"
+                    >
+                      {t('common.cancel')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!selectedReplacement || swapping}
+                      onClick={handleConfirmSwap}
+                      className="btn-primary !px-3.5 !py-1.5 text-xs"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>{lang === 'vi' ? 'Đổi sang điểm này' : 'Confirm swap'}</span>
+                    </button>
+                  </div>
+                </>
               )}
             </div>
-          )}
-
-          {/* MỤC ĐỔI ĐỊA ĐIỂM (CHỈ HIỂN THỊ KHI CHƯA HOÀN THÀNH) */}
-          {!isVisited && (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="flex items-center gap-1.5 font-display text-sm font-extrabold text-amber-950">
-                  <RefreshCw className="h-4 w-4 text-amber-600" />
-                  <span>{lang === 'vi' ? 'Đổi sang địa điểm khác' : 'Swap Place'}</span>
-                </h4>
-                <p className="mt-0.5 text-xs text-amber-800/90">
-                  {lang === 'vi'
-                    ? 'Bạn không thích điểm này? Chọn ngay một điểm tương đương cùng quận.'
-                    : 'Not feeling this stop? Pick a similar alternative.'}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowSwapList((prev) => !prev)}
-                className="inline-flex items-center gap-1 rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-extrabold text-amber-900 shadow-xs hover:bg-amber-100"
-              >
-                <span>{showSwapList ? (lang === 'vi' ? 'Thu gọn danh sách' : 'Hide') : (lang === 'vi' ? 'Xem danh sách thay thế' : 'View list')}</span>
-              </button>
-            </div>
-
-            {/* DANH SÁCH CÁC ĐỊA ĐIỂM THAY THẾ KHI BẤM XEM */}
-            {showSwapList && (
-              <div className="mt-3 space-y-2 border-t border-amber-200/80 pt-3 animate-fade-in">
-                {alternatives.length === 0 ? (
-                  <p className="text-xs text-amber-800 italic">
-                    {lang === 'vi' ? 'Hiện tại không có điểm thay thế cùng tiêu chí.' : 'No alternatives found.'}
-                  </p>
-                ) : (
-                  <>
-                    <p className="text-[11px] font-bold text-amber-900">
-                      {lang === 'vi' ? 'Chọn một địa điểm dưới đây rồi nhấn nút "Xác nhận đổi":' : 'Select an alternative and confirm:'}
-                    </p>
-                    <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-                      {alternatives.map((alt) => {
-                        const isSelected = selectedReplacement?.place_id === alt.place_id;
-                        return (
-                          <div
-                            key={alt.place_id}
-                            onClick={() => setSelectedReplacement(alt)}
-                            className={cn(
-                              'flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-2.5 transition-all',
-                              isSelected
-                                ? 'border-amber-500 bg-white shadow-sm ring-2 ring-amber-300'
-                                : 'border-amber-200/70 bg-white/80 hover:bg-white hover:border-amber-300'
-                            )}
-                          >
-                            <div className="flex min-w-0 items-center gap-2.5">
-                              <span
-                                className={cn(
-                                  'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs font-bold',
-                                  isSelected ? 'border-amber-600 bg-amber-500 text-white' : 'border-slate-300 bg-white text-transparent'
-                                )}
-                              >
-                                ✓
-                              </span>
-                              <div className="min-w-0">
-                                <p className="truncate text-xs font-extrabold text-slate-900">
-                                  {alt.place_name}
-                                </p>
-                                <p className="text-[10px] text-slate-500">
-                                  {alt.district} · {alt.estimated_cost > 0 ? formatVnd(alt.estimated_cost, lang) : (lang === 'vi' ? 'Miễn phí' : 'Free')}
-                                </p>
-                              </div>
-                            </div>
-                            <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold text-slate-600">
-                              {t(`category.${alt.category}`)}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <div className="flex items-center justify-end gap-2 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowSwapList(false)}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
-                      >
-                        {lang === 'vi' ? 'Hủy' : 'Cancel'}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!selectedReplacement || swapping}
-                        onClick={handleConfirmSwap}
-                        className="inline-flex items-center gap-1 rounded-xl bg-amber-600 px-4 py-1.5 text-xs font-extrabold text-white shadow-sm hover:bg-amber-700 disabled:opacity-50"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        <span>{lang === 'vi' ? 'Xác nhận đổi sang điểm này' : 'Confirm Swap'}</span>
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-          )}
+          ) : null}
         </div>
 
-        {/* Action bar dính dưới chân modal */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50/90 px-4 py-3 sm:px-6">
+        {/* Thanh hành động chân modal — mỗi hành động chỉ xuất hiện 1 lần */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-6">
           <div className="flex flex-wrap items-center gap-2">
             {!isVisited ? (
               <>
-                {/* Nút Accept */}
-                <button
-                  type="button"
-                  onClick={() => onToggleAccept && onToggleAccept(stop)}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-extrabold shadow-xs transition-all active:scale-97',
-                    isAccepted
-                      ? 'border border-emerald-400 bg-emerald-600 text-white'
-                      : 'border border-slate-300 bg-white text-slate-800 hover:border-emerald-500 hover:text-emerald-700'
-                  )}
-                >
-                  <Check className="h-3.5 w-3.5" />
-                  <span>{isAccepted ? (lang === 'vi' ? 'Đã duyệt ✓' : 'Accepted') : (lang === 'vi' ? 'Accept điểm này' : 'Accept stop')}</span>
-                </button>
+                {onToggleAccept ? (
+                  <button
+                    type="button"
+                    onClick={() => onToggleAccept(stop)}
+                    className={cn(
+                      'inline-flex min-h-9 items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors',
+                      isAccepted
+                        ? 'border border-emerald-300 bg-emerald-600 text-white hover:bg-emerald-700'
+                        : 'border border-slate-200 bg-white text-slate-800 hover:border-emerald-400 hover:text-emerald-700'
+                    )}
+                  >
+                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>
+                      {isAccepted ? t('itinerary.card.accepted') : t('itinerary.card.accept')}
+                    </span>
+                  </button>
+                ) : null}
 
-                {/* Nút Đổi địa điểm */}
-                <button
-                  type="button"
-                  onClick={() => setShowSwapList(true)}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-extrabold text-amber-900 shadow-xs hover:bg-amber-100"
-                >
-                  <RefreshCw className="h-3.5 w-3.5 text-amber-600" />
-                  <span>{lang === 'vi' ? 'Đổi địa điểm' : 'Swap Place'}</span>
-                </button>
-              </>
-            ) : (
-              <div className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-100 px-3.5 py-2 text-xs font-extrabold text-emerald-900 shadow-xs">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                <span>{lang === 'vi' ? 'Chặng đã hoàn thành (Chỉ xem)' : 'Completed (View-only)'}</span>
-              </div>
-            )}
-          </div>
+                {onSwap ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowSwapList((prev) => !prev)}
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>{t('itinerary.card.swap')}</span>
+                  </button>
+                ) : null}
 
-          <div className="flex items-center gap-2">
-            {!isVisited && (
-              <>
-                {/* Nút Đặt xe 3 lựa chọn (Grab / Xanh SM / Be) */}
                 <button
                   type="button"
                   onClick={() => setShowRideModal(true)}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500 bg-emerald-600 px-3 py-2 text-xs font-extrabold text-white shadow-xs hover:bg-emerald-700 active:scale-97"
-                  title="Đặt xe với 3 lựa chọn: Grab, Xanh SM hoặc Be"
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-brand-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-brand-700"
                 >
-                  <Bike className="h-3.5 w-3.5" />
-                  <span>{lang === 'vi' ? 'Đặt xe (Grab/XanhSM/Be)' : 'Book Ride'}</span>
+                  <Bike className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{lang === 'vi' ? 'Gọi xe' : 'Book ride'}</span>
                 </button>
 
-                {/* Nút Chụp ảnh check-in */}
-                {onOpenCheckin && (
+                {onOpenCheckin ? (
                   <button
                     type="button"
                     onClick={() => {
                       onClose();
                       onOpenCheckin(stop);
                     }}
-                    className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100"
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                   >
-                    <Camera className="h-3.5 w-3.5 text-emerald-600" />
-                    <span className="hidden sm:inline">{lang === 'vi' ? 'Check-in' : 'Photo'}</span>
+                    <Camera className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
+                    <span>{lang === 'vi' ? 'Check-in' : 'Check-in'}</span>
                   </button>
-                )}
+                ) : null}
               </>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-900">
+                <CheckCircle2 className="h-4 w-4 text-emerald-700" aria-hidden="true" />
+                <span>{lang === 'vi' ? 'Đã hoàn thành (chỉ xem)' : 'Completed (read-only)'}</span>
+              </span>
             )}
-
-            {/* Nút Đóng */}
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100"
-            >
-              {lang === 'vi' ? 'Đóng' : 'Close'}
-            </button>
           </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn-secondary !px-3.5 !py-2 text-xs"
+          >
+            {t('common.close')}
+          </button>
         </div>
       </div>
 
-      {/* MODAL ĐẶT XE (GRAB - XANH SM - BE) */}
       <RidePickerModal
         stop={stop}
         isOpen={showRideModal}
