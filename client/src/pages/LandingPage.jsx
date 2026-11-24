@@ -53,7 +53,7 @@ export default function LandingPage() {
       <SiteHeader />
 
       <main>
-        <section className="border-b border-slate-200 bg-slate-50">
+        <section className="border-b border-slate-200 bg-mesh">
           <div className="mx-auto grid max-w-7xl items-center gap-8 px-4 pb-12 pt-8 sm:gap-14 sm:px-6 sm:pb-20 sm:pt-12 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:pb-24 lg:pt-16">
             <div>
               <h1 className="font-display text-[32px] font-extrabold leading-[1.12] tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
@@ -296,9 +296,9 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="plan" className="scroll-mt-16 border-b border-slate-200 bg-white">
+        <section id="plan" className="plan-background scroll-mt-16 border-b border-slate-200">
           <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:px-8 lg:py-20">
-            <Reveal>
+            <Reveal className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm sm:p-6">
               <h2 className="font-display text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
                 {t('form.title')}
               </h2>

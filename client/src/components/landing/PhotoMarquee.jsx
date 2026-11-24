@@ -5,6 +5,7 @@ import { DEMO } from '../../demo.jsx';
 import { useI18n } from '../../i18n/I18nContext.jsx';
 import { api, assetUrl } from '../../lib/api.js';
 import { cn } from '../../lib/cn.js';
+import { buildMarqueeTrack } from '../../lib/marqueePhotos.js';
 
 const FALLBACK_SURFACES = [
   'bg-slate-200',
@@ -113,7 +114,7 @@ export default function PhotoMarquee() {
     }));
   }, [photos, lang]);
 
-  const track = reduced ? cards : [...cards, ...cards];
+  const track = useMemo(() => buildMarqueeTrack(cards, { reduced }), [cards, reduced]);
 
   if (DEMO) {
     return (

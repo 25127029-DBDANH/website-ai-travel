@@ -155,12 +155,14 @@
 }
 
 @layer utilities {
+  /* Ảnh chụp skyline + lớp phủ màu đặc (không gradient) để chữ tối đọc được. */
   .bg-mesh {
-    @apply bg-slate-50;
+    background: #f8fafc url('/images/background.png') center / cover no-repeat;
+    box-shadow: inset 0 0 0 100vmax rgba(248, 250, 252, 0.72);
   }
 
   .plan-background {
-    @apply bg-slate-50;
+    background: #0f172a url('/images/plan_bg.jpg') center / cover no-repeat;
   }
 
   .text-balance {
