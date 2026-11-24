@@ -3,18 +3,16 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  Compass,
   MapPin,
   MessageCircle,
-  Sparkles,
   Wallet
 } from 'lucide-react';
-import { motion, useReducedMotion, useScroll, useTransform } from 'motion/react';
-import { useEffect, useRef } from 'react';
+import { useReducedMotion } from 'motion/react';
+import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import CategoryTile from '../components/CategoryTile.jsx';
-import MagneticButton from '../components/landing/MagneticButton.jsx';
 import PhotoMarquee from '../components/landing/PhotoMarquee.jsx';
-import SpotlightCard from '../components/landing/SpotlightCard.jsx';
 import Reveal from '../components/Reveal.jsx';
 import SiteFooter from '../components/SiteFooter.jsx';
 import SiteHeader from '../components/SiteHeader.jsx';
@@ -30,14 +28,14 @@ const MOCK_STOPS = [
   { time: '14:30', titleKey: 'hero.card.afternoon', category: 'cafe', areaKey: 'hero.card.area1' }
 ];
 
-const HOW_ICONS = [CalendarDays, MessageCircle, Sparkles];
-const FEATURE_ICONS = [MapPin, Wallet, MessageCircle, Sparkles];
+const HOW_ICONS = [CalendarDays, MessageCircle, Compass];
+const FEATURE_ICONS = [MapPin, Wallet, MessageCircle, CalendarDays];
 
 export default function LandingPage() {
   const { lang, t } = useI18n();
   const location = useLocation();
-  const heroRef = useRef(null);
   const reduced = useReducedMotion();
+
   useEffect(() => {
     if (!location.hash) return;
     const target = document.getElementById(location.hash.slice(1));
@@ -48,12 +46,6 @@ export default function LandingPage() {
     }
   }, [location.hash, reduced]);
 
-  const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
-  const blobLeftY = useTransform(scrollYProgress, [0, 1], [0, 110]);
-  const blobRightY = useTransform(scrollYProgress, [0, 1], [0, -90]);
-  const mockY = useTransform(scrollYProgress, [0, 1], [0, 60]);
-  const parallax = (value) => (reduced ? undefined : { y: value });
-
   const heroNotes = t('hero.note').split(' · ');
 
   return (
@@ -61,57 +53,41 @@ export default function LandingPage() {
       <SiteHeader />
 
       <main>
-        <section ref={heroRef} className="relative overflow-hidden bg-mesh">
-          <motion.div
-            style={parallax(blobLeftY)}
-            className="pointer-events-none absolute -left-32 top-20 h-72 w-72 rounded-full bg-brand-200/40 blur-3xl"
-          />
-          <motion.div
-            style={parallax(blobRightY)}
-            className="pointer-events-none absolute -right-24 top-0 h-80 w-80 rounded-full bg-accent-200/40 blur-3xl"
-          />
-          <div className="vn-pattern absolute inset-0 opacity-60" aria-hidden="true" />
-          <div className="grain absolute inset-0" aria-hidden="true" />
-          <div className="relative mx-auto grid max-w-7xl items-center gap-8 px-4 pb-12 pt-8 sm:gap-14 sm:px-6 sm:pb-20 sm:pt-12 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:pb-28 lg:pt-20">
-            <div className="animate-fade-up">
-              <h1 className="font-display text-[32px] sm:text-5xl lg:text-6xl font-extrabold leading-[1.15] sm:leading-[1.18] tracking-tight text-slate-900">
+        <section className="border-b border-slate-200 bg-slate-50">
+          <div className="mx-auto grid max-w-7xl items-center gap-8 px-4 pb-12 pt-8 sm:gap-14 sm:px-6 sm:pb-20 sm:pt-12 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:pb-24 lg:pt-16">
+            <div>
+              <h1 className="font-display text-[32px] font-extrabold leading-[1.12] tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
                 {t('hero.title')}
-                <span className="mt-1 block text-brand-600">
-                  {t('hero.titleAccent')}
-                </span>
+                <span className="mt-1 block text-brand-600">{t('hero.titleAccent')}</span>
               </h1>
 
-              <p className="mt-4 sm:mt-5 max-w-xl text-balance text-base leading-relaxed text-slate-800 sm:text-[17px]">
+              <p className="mt-4 max-w-xl text-balance text-base leading-relaxed text-slate-600 sm:mt-5 sm:text-[17px]">
                 {t('hero.subtitle')}
               </p>
 
               <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                <MagneticButton>
-                  <a href="#plan" className="btn-primary !px-6 !py-3.5">
-                    {t('hero.cta')}
-                    <ArrowRight className="h-4 w-4" />
-                  </a>
-                </MagneticButton>
-                <MagneticButton strength={0.14}>
-                  <a href="#how" className="btn-secondary !px-6 !py-3.5">
-                    {t('hero.secondary')}
-                  </a>
-                </MagneticButton>
+                <a href="#plan" className="btn-primary !px-6 !py-3.5">
+                  {t('hero.cta')}
+                  <ArrowRight className="h-4 w-4" />
+                </a>
+                <a href="#how" className="btn-secondary !px-6 !py-3.5">
+                  {t('hero.secondary')}
+                </a>
               </div>
 
               <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
                 {heroNotes.map((note) => (
                   <span
                     key={note}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-800"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700"
                   >
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                     {note}
                   </span>
                 ))}
               </div>
 
-              <div className="mt-9 grid max-w-lg grid-cols-3 gap-4 rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-sm backdrop-blur-sm">
+              <div className="mt-9 grid max-w-lg grid-cols-3 gap-4 rounded-2xl border border-slate-200 bg-white p-4">
                 {[
                   ['stats.places', 'stats.places.value'],
                   ['stats.budget', 'stats.budget.value'],
@@ -121,7 +97,7 @@ export default function LandingPage() {
                     <p className="font-display text-xl font-extrabold tracking-tight text-brand-700 sm:text-2xl">
                       {t(valueKey)}
                     </p>
-                    <p className="mt-0.5 text-xs font-semibold leading-snug text-slate-700">
+                    <p className="mt-0.5 text-xs font-medium leading-snug text-slate-600">
                       {t(`${prefix}.label`)}
                     </p>
                   </div>
@@ -129,52 +105,46 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <motion.div
-              style={parallax(mockY)}
-              className="relative mx-auto w-full max-w-md animate-fade-up [animation-delay:120ms]"
-            >
-              <div className="absolute -inset-5 rounded-[2.5rem] bg-gradient-to-br from-brand-200/70 via-white to-accent-200/70 blur-2xl" />
-
-              <SpotlightCard className="relative overflow-hidden rounded-4xl border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur sm:p-5">
+            <div className="mx-auto w-full max-w-md">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-card sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2.5">
-                    <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-brand-600 to-accent-500 text-white shadow-glow">
-                      <MapPin className="h-5 w-5" strokeWidth={2.4} />
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-600 text-white">
+                      <MapPin className="h-5 w-5" strokeWidth={2.2} />
                     </span>
                     <div>
                       <p className="font-display text-sm font-extrabold text-slate-900">
                         {t('hero.card.title')}
                       </p>
-                      <p className="text-xs font-semibold text-slate-600">
+                      <p className="text-xs font-medium text-slate-600">
                         {t('hero.card.subtitle')}
                       </p>
                     </div>
                   </div>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-brand-100 bg-brand-50 px-2.5 py-1 text-xs font-extrabold uppercase tracking-wider text-brand-700">
-                    <Sparkles className="h-3 w-3" />
+                  <span className="shrink-0 rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
                     {t('hero.card.badge')}
                   </span>
                 </div>
 
-                <div className="mt-4 rounded-2xl bg-slate-900 p-3.5 text-white">
+                <div className="mt-4 rounded-xl bg-slate-900 p-3.5 text-white">
                   <div className="flex items-end justify-between gap-2">
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/70">
+                      <p className="text-xs font-semibold text-slate-300">
                         {t('hero.card.budget')}
                       </p>
                       <p className="mt-0.5 font-display text-lg font-extrabold">
                         {formatVnd(3_150_000, lang)}
                       </p>
                     </div>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/15 px-2 py-1 text-xs font-bold text-emerald-300">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-semibold text-emerald-300">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                       {t('hero.card.remaining')}
                     </span>
                   </div>
                   <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-white/15">
-                    <div className="h-full w-[63%] rounded-full bg-gradient-to-r from-emerald-400 to-teal-300" />
+                    <div className="h-full w-[63%] rounded-full bg-emerald-400" />
                   </div>
-                  <div className="mt-2 flex justify-between text-xs font-semibold text-white/70">
+                  <div className="mt-2 flex justify-between text-xs font-medium text-slate-300">
                     <span>{formatVnd(3_150_000, lang)}</span>
                     <span>{formatVnd(5_000_000, lang)}</span>
                   </div>
@@ -191,14 +161,14 @@ export default function LandingPage() {
                       </div>
                       <div className={index < MOCK_STOPS.length - 1 ? 'min-w-0 flex-1 pb-3.5' : 'min-w-0 flex-1'}>
                         <div className="flex items-start justify-between gap-2">
-                          <p className="truncate text-xs font-extrabold text-slate-800">
+                          <p className="truncate text-xs font-bold text-slate-900">
                             {t(stop.titleKey)}
                           </p>
-                          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-700">
+                          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
                             {stop.time}
                           </span>
                         </div>
-                        <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-slate-700">
+                        <p className="mt-0.5 text-xs font-medium text-slate-600">
                           {t(stop.areaKey)}
                         </p>
                       </div>
@@ -212,50 +182,32 @@ export default function LandingPage() {
                       key={day}
                       className={
                         day === 1
-                          ? 'rounded-lg bg-brand-600 px-2.5 py-1 text-xs font-bold text-white'
-                          : 'rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600'
+                          ? 'rounded-lg bg-brand-600 px-2.5 py-1 text-xs font-semibold text-white'
+                          : 'rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600'
                       }
                     >
                       {formatDayLabel(lang, day)}
                     </span>
                   ))}
-                  <span className="ml-auto inline-flex items-center gap-1 text-xs font-bold text-slate-500">
+                  <span className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-slate-500">
                     <Wallet className="h-3 w-3" />
                     VND
                   </span>
                 </div>
-              </SpotlightCard>
-
-              <div className="absolute -bottom-16 -left-4 hidden items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/95 px-3 py-2 shadow-soft backdrop-blur animate-float sm:flex">
-                <span className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-50 text-emerald-600">
-                  <Check className="h-4 w-4" strokeWidth={3} />
-                </span>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                    {t('itinerary.budget.health.under')}
-                  </p>
-                  <p className="text-xs font-extrabold text-slate-800">
-                    {formatVnd(1_850_000, lang)}
-                  </p>
-                </div>
               </div>
-
-              <div className="absolute -right-3 -top-3 grid h-12 w-12 place-items-center rounded-2xl bg-accent-500 text-white shadow-glow animate-float [animation-delay:1.2s]">
-                <MapPin className="h-5 w-5" strokeWidth={2.4} />
-              </div>
-            </motion.div>
+            </div>
           </div>
         </section>
 
         <PhotoMarquee />
 
-        <section id="how" className="scroll-mt-16 border-y border-slate-200/70 bg-white">
+        <section id="how" className="scroll-mt-16 border-b border-slate-200 bg-white">
           <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
             <Reveal className="max-w-2xl">
               <h2 className="font-display text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
                 {t('how.title')}
               </h2>
-              <p className="mt-3 text-sm leading-relaxed text-slate-500 sm:text-base">
+              <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">
                 {t('how.subtitle')}
               </p>
             </Reveal>
@@ -268,20 +220,20 @@ export default function LandingPage() {
                     as="article"
                     key={step}
                     delay={index * 70}
-                    className="group relative overflow-hidden rounded-3xl border border-slate-200/80 bg-slate-50/60 p-6 ring-1 ring-slate-900/5 transition-[transform,border-color,background-color,box-shadow] duration-300 ease-out-strong hover:-translate-y-1 hover:border-brand-200 hover:bg-white hover:shadow-lift"
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-6"
                   >
-                    <span className="absolute right-2 top-2 font-display text-7xl font-extrabold text-slate-500 transition-colors duration-300 ease-out-strong group-hover:text-brand-600">
-                      0{step}
-                    </span>
-                    <div className="relative flex items-center gap-3">
-                      <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-50 text-brand-600">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-50 text-brand-700">
                         <Icon className="h-5 w-5" />
                       </span>
-                      <h3 className="font-display text-base font-extrabold text-slate-900">
-                        {t(`how.step${step}.title`)}
-                      </h3>
+                      <span className="font-display text-sm font-bold text-slate-400">
+                        0{step}
+                      </span>
                     </div>
-                    <p className="relative mt-2 text-xs leading-relaxed text-slate-600">
+                    <h3 className="mt-4 font-display text-base font-bold text-slate-900">
+                      {t(`how.step${step}.title`)}
+                    </h3>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-600">
                       {t(`how.step${step}.desc`)}
                     </p>
                   </Reveal>
@@ -291,12 +243,8 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="features" className="scroll-mt-16 relative overflow-hidden bg-slate-900">
-          <div className="pointer-events-none absolute -right-20 top-0 h-72 w-72 rounded-full bg-brand-600/25 blur-3xl" />
-          <div className="pointer-events-none absolute -left-24 bottom-0 h-72 w-72 rounded-full bg-accent-500/15 blur-3xl" />
-          <div className="vn-lotus-light absolute inset-0 opacity-80" aria-hidden="true" />
-
-          <div className="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
+        <section id="features" className="scroll-mt-16 bg-slate-900">
+          <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
             <Reveal className="max-w-2xl">
               <h2 className="font-display text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
                 {t('features.title')}
@@ -311,16 +259,14 @@ export default function LandingPage() {
                     as="article"
                     key={feature}
                     delay={index * 70}
-                    className="group rounded-3xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur transition-[transform,border-color,background-color] duration-300 ease-out-strong hover:-translate-y-1 hover:border-brand-400/40 hover:bg-white/[0.07]"
+                    className="rounded-2xl border border-slate-800 bg-slate-800/70 p-5"
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="grid h-9 w-9 place-items-center rounded-lg bg-white/10 text-accent-400 ring-1 ring-white/10">
-                        <Icon className="h-4.5 w-4.5" />
-                      </span>
-                      <h3 className="font-display text-sm font-extrabold text-white">
-                        {t(`features.f${feature}.title`)}
-                      </h3>
-                    </div>
+                    <span className="grid h-9 w-9 place-items-center rounded-lg bg-slate-700 text-accent-400">
+                      <Icon className="h-4.5 w-4.5" />
+                    </span>
+                    <h3 className="mt-4 font-display text-sm font-bold text-white">
+                      {t(`features.f${feature}.title`)}
+                    </h3>
                     <p className="mt-2 text-xs leading-relaxed text-slate-300">
                       {t(`features.f${feature}.desc`)}
                     </p>
@@ -331,19 +277,18 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Curated Starter Trips Section */}
-        <section id="curated" className="bg-slate-50/80 px-4 py-16 sm:px-6 lg:px-8 border-b border-slate-200/60">
+        <section id="curated" className="border-b border-slate-200 bg-slate-50 px-4 py-16 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
-            <Reveal className="text-center max-w-2xl mx-auto mb-10">
+            <Reveal className="mx-auto mb-10 max-w-2xl text-center">
               <h2 className="font-display text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
                 {t('curated.title')}
               </h2>
-              <p className="mt-3 text-sm text-slate-600 leading-relaxed">
+              <p className="mt-3 text-sm leading-relaxed text-slate-600">
                 {t('curated.subtitle')}
               </p>
             </Reveal>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {CURATED_TRIPS.map((curated) => (
                 <CuratedTripCard key={curated.id} trip={curated} />
               ))}
@@ -351,27 +296,27 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="plan" className="plan-background scroll-mt-16 relative overflow-hidden bg-slate-50">
-          <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:px-8 lg:py-24">
-            <Reveal className="rounded-3xl border border-white/70 bg-white/85 p-5 shadow-sm backdrop-blur-sm sm:p-6">
+        <section id="plan" className="scroll-mt-16 border-b border-slate-200 bg-white">
+          <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:px-8 lg:py-20">
+            <Reveal>
               <h2 className="font-display text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
                 {t('form.title')}
               </h2>
-              <p className="mt-3 max-w-md text-sm leading-relaxed text-slate-900 sm:text-base">
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-slate-600 sm:text-base">
                 {t('form.subtitle')}
               </p>
 
-              <div className="mt-7 space-y-3">
+              <div className="mt-7 space-y-4">
                 {[1, 2, 3].map((feature) => (
                   <div key={feature} className="flex items-start gap-3">
-                    <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-600">
+                    <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700">
                       <Check className="h-3.5 w-3.5" strokeWidth={3} />
                     </span>
                     <div>
-                      <p className="text-sm font-bold text-slate-800">
+                      <p className="text-sm font-bold text-slate-900">
                         {t(`features.f${feature}.title`)}
                       </p>
-                      <p className="mt-0.5 max-w-sm text-xs leading-relaxed text-slate-900">
+                      <p className="mt-0.5 max-w-sm text-xs leading-relaxed text-slate-600">
                         {t(`features.f${feature}.desc`)}
                       </p>
                     </div>
@@ -385,37 +330,29 @@ export default function LandingPage() {
               </div>
             </Reveal>
 
-            <Reveal delay={90} className="relative">
-              <div className="absolute -inset-3 rounded-[2rem] bg-gradient-to-br from-brand-100 via-white to-accent-100 blur-xl" />
-              <div className="relative">
-                <TripForm />
-              </div>
+            <Reveal delay={90}>
+              <TripForm />
             </Reveal>
           </div>
         </section>
 
-        <section className="bg-white px-4 pb-20 pt-4 sm:px-6 lg:px-8">
-          <div className="relative mx-auto max-w-7xl overflow-hidden rounded-4xl bg-gradient-to-br from-brand-700 via-brand-800 to-slate-900 px-6 py-14 text-center shadow-soft sm:px-12">
-            <div className="pointer-events-none absolute -left-16 -top-16 h-56 w-56 rounded-full border-[24px] border-white/10" />
-            <div className="pointer-events-none absolute -bottom-20 -right-12 h-64 w-64 rounded-full border-[28px] border-accent-400/20" />
-            <div className="pointer-events-none absolute left-1/3 top-0 h-40 w-40 rounded-full bg-brand-400/20 blur-3xl" />
-            <div className="vn-lotus-light absolute inset-0" aria-hidden="true" />
-
-            <Reveal className="relative">
-              <h2 className="font-display text-3xl font-extrabold tracking-tight text-white sm:text-4xl flex items-center justify-center gap-3">
-                <MapPin className="h-7 w-7 text-accent-400 shrink-0" strokeWidth={2.4} />
+        <section className="bg-slate-50 px-4 py-16 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl rounded-2xl bg-brand-700 px-6 py-12 text-center sm:px-12">
+            <Reveal>
+              <h2 className="flex items-center justify-center gap-2.5 font-display text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
+                <MapPin className="h-6 w-6 shrink-0 text-accent-300" strokeWidth={2.2} />
                 {t('cta.title')}
               </h2>
               <p className="mt-2 text-sm text-brand-100">{t('cta.subtitle')}</p>
-              <MagneticButton className="mt-7 inline-block">
+              <div className="mt-6">
                 <a
                   href="#plan"
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3.5 text-sm font-bold text-slate-900 shadow-card transition-[transform,background-color] duration-200 ease-out-strong hover:-translate-y-0.5 hover:bg-brand-50 active:scale-[0.97]"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-bold text-slate-900 transition-[transform,background-color] duration-200 ease-out-strong hover:bg-brand-50 active:scale-[0.97]"
                 >
                   {t('cta.button')}
                   <ArrowRight className="h-4 w-4" />
                 </a>
-              </MagneticButton>
+              </div>
             </Reveal>
           </div>
         </section>

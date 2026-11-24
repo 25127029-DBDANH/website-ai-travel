@@ -9,8 +9,6 @@ import {
   Clock,
   ExternalLink,
   MapPin,
-  Share2,
-  Sparkles,
   TrendingDown,
   TrendingUp,
   Utensils,
@@ -128,28 +126,28 @@ export default function TripSummaryView({
         </div>
       </div>
 
-      {/* HERO BANNER: CHÚC MỪNG HOÀN THÀNH CHUYẾN ĐI */}
-      <div className="relative overflow-hidden rounded-3xl border border-emerald-300 bg-gradient-to-br from-emerald-600 via-teal-700 to-slate-900 p-6 sm:p-8 text-white shadow-xl">
-        <div className="relative z-10 max-w-3xl">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-extrabold uppercase tracking-wider backdrop-blur-md">
-            <Award className="h-4 w-4 text-amber-300" />
-            {lang === 'vi' ? 'Hành trình hoàn tất thành công!' : 'Trip Completed!'}
+      {/* HERO BANNER: TỔNG KẾT CHUYẾN ĐI */}
+      <div className="rounded-2xl bg-slate-900 p-6 text-white sm:p-8">
+        <div className="max-w-3xl">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {lang === 'vi' ? 'Chuyến đi đã hoàn tất' : 'Trip completed'}
           </span>
 
-          <h2 className="mt-3 font-display text-2xl sm:text-3xl font-extrabold tracking-tight">
-            {lang === 'vi' ? `Tổng kết chuyến đi: ${trip?.title || 'Khám phá Sài Gòn'}` : `Trip Summary: ${trip?.title}`}
+          <h2 className="mt-3 font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
+            {lang === 'vi' ? `Tổng kết: ${trip?.title || 'Chuyến đi TP.HCM'}` : `Summary: ${trip?.title}`}
           </h2>
 
-          <p className="mt-2 text-sm text-emerald-100 leading-relaxed max-w-2xl">
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-300">
             {lang === 'vi'
-              ? `Bạn đã hoàn thành chuyến hành trình ${dayCount} ngày tại TP. Hồ Chí Minh. Dưới đây là bảng tổng kết chi tiết những nơi bạn đã đi qua và toàn bộ các khoản chi tiêu thực tế so với ngân sách ban đầu.`
-              : `You have successfully completed your ${dayCount}-day journey in Saigon. Here is your full recap of places visited and total expenses.`}
+              ? `Tổng hợp ${dayCount} ngày tại TP.HCM gồm các điểm đã ghé, chi phí ước tính theo nhóm và ảnh check-in.`
+              : `Overview of your ${dayCount}-day Ho Chi Minh City trip: visited stops, cost breakdown, and check-in photos.`}
           </p>
 
-          {/* 3 Thống kê nhanh */}
+          {/* 4 Thống kê nhanh */}
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-2xl bg-white/10 p-3.5 backdrop-blur-md">
-              <span className="block text-[10.5px] font-bold text-emerald-200 uppercase tracking-wider">
+            <div className="rounded-xl border border-slate-700 bg-slate-800 p-3.5">
+              <span className="block text-[11px] font-semibold text-slate-400">
                 {lang === 'vi' ? 'Thời gian' : 'Duration'}
               </span>
               <span className="mt-1 block font-display text-lg font-extrabold">
@@ -157,38 +155,38 @@ export default function TripSummaryView({
               </span>
             </div>
 
-            <div className="rounded-2xl bg-white/10 p-3.5 backdrop-blur-md">
-              <span className="block text-[10.5px] font-bold text-emerald-200 uppercase tracking-wider">
-                {lang === 'vi' ? 'Điểm đã ghé thăm' : 'Stops Visited'}
+            <div className="rounded-xl border border-slate-700 bg-slate-800 p-3.5">
+              <span className="block text-[11px] font-semibold text-slate-400">
+                {lang === 'vi' ? 'Điểm đã ghé' : 'Stops visited'}
               </span>
               <span className="mt-1 block font-display text-lg font-extrabold text-amber-300">
                 {visitedCount} / {totalStops}
               </span>
             </div>
 
-            <div className="rounded-2xl bg-white/10 p-3.5 backdrop-blur-md">
-              <span className="block text-[10.5px] font-bold text-emerald-200 uppercase tracking-wider">
-                {lang === 'vi' ? 'Tổng chi tiêu' : 'Total Spent'}
+            <div className="rounded-xl border border-slate-700 bg-slate-800 p-3.5">
+              <span className="block text-[11px] font-semibold text-slate-400">
+                {lang === 'vi' ? 'Tổng chi tiêu' : 'Total spent'}
               </span>
               <span className="mt-1 block font-display text-lg font-extrabold">
                 {formatVnd(expenseStats.totalSpent, lang)}
               </span>
             </div>
 
-            <div className="rounded-2xl bg-white/10 p-3.5 backdrop-blur-md">
-              <span className="block text-[10.5px] font-bold text-emerald-200 uppercase tracking-wider">
-                {lang === 'vi' ? 'Tình trạng ngân sách' : 'Budget Health'}
+            <div className="rounded-xl border border-slate-700 bg-slate-800 p-3.5">
+              <span className="block text-[11px] font-semibold text-slate-400">
+                {lang === 'vi' ? 'So với ngân sách' : 'Budget status'}
               </span>
               <span className="mt-1 flex items-center gap-1 font-display text-sm font-extrabold text-emerald-300">
                 {expenseStats.isUnderBudget ? (
                   <>
                     <TrendingDown className="h-4 w-4" />
-                    <span>Dư {formatVnd(expenseStats.remaining, lang)}</span>
+                    <span>{lang === 'vi' ? 'Dư' : 'Under'} {formatVnd(expenseStats.remaining, lang)}</span>
                   </>
                 ) : (
                   <>
                     <TrendingUp className="h-4 w-4 text-rose-300" />
-                    <span>Vượt {formatVnd(expenseStats.remaining, lang)}</span>
+                    <span className="text-rose-300">{lang === 'vi' ? 'Vượt' : 'Over'} {formatVnd(expenseStats.remaining, lang)}</span>
                   </>
                 )}
               </span>
@@ -197,8 +195,8 @@ export default function TripSummaryView({
         </div>
       </div>
 
-      {/* PHẦN 1: BÁO CÁO CHI TIÊU NHỮNG GÌ (EXPENSE & BUDGET BREAKDOWN) */}
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs">
+      {/* PHẦN 1: BÁO CÁO CHI TIÊU */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-4">
           <div className="flex items-center gap-2.5">
             <span className="grid h-10 w-10 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
@@ -297,14 +295,18 @@ export default function TripSummaryView({
           </div>
           <p className="mt-2 text-center text-xs font-semibold text-slate-600">
             {expenseStats.isUnderBudget
-              ? (lang === 'vi' ? `🎉 Tuyệt vời! Bạn đã tiết kiệm được ${formatVnd(expenseStats.remaining, lang)} so với ngân sách dự trù.` : 'Great job! Under budget.')
-              : (lang === 'vi' ? `Bạn đã chi vượt ${formatVnd(expenseStats.remaining, lang)} so với ngân sách.` : 'Over budget.')}
+              ? lang === 'vi'
+                ? `Còn dư ${formatVnd(expenseStats.remaining, lang)} so với ngân sách dự trù.`
+                : `Under budget by ${formatVnd(expenseStats.remaining, lang)}.`
+              : lang === 'vi'
+                ? `Đã chi vượt ${formatVnd(expenseStats.remaining, lang)} so với ngân sách.`
+                : `Over budget by ${formatVnd(expenseStats.remaining, lang)}.`}
           </p>
         </div>
       </div>
 
       {/* PHẦN 2: ĐÃ ĐI ĐẾN ĐÂU (DANH SÁCH LỘ TRÌNH ĐIỂM ĐẾN TỪNG NGÀY) */}
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs">
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-4">
           <div className="flex items-center gap-2.5">
             <span className="grid h-10 w-10 place-items-center rounded-2xl bg-brand-50 text-brand-600">
@@ -392,8 +394,8 @@ export default function TripSummaryView({
                               className="h-full w-full object-cover"
                             />
                             {stop.checkin_photo && (
-                              <span className="absolute bottom-1 right-1 rounded-md bg-emerald-600 px-1 py-0.5 text-[8.5px] font-extrabold text-white">
-                                📸 Check-in
+                              <span className="absolute bottom-1 right-1 rounded-md bg-emerald-700 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                                Check-in
                               </span>
                             )}
                           </div>
@@ -440,19 +442,21 @@ export default function TripSummaryView({
         </div>
       </div>
 
-      {/* PHẦN 3: BỘ SƯU TẬP ẢNH CHECK-IN KỶ NIỆM (NẾU CÓ) */}
+      {/* PHẦN 3: BỘ SƯU TẬP ẢNH CHECK-IN (NẾU CÓ) */}
       {checkinPhotos.length > 0 && (
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-7 shadow-xs">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
           <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
-            <span className="grid h-10 w-10 place-items-center rounded-2xl bg-amber-50 text-amber-600">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-amber-50 text-amber-600">
               <Camera className="h-5 w-5" />
             </span>
             <div>
               <h3 className="font-display text-base sm:text-lg font-extrabold text-slate-900">
-                {lang === 'vi' ? 'Album ảnh kỷ niệm thực tế của bạn' : 'Your Check-in Photos'}
+                {lang === 'vi' ? 'Ảnh check-in trong chuyến đi' : 'Your check-in photos'}
               </h3>
               <p className="text-xs text-slate-500">
-                {lang === 'vi' ? `Đã lưu ${checkinPhotos.length} khoảnh khắc check-in tuyệt đẹp tại Sài Gòn` : `${checkinPhotos.length} photos captured`}
+                {lang === 'vi'
+                  ? `Đã lưu ${checkinPhotos.length} ảnh check-in.`
+                  : `${checkinPhotos.length} check-in photos saved.`}
               </p>
             </div>
           </div>

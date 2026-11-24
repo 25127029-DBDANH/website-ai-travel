@@ -1,8 +1,6 @@
 import {
   Camera,
   Check,
-  Image as ImageIcon,
-  Sparkles,
   Upload,
   X
 } from 'lucide-react';
@@ -39,8 +37,8 @@ export default function CheckinModal({ stop, onConfirm, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs animate-fade-in">
-      <div className="w-full max-w-md overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl animate-scale-up">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 animate-fade-in">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-soft animate-scale-up">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2">
@@ -49,7 +47,7 @@ export default function CheckinModal({ stop, onConfirm, onClose }) {
             </span>
             <div>
               <h4 className="font-display text-base font-extrabold text-slate-900">
-                {lang === 'vi' ? 'Chụp ảnh Check-in' : 'Photo Check-in'}
+                {lang === 'vi' ? 'Chụp ảnh check-in' : 'Photo check-in'}
               </h4>
               <p className="text-[11px] font-semibold text-slate-500">
                 {stop?.place_name}
@@ -59,7 +57,8 @@ export default function CheckinModal({ stop, onConfirm, onClose }) {
           <button
             type="button"
             onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-400 hover:text-slate-600"
+            aria-label={t('common.close')}
+            className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-500 hover:text-slate-700"
           >
             <X className="h-4 w-4" />
           </button>
@@ -68,7 +67,7 @@ export default function CheckinModal({ stop, onConfirm, onClose }) {
         {/* Khung chụp / tải ảnh */}
         <div className="mt-4 space-y-4">
           {photoData ? (
-            <div className="relative overflow-hidden rounded-2xl border-2 border-emerald-400 bg-slate-100">
+            <div className="relative overflow-hidden rounded-2xl border border-emerald-300 bg-slate-100">
               <img
                 src={photoData}
                 alt="Ảnh check-in"
@@ -77,25 +76,25 @@ export default function CheckinModal({ stop, onConfirm, onClose }) {
               <button
                 type="button"
                 onClick={() => setPhotoData(null)}
-                className="absolute right-2 top-2 rounded-full bg-slate-900/80 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm hover:bg-slate-900"
+                className="absolute right-2 top-2 rounded-full bg-slate-900/85 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-slate-900"
               >
-                {lang === 'vi' ? 'Đổi ảnh khác ✕' : 'Change photo ✕'}
+                {lang === 'vi' ? 'Đổi ảnh khác' : 'Change photo'}
               </button>
-              <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-lg bg-emerald-600/90 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur-xs">
+              <div className="absolute bottom-2 left-2 flex items-center gap-1 rounded-lg bg-emerald-700 px-2 py-0.5 text-[10px] font-bold text-white">
                 <Check className="h-3 w-3" />
-                <span>{lang === 'vi' ? 'Ảnh check-in thực tế' : 'Verified photo'}</span>
+                <span>{lang === 'vi' ? 'Ảnh check-in đã chọn' : 'Check-in photo attached'}</span>
               </div>
             </div>
           ) : (
-            <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/70 p-6 text-center">
-              <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+              <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
                 <Camera className="h-6 w-6" />
               </div>
               <p className="mt-2 text-xs font-bold text-slate-800">
-                {lang === 'vi' ? 'Chụp ảnh tại điểm đến để lưu kỷ niệm' : 'Take or upload a photo to check-in'}
+                {lang === 'vi' ? 'Chụp hoặc tải ảnh tại điểm dừng' : 'Take or upload a photo at this stop'}
               </p>
               <p className="mt-1 text-[11px] text-slate-500">
-                {lang === 'vi' ? 'Ảnh sẽ tự động đưa vào Thẻ ảnh Kỷ niệm của chuyến đi' : 'Photo will be added to your Trip Story Recap'}
+                {lang === 'vi' ? 'Ảnh được gắn vào mục tổng kết chuyến đi.' : 'Saved to your trip summary album.'}
               </p>
 
               {/* 2 Nút: Chụp camera & Tải thư viện */}
@@ -112,10 +111,10 @@ export default function CheckinModal({ stop, onConfirm, onClose }) {
                 <button
                   type="button"
                   onClick={() => cameraInputRef.current?.click()}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-extrabold text-white shadow-xs hover:bg-emerald-700 active:scale-98"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-700 active:scale-[0.98]"
                 >
                   <Camera className="h-3.5 w-3.5" />
-                  <span>{lang === 'vi' ? 'Chụp bằng máy ảnh' : 'Take with Camera'}</span>
+                  <span>{lang === 'vi' ? 'Chụp bằng máy ảnh' : 'Take with camera'}</span>
                 </button>
 
                 {/* 2. Tải ảnh từ thư viện */}
@@ -129,10 +128,10 @@ export default function CheckinModal({ stop, onConfirm, onClose }) {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 active:scale-98"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 active:scale-[0.98]"
                 >
                   <Upload className="h-3.5 w-3.5 text-slate-500" />
-                  <span>{lang === 'vi' ? 'Tải ảnh từ máy' : 'Upload from Library'}</span>
+                  <span>{lang === 'vi' ? 'Tải ảnh từ máy' : 'Upload from device'}</span>
                 </button>
               </div>
             </div>
@@ -141,11 +140,11 @@ export default function CheckinModal({ stop, onConfirm, onClose }) {
           {/* Ô nhập cảm nghĩ nhanh */}
           <div>
             <label className="label">
-              {lang === 'vi' ? 'Cảm nhận của bạn (tùy chọn)' : 'Quick note (optional)'}
+              {lang === 'vi' ? 'Ghi chú tại điểm dừng (tùy chọn)' : 'Stop note (optional)'}
             </label>
             <input
               type="text"
-              placeholder={lang === 'vi' ? 'VD: Món ăn rất ngon, không gian cổ kính thoáng mát...' : 'e.g. Great coffee, friendly staff...'}
+              placeholder={lang === 'vi' ? 'VD: Đông khách tầm 12h, phần ăn vừa miệng' : 'e.g. Busy around noon, good iced coffee'}
               value={note}
               onChange={(e) => setNote(e.target.value)}
               className="input text-xs"
@@ -167,10 +166,10 @@ export default function CheckinModal({ stop, onConfirm, onClose }) {
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="btn-primary flex-1 !py-2.5 text-xs font-extrabold bg-emerald-600 hover:bg-emerald-700"
+            className="btn flex-1 !py-2.5 bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-700"
           >
             <Check className="h-4 w-4" />
-            <span>{lang === 'vi' ? 'Xác nhận Check-in' : 'Confirm Check-in'}</span>
+            <span>{lang === 'vi' ? 'Lưu check-in' : 'Save check-in'}</span>
           </button>
         </div>
       </div>

@@ -11,8 +11,8 @@ export default function NotFoundPage() {
     <div className="flex min-h-screen flex-col bg-slate-50">
       <SiteHeader />
       <main className="flex flex-1 items-center justify-center px-4 py-16">
-        <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-card">
-          <span className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-gradient-to-br from-brand-100 to-accent-100 text-brand-700">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-brand-50 text-brand-700">
             <MapPin className="h-7 w-7" />
           </span>
           <p className="mt-5 text-[10px] font-extrabold uppercase tracking-[0.22em] text-slate-500">
