@@ -485,7 +485,6 @@ def test_ground_itinerary_warns_without_raising_when_must_visit_missing(
     assert any("p-must" in record.message for record in caplog.records)
 
 
-
 # ---------------------------------------------------------------------------
 # Tests for issue #37: transit_info auto-fill & GeminiService fallback coverage
 # ---------------------------------------------------------------------------
@@ -620,12 +619,8 @@ async def test_generate_itinerary_transit_info_uses_correct_transport_mode() -> 
     from app.services.gemini_service import GeminiService
 
     places = [
-        PlaceResponse.model_validate(
-            _make_place("a", "Quận 1", "food", lat=10.776, lon=106.700)
-        ),
-        PlaceResponse.model_validate(
-            _make_place("b", "Quận 1", "cafe", lat=10.780, lon=106.695)
-        ),
+        PlaceResponse.model_validate(_make_place("a", "Quận 1", "food", lat=10.776, lon=106.700)),
+        PlaceResponse.model_validate(_make_place("b", "Quận 1", "cafe", lat=10.780, lon=106.695)),
         PlaceResponse.model_validate(
             _make_place("c", "Quận 1", "sightseeing", lat=10.775, lon=106.698)
         ),
@@ -633,9 +628,7 @@ async def test_generate_itinerary_transit_info_uses_correct_transport_mode() -> 
     service = GeminiService(api_key=None)
 
     for mode in ("walk", "grab_bike", "grab_car", "public"):
-        request = TripGenerationRequest.model_validate(
-            _generation_payload(transport_mode=mode)
-        )
+        request = TripGenerationRequest.model_validate(_generation_payload(transport_mode=mode))
         result = await service.generate_itinerary(request, places)
         for item in result.itinerary_items[1:]:
             assert item.transit_info is not None
@@ -649,20 +642,14 @@ async def test_generate_itinerary_walk_mode_fare_is_zero() -> None:
     from app.services.gemini_service import GeminiService
 
     places = [
-        PlaceResponse.model_validate(
-            _make_place("w1", "Quận 1", "food", lat=10.776, lon=106.700)
-        ),
-        PlaceResponse.model_validate(
-            _make_place("w2", "Quận 1", "cafe", lat=10.780, lon=106.695)
-        ),
+        PlaceResponse.model_validate(_make_place("w1", "Quận 1", "food", lat=10.776, lon=106.700)),
+        PlaceResponse.model_validate(_make_place("w2", "Quận 1", "cafe", lat=10.780, lon=106.695)),
         PlaceResponse.model_validate(
             _make_place("w3", "Quận 1", "sightseeing", lat=10.775, lon=106.698)
         ),
     ]
     service = GeminiService(api_key=None)
-    request = TripGenerationRequest.model_validate(
-        _generation_payload(transport_mode="walk")
-    )
+    request = TripGenerationRequest.model_validate(_generation_payload(transport_mode="walk"))
     result = await service.generate_itinerary(request, places)
     for item in result.itinerary_items[1:]:
         assert item.transit_info is not None
