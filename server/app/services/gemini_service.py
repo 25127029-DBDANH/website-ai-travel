@@ -165,7 +165,10 @@ class GeminiService:
         request: TripConceptRequest,
         available_places: Sequence[PlaceResponse],
     ) -> ConceptResponse:
-        places = self._require_places(available_places)
+        places = self._filter_avoid_districts(
+            self._require_places(available_places),
+            request.avoid_districts,
+        )
         prompt = self._prompt(
             "Suggest a trip concept before the traveler approves a detailed plan.",
             request,
@@ -195,7 +198,11 @@ class GeminiService:
         request: TripGenerationRequest,
         available_places: Sequence[PlaceResponse],
     ) -> TripGenerationResponse:
-        places = self._require_places(available_places)
+        places = self._filter_avoid_districts(
+            self._require_places(available_places),
+            request.avoid_districts,
+            min_count=request.days * request.places_per_day,
+        )
         prompt = self._prompt(
             "Create the detailed trip after the traveler approved the concept.",
             request,
@@ -377,6 +384,23 @@ class GeminiService:
         return normalized
 
     @staticmethod
+    def _filter_avoid_districts(
+        places: Sequence[PlaceResponse],
+        avoid_districts: Sequence[str],
+        *,
+        min_count: int = 1,
+    ) -> list[PlaceResponse]:
+        normalized_avoid = {_normalize_district(d) for d in avoid_districts if d and d.strip()}
+        if not normalized_avoid:
+            return list(places)
+        filtered = [
+            place
+            for place in places
+            if _normalize_district(place.district) not in normalized_avoid
+        ]
+        return filtered if len(filtered) >= min_count else list(places)
+
+    @staticmethod
     def _prompt(
         task: str,
         request: BaseModel,
@@ -385,10 +409,30 @@ class GeminiService:
     ) -> str:
         catalog = [_model_dict(place) for place in places]
         example = GeminiService._few_shot_example(places)
+        request_data = _model_dict(request)
+        constraints: list[str] = []
+        dietary = getattr(request, "dietary", None) or []
+        avoid_districts = getattr(request, "avoid_districts", None) or []
+        if dietary:
+            constraints.append(
+                "DIETARY REQUIREMENTS (strictly respect for food and cafe stops): "
+                + ", ".join(str(item) for item in dietary)
+            )
+        if avoid_districts:
+            constraints.append(
+                "DISTRICTS TO AVOID (do not recommend or schedule stops here): "
+                + ", ".join(str(item) for item in avoid_districts)
+            )
+        constraints_block = (
+            "ADDITIONAL CONSTRAINTS:\n" + "\n".join(f"- {line}" for line in constraints) + "\n\n"
+            if constraints
+            else ""
+        )
         return (
             f"{SYSTEM_INSTRUCTION}\nTASK: {task}\n\n"
             f"LOCAL FEW-SHOT EXAMPLE (format guidance only):\n{example}\n\n"
-            f"TRAVELER REQUEST:\n{json.dumps(_model_dict(request), ensure_ascii=False)}\n\n"
+            f"TRAVELER REQUEST:\n{json.dumps(request_data, ensure_ascii=False)}\n\n"
+            f"{constraints_block}"
             f"VERIFIED PLACE CATALOG:\n{json.dumps(catalog, ensure_ascii=False)}\n\n"
             f"TASK RULES:\n{instructions}"
         )

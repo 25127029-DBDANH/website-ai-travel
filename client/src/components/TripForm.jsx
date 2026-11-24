@@ -1,31 +1,12 @@
 import {
-  ArrowRight,
-  Bike,
-  Car,
-  Check,
-  Clock,
-  Compass,
-  Heart,
-  Loader2,
-  MapPin,
-  Minus,
-  Moon,
-  Plus,
-  ShieldCheck,
-  Sparkles,
-  Sun,
-  Train,
-  User,
-  Users,
-  Wallet,
-  Wand2,
-  Zap
+  AlertTriangle, ArrowRight, Check, ChevronDown, Heart, Loader2, MapPin, Minus,
+  Plus, Sparkles, User, Users, Wallet, Wand2, X
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { useI18n } from '../i18n/I18nContext.jsx';
 import { DEMO } from '../demo.jsx';
+import { useI18n } from '../i18n/I18nContext.jsx';
 import { preferenceOptions } from '../i18n/translations.js';
 import { api } from '../lib/api.js';
 import { getCategoryMeta } from '../lib/categories.jsx';
@@ -33,102 +14,157 @@ import { cn } from '../lib/cn.js';
 import { translateApiError } from '../lib/errors.js';
 import { formatVnd } from '../lib/format.js';
 import { parseTripSentence } from '../lib/sentenceParser.js';
+import {
+  ADVANCED_KEYS, applyParsedToForm, BUDGET_PER_PERSON_PER_DAY, budgetPresetPatch,
+  budgetPresetTotal, buildAiRequest, buildTripCreatePayload, canUseLocalItineraryFallback,
+  CATALOG_DISTRICTS, compactVnd, companionsPatch, countCustomizedAdvanced, customBudgetPatch,
+  daysPatch, defaultTripForm, describeFilledFields, FORM_DIETARY, groupSizePatch,
+  LONG_TRIP_DAYS, makeFallbackConcept, MAX_AVOID_DISTRICTS, missingParsedLabels,
+  PREFERENCE_CATEGORY, toggleListValue, validateTripForm
+} from '../lib/tripFormLogic.js';
+import { hasParsedTripContent, START_LOCATION_SUGGESTIONS, TRIP_OPTION_VALUES } from '../lib/tripOptions.js';
 
-const PREFERENCE_CATEGORY = {
-  food: 'food',
-  culture: 'sightseeing',
-  cafe: 'cafe',
-  shopping: 'shopping',
-  nature: 'nature',
-  nightlife: 'entertainment'
-};
+const COMPANION_ICONS = { solo: User, couple: Heart, friends: Users, family: Users };
+const HIGHLIGHT_RING = 'rounded-2xl ring-2 ring-emerald-300 ring-offset-2 ring-offset-white transition-shadow';
 
-const BUDGET_PRESETS = [1_500_000, 3_000_000, 5_000_000, 10_000_000];
-
-const DISTRICT_SUGGESTIONS = [
-  'Quận 1, TP. Hồ Chí Minh',
-  'Quận 3, TP. Hồ Chí Minh',
-  'Quận 5 (Khu Chợ Lớn), TP. Hồ Chí Minh',
-  'Thảo Điền, TP. Thủ Đức',
-  'Bình Thạnh, TP. Hồ Chí Minh',
-  'Phú Nhuận, TP. Hồ Chí Minh'
-];
-
-const GROUP_OPTIONS = [
-  { id: 'solo', label: 'Đi 1 mình', desc: 'Tự do khám phá', icon: User },
-  { id: 'couple', label: 'Cặp đôi', desc: 'Lãng mạn & chill', icon: Heart },
-  { id: 'friends', label: 'Nhóm bạn', desc: 'Năng động, check-in', icon: Users },
-  { id: 'family', label: 'Gia đình', desc: 'Có trẻ / người lớn', icon: Users }
-];
-
-const TRANSPORT_OPTIONS = [
-  { id: 'motorbike', label: 'Xe máy / GrabBike', desc: 'Len lỏi mọi ngóc ngách', icon: Bike },
-  { id: 'grab_car', label: 'Ô tô / GrabCar', desc: 'Mát mẻ & tránh mưa nắng', icon: Car },
-  { id: 'metro_walking', label: 'Metro & Đi bộ', desc: 'Trải nghiệm Metro số 1', icon: Train }
-];
-
-const PACE_OPTIONS = [
-  { id: 'relaxed', label: 'Thong thả', desc: '2 - 3 điểm/ngày, nhiều thời gian cafe nghỉ ngơi' },
-  { id: 'moderate', label: 'Cân bằng', desc: '3 - 4 điểm/ngày, lịch trình tiêu chuẩn' },
-  { id: 'packed', label: 'Khám phá tối đa', desc: '5 - 6 điểm/ngày, trải nghiệm dày đặc' }
-];
-
-const SPECIAL_NOTES = [
-  { id: 'ac_preferred', label: 'Ưu tiên máy lạnh/trong nhà', emoji: '❄️' },
-  { id: 'vegetarian', label: 'Ăn chay / Thanh tịnh', emoji: '🥗' },
-  { id: 'no_spicy', label: 'Không ăn cay', emoji: '🌶️' },
-  { id: 'limited_walking', label: 'Hạn chế đi bộ xa', emoji: '🚶' }
-];
-
-const PLACES_PER_DAY_BY_PACE = { relaxed: 3, moderate: 4, packed: 6 };
-const AI_TRANSPORT_MODE = {
-  motorbike: 'grab_bike',
-  grab_car: 'grab_car',
-  metro_walking: 'public'
-};
-
-function districtFromStartLocation(startLocation) {
-  const value = startLocation.toLocaleLowerCase('vi-VN');
-  const matches = [
-    [/thủ\s*đức|thảo\s*điền/, 'Thủ Đức'],
-    [/bình\s*thạnh/, 'Bình Thạnh'],
-    [/phú\s*nhuận/, 'Phú Nhuận'],
-    [/quận\s*7|q\.?\s*7\b/, 'Quận 7'],
-    [/quận\s*5|q\.?\s*5\b/, 'Quận 5'],
-    [/quận\s*4|q\.?\s*4\b/, 'Quận 4'],
-    [/quận\s*3|q\.?\s*3\b/, 'Quận 3'],
-    [/quận\s*1|q\.?\s*1\b/, 'Quận 1']
-  ];
-  return matches.find(([pattern]) => pattern.test(value))?.[1] || 'Quận 1';
+function Stepper({ id, labelledBy, value, label, min, max, onChange, decreaseLabel, increaseLabel, describedBy, invalid }) {
+  return (
+    <div id={id} role="group" aria-labelledby={labelledBy} aria-describedby={describedBy} aria-invalid={invalid || undefined} tabIndex={-1}
+      className={cn('flex items-center justify-between rounded-xl border bg-white p-1', invalid ? 'border-rose-400' : 'border-slate-200')}>
+      <button type="button" onClick={() => onChange(value - 1)} disabled={value <= min} aria-label={decreaseLabel}
+        className="grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-slate-700 transition-[transform,background-color] duration-150 ease-out-strong hover:bg-slate-200 active:scale-[0.95] disabled:cursor-not-allowed disabled:opacity-40">
+        <Minus className="h-4 w-4" aria-hidden="true" />
+      </button>
+      <output aria-live="polite" className="font-display text-base font-extrabold text-slate-900">{label}</output>
+      <button type="button" onClick={() => onChange(value + 1)} disabled={value >= max} aria-label={increaseLabel}
+        className="grid h-10 w-10 place-items-center rounded-lg bg-brand-600 text-white shadow-sm transition-[transform,background-color] duration-150 ease-out-strong hover:bg-brand-700 active:scale-[0.95] disabled:cursor-not-allowed disabled:opacity-40">
+        <Plus className="h-4 w-4" aria-hidden="true" />
+      </button>
+    </div>
+  );
 }
 
-function specialNotesForAi(noteIds) {
-  return noteIds
-    .map((id) => SPECIAL_NOTES.find((note) => note.id === id)?.label)
-    .filter(Boolean)
-    .join(', ');
+function OptionChips({ name, values, value, onChange, multiple = false, highlighted = false }) {
+  const { t } = useI18n();
+  return (
+    <fieldset className={cn('min-w-0', highlighted && HIGHLIGHT_RING)}>
+      <legend className="label">{t(`form.options.${name}`)}</legend>
+      <div className="flex flex-wrap gap-1.5">
+        {values.map((option) => {
+          const selected = multiple ? value.includes(option) : value === option;
+          return (
+            <button key={option} type="button" aria-pressed={selected}
+              onClick={() => onChange(multiple ? toggleListValue(value, option) : option)}
+              className={cn('min-h-10 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition-colors',
+                selected ? 'border-brand-500 bg-brand-50 text-brand-700'
+                  : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-slate-900')}>
+              {t(`form.option.${name}.${option}`)}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
 }
 
-function canUseLocalItineraryFallback(error) {
-  return error?.code === 'AI_UNAVAILABLE' || error?.status === 0 ||
-    [408, 429, 500, 502, 503, 504].includes(error?.status);
+function FieldError({ id, message }) {
+  return message ? <p id={id} role="alert" className="mt-1.5 text-xs font-semibold text-rose-700">{message}</p> : null;
 }
 
-function makeFallbackConcept(tripRequest, error, lang) {
-  const district = tripRequest.districts.join(', ');
-  return {
-    source: 'fallback',
-    summary: lang === 'vi'
-      ? `Chuyến đi ${tripRequest.days} ngày, ưu tiên ${tripRequest.preferences.join(', ')} tại ${district}, trong ngân sách ${formatVnd(tripRequest.budget, lang)}.`
-      : `A ${tripRequest.days}-day trip focused on ${tripRequest.preferences.join(', ')} in ${district}, within a ${formatVnd(tripRequest.budget, lang)} budget.`,
-    highlights: [],
-    recommended_districts: tripRequest.districts,
-    route_overview: district,
-    confirmation_question: lang === 'vi'
-      ? 'Gemini hiện không khả dụng. Bạn muốn tiếp tục với lịch trình dự phòng không?'
-      : 'Gemini is unavailable. Would you like to continue with a fallback itinerary?',
-    fallback_reason: error?.message || ''
-  };
+function ConceptDialog({ concept, submitting, submissionStage, error, lang, t, onClose, onApprove }) {
+  const dialogRef = useRef(null);
+  const previousFocusRef = useRef(null);
+  const vi = lang === 'vi';
+
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement;
+    dialogRef.current?.focus();
+    return () => previousFocusRef.current?.focus?.();
+  }, []);
+
+  return (
+    <div role="dialog" aria-modal="true" aria-labelledby="trip-concept-title" ref={dialogRef} tabIndex={-1}
+      onKeyDown={(event) => event.key === 'Escape' && !submitting && onClose()}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm outline-none">
+      <section className="modal-panel w-full max-w-xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft">
+        <header className="flex items-start justify-between gap-4 border-b border-slate-100 bg-brand-50/70 p-5 sm:p-6">
+          <div>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white px-2.5 py-1 text-[11px] font-bold text-brand-700">
+              <Sparkles className="h-3 w-3" aria-hidden="true" />
+              {concept.source === 'fallback'
+                ? (vi ? 'Gợi ý dự phòng' : 'Fallback suggestion')
+                : (vi ? 'Đề xuất từ Gemini' : 'Gemini suggestion')}
+            </span>
+            <h2 id="trip-concept-title" className="mt-2 font-display text-xl font-extrabold text-slate-900">
+              {vi ? 'Concept chuyến đi của bạn' : 'Your trip concept'}
+            </h2>
+          </div>
+          <button type="button" disabled={submitting} onClick={onClose}
+            aria-label={vi ? 'Đóng concept' : 'Close concept'}
+            className="grid h-10 w-10 place-items-center rounded-full text-slate-500 hover:bg-white hover:text-slate-900 disabled:opacity-50">
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </header>
+
+        <div className="max-h-[70vh] space-y-4 overflow-y-auto p-5 sm:p-6">
+          {concept.source === 'fallback' && (
+            <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+              {concept.fallback_reason
+                ? (vi ? 'Không kết nối được Gemini. Khi bạn đồng ý, hệ thống sẽ tạo lịch trình dự phòng và báo rõ nguồn kết quả.'
+                  : 'Could not reach Gemini. If you approve, the app will create a fallback itinerary and label its source.')
+                : (vi ? 'Gemini chưa trả lời được. Đây là concept dự phòng được tạo từ danh sách địa điểm có sẵn.'
+                  : 'Gemini did not respond. This fallback concept was created from the available place catalog.')}
+            </p>
+          )}
+          <p className="text-sm leading-relaxed text-slate-700">{concept.summary}</p>
+          {concept.highlights?.length > 0 && (
+            <section>
+              <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">{vi ? 'Điểm nổi bật' : 'Highlights'}</h3>
+              <ul className="mt-2 space-y-1.5">
+                {concept.highlights.map((highlight, index) => (
+                  <li key={`${highlight}-${index}`} className="flex gap-2 text-sm text-slate-700">
+                    <span className="text-brand-600" aria-hidden="true">•</span><span>{highlight}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {concept.recommended_districts?.length > 0 && (
+            <section>
+              <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">{vi ? 'Các quận dự kiến' : 'Recommended districts'}</h3>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {concept.recommended_districts.map((district) => (
+                  <span key={district} className="rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700">{district}</span>
+                ))}
+              </div>
+            </section>
+          )}
+          <section>
+            <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">{vi ? 'Lộ trình gợi ý' : 'Suggested route'}</h3>
+            <p className="mt-1 text-sm text-slate-700">{concept.route_overview}</p>
+          </section>
+          <p className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-800">{concept.confirmation_question}</p>
+          {error && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">{error}</p>}
+          {submitting && (
+            <p role="status" className="flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 p-3 text-xs font-semibold text-brand-700">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-600" aria-hidden="true" />
+              {submissionStage === 'generate' ? t('form.stage.generate') : t('form.stage.save')}
+            </p>
+          )}
+        </div>
+
+        <footer className="flex flex-col-reverse gap-2 border-t border-slate-100 p-5 sm:flex-row sm:justify-end sm:p-6">
+          <button type="button" disabled={submitting} onClick={onClose} className="btn-secondary min-h-11">
+            {vi ? 'Để sau' : 'Not now'}
+          </button>
+          <button type="button" disabled={submitting} onClick={onApprove} className="btn-primary min-h-11">
+            {submitting ? (vi ? 'Đang xử lý...' : 'Working...') : (vi ? 'Đồng ý, tạo lịch trình' : 'Approve and create itinerary')}
+            {!submitting && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
 }
 
 export default function TripForm() {
@@ -136,152 +172,118 @@ export default function TripForm() {
   const { user, loading, openAuth } = useAuth();
   const navigate = useNavigate();
 
-  const [mode, setMode] = useState('form');
-  const [startLocation, setStartLocation] = useState(() => t('form.startDefault'));
-  const [days, setDays] = useState(3);
-  const [budget, setBudget] = useState(3_000_000);
-  const [preferences, setPreferences] = useState(['food', 'cafe']);
-  const [groupType, setGroupType] = useState('couple');
-  const [transportMode, setTransportMode] = useState('motorbike');
-  const [pace, setPace] = useState('moderate');
-  const [scheduleProfile, setScheduleProfile] = useState('early_bird');
-  const [specialNotes, setSpecialNotes] = useState(['ac_preferred']);
-
+  const [form, setForm] = useState(() => defaultTripForm(t('form.startDefault')));
+  const [budgetDraft, setBudgetDraft] = useState(null);
   const [sentence, setSentence] = useState('');
-  const [parsed, setParsed] = useState(null);
-  const [error, setError] = useState('');
-  const [errorField, setErrorField] = useState('');
+  const [quickFillError, setQuickFillError] = useState('');
+  const [lastParse, setLastParse] = useState(null);
+  const [highlighted, setHighlighted] = useState(() => new Set());
+  const [parseSummary, setParseSummary] = useState(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submissionStage, setSubmissionStage] = useState('');
   const [concept, setConcept] = useState(null);
   const [pendingTrip, setPendingTrip] = useState(null);
 
   const defaultStartRef = useRef(t('form.startDefault'));
+  const sentenceRef = useRef(null);
   const startRef = useRef(null);
   const budgetRef = useRef(null);
-  const sentenceRef = useRef(null);
+  const preferencesRef = useRef(null);
+  const notesRef = useRef(null);
 
   useEffect(() => {
     const previousDefault = defaultStartRef.current;
     const nextDefault = t('form.startDefault');
-    setStartLocation((current) => (current === previousDefault ? nextDefault : current));
+    setForm((current) => (current.start_location === previousDefault ? { ...current, start_location: nextDefault } : current));
     defaultStartRef.current = nextDefault;
   }, [t]);
 
-  const compactVnd = (value) =>
-    new Intl.NumberFormat(lang === 'vi' ? 'vi-VN' : 'en-US', {
-      notation: 'compact',
-      maximumFractionDigits: 1
-    }).format(value);
-
-  const clearError = () => {
-    setError('');
-    setErrorField('');
+  const update = (patch) => {
+    setForm((current) => ({ ...current, ...patch }));
+    const keys = Object.keys(patch);
+    setHighlighted((current) => {
+      if (!keys.some((key) => current.has(key))) return current;
+      const next = new Set(current);
+      keys.forEach((key) => next.delete(key));
+      return next;
+    });
+    setFieldErrors((current) => {
+      if (!keys.some((key) => key in current || key === 'custom_notes' || key === 'quick_notes')) return current;
+      const next = { ...current };
+      keys.forEach((key) => {
+        delete next[key];
+        if (key === 'custom_notes' || key === 'quick_notes') delete next.special_notes;
+      });
+      return next;
+    });
+    if (formError) setFormError('');
   };
 
-  const showError = (field, message, ref) => {
-    setError(message);
-    setErrorField(field);
-    requestAnimationFrame(() => ref?.current?.focus());
-  };
+  const handleQuickFill = (inputSentence = sentence) => {
+    setQuickFillError('');
+    setFormError('');
+    const text = String(inputSentence || '').trim();
+    if (text.length < 6) {
+      setQuickFillError(t('form.sentence.tooShort'));
+      requestAnimationFrame(() => sentenceRef.current?.focus());
+      return;
+    }
+    const parsed = parseTripSentence(text);
+    if (!hasParsedTripContent(parsed)) {
+      setQuickFillError(t('form.sentence.parsedNone'));
+      requestAnimationFrame(() => sentenceRef.current?.focus());
+      return;
+    }
 
-  const changeMode = (nextMode) => {
-    setMode(nextMode);
-    clearError();
-  };
+    const result = applyParsedToForm(form, parsed, lastParse);
+    setForm(result.form);
+    setLastParse(result.parse);
+    setBudgetDraft(null);
+    setFieldErrors({});
+    setHighlighted(new Set(result.parse.keys));
+    if (result.parse.keys.some((key) => ADVANCED_KEYS.includes(key))) setAdvancedOpen(true);
 
-  const togglePreference = (preference) => {
-    setPreferences((current) => {
-      if (current.includes(preference)) return current.filter((value) => value !== preference);
-      if (current.length >= 4) return current;
-      return [...current, preference];
+    setParseSummary({
+      count: result.parse.keys.length,
+      badges: describeFilledFields(result.parse.keys, result.form, t, formatVnd, lang),
+      missing: missingParsedLabels(parsed, t)
     });
   };
 
-  const toggleSpecialNote = (noteId) => {
-    setSpecialNotes((current) =>
-      current.includes(noteId) ? current.filter((id) => id !== noteId) : [...current, noteId]
-    );
-  };
-
-  const changeDays = (delta) => {
-    setDays((current) => Math.min(14, Math.max(1, current + delta)));
-    if (errorField === 'days') clearError();
-  };
-
-  const applyParsed = (result) => {
-    setParsed(result);
-    if (result.days) setDays(result.days);
-    if (result.budget) setBudget(result.budget);
-    if (result.preferences.length > 0) setPreferences(result.preferences);
-  };
-
-  const handleSentenceChange = (event) => {
-    setSentence(event.target.value);
-    setParsed(null);
-    clearError();
-  };
-
-  const handleParse = () => {
-    clearError();
-    if (sentence.trim().length < 12) {
-      showError('sentence', t('form.sentence.tooShort'), sentenceRef);
-      return;
-    }
-    applyParsed(parseTripSentence(sentence));
+  const focusFirstError = (errors) => {
+    const focusMap = [
+      ['start_location', () => startRef.current?.focus()],
+      ['days', () => document.getElementById('trip-days')?.focus()],
+      ['group_size', () => document.getElementById('trip-group-size')?.focus()],
+      ['budget', () => budgetRef.current?.focus()],
+      ['preferences', () => preferencesRef.current?.focus()],
+      ['special_notes', () => { setAdvancedOpen(true); requestAnimationFrame(() => notesRef.current?.focus()); }]
+    ];
+    const match = focusMap.find(([key]) => errors[key]);
+    if (match) requestAnimationFrame(match[1]);
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (submitting) return;
-    clearError();
+    setFormError('');
+    setQuickFillError('');
 
-    let payloadDays = days;
-    let payloadBudget = budget;
-    let payloadPreferences = preferences;
-
-    if (mode === 'sentence') {
-      if (sentence.trim().length < 12) {
-        showError('sentence', t('form.sentence.tooShort'), sentenceRef);
-        return;
-      }
-      const result = parseTripSentence(sentence);
-      applyParsed(result);
-      if (!result.days && !result.budget && result.preferences.length === 0) {
-        showError('sentence', t('form.sentence.parsedNone'), sentenceRef);
-        return;
-      }
-      payloadDays = result.days ?? days;
-      payloadBudget = result.budget ?? budget;
-      payloadPreferences = result.preferences.length > 0 ? result.preferences : preferences;
-    }
-
-    const start = startLocation.trim();
-    if (!start) {
-      showError('start', t('form.validation.start'), startRef);
+    const validation = validateTripForm(form, budgetDraft);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      focusFirstError(validation.errors);
       return;
     }
-    if (payloadDays < 1 || payloadDays > 14) {
-      showError('days', t('form.validation.days'));
-      return;
-    }
-    if (!payloadBudget || payloadBudget <= 0) {
-      showError('budget', t('form.validation.budget'), budgetRef);
-      return;
-    }
-    if (payloadPreferences.length === 0) {
-      showError('preferences', lang === 'vi' ? 'Hãy chọn ít nhất một sở thích để AI tạo lịch trình.' : 'Choose at least one preference so AI can plan your trip.');
-      return;
-    }
+    setFieldErrors({});
 
     if (loading) return;
     if (!user) {
-      showError(
-        'auth',
-        lang === 'vi'
-          ? 'Vui lòng đăng nhập trước khi tạo lịch trình với Gemini để lưu chuyến đi.'
-          : 'Please log in before generating an itinerary with Gemini to save your trip.'
-      );
+      setFormError(t('form.validation.auth'));
       openAuth('login');
       return;
     }
@@ -291,32 +293,19 @@ export default function TripForm() {
       navigate('/trip/demo');
       return;
     }
-    let tripRequest;
+
+    const tripRequest = buildAiRequest(form);
     try {
-      tripRequest = {
-        start_location: start,
-        budget: Math.round(payloadBudget),
-        days: payloadDays,
-        districts: [districtFromStartLocation(start)],
-        places_per_day: PLACES_PER_DAY_BY_PACE[pace] || 4,
-        companion: groupType,
-        member_count: groupType === 'solo' ? 1 : groupType === 'couple' ? 2 : 4,
-        transport_mode: AI_TRANSPORT_MODE[transportMode] || 'grab_bike',
-        preferences: payloadPreferences,
-        pace,
-        special_notes: specialNotesForAi(specialNotes)
-      };
       setPendingTrip(tripRequest);
       setSubmissionStage('concept');
       const suggestedConcept = await api.suggestTripConcept(tripRequest);
       setConcept(suggestedConcept);
-      setError('');
     } catch (requestError) {
       if (canUseLocalItineraryFallback(requestError)) {
         setPendingTrip(tripRequest);
-        setConcept(makeFallbackConcept(tripRequest, requestError, lang));
+        setConcept(makeFallbackConcept(tripRequest, requestError, formatVnd, lang));
       } else {
-        setError(requestError?.message || translateApiError(t, requestError));
+        setFormError(requestError?.message || translateApiError(t, requestError));
       }
     } finally {
       setSubmitting(false);
@@ -328,16 +317,12 @@ export default function TripForm() {
     if (!pendingTrip || !concept || submitting) return;
     if (loading) return;
     if (!user) {
-      showError(
-        'auth',
-        lang === 'vi'
-          ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để tiếp tục.'
-          : 'Your session has expired. Please log in again to continue.'
-      );
+      setFormError(t('form.validation.authExpired'));
       openAuth('login');
       return;
     }
-    clearError();
+
+    setFormError('');
     setSubmitting(true);
     setSubmissionStage('generate');
     try {
@@ -346,28 +331,15 @@ export default function TripForm() {
         generated = { source: 'fallback', itinerary_items: null };
       } else {
         try {
-          generated = await api.generateAiItinerary({
-            ...pendingTrip,
-            approved_concept: concept
-          });
+          generated = await api.generateAiItinerary({ ...pendingTrip, approved_concept: concept });
         } catch (requestError) {
           if (!canUseLocalItineraryFallback(requestError)) throw requestError;
           generated = { source: 'fallback', itinerary_items: null };
         }
       }
+
       setSubmissionStage('save');
-      const tripPayload = {
-        ...pendingTrip,
-        group_type: pendingTrip.companion,
-        transport_mode: transportMode,
-        schedule_profile: scheduleProfile,
-        special_notes: specialNotes,
-        source: mode === 'sentence' ? 'sentence' : 'form'
-      };
-      if (generated.itinerary_items?.length) {
-        tripPayload.itinerary_items = generated.itinerary_items;
-      }
-      const trip = await api.createTrip(tripPayload);
+      const trip = await api.createTrip(buildTripCreatePayload(pendingTrip, generated, lastParse ? 'sentence' : 'form'));
       navigate(`/trip/${trip.id}`, {
         state: {
           aiConceptSource: concept.source || 'gemini',
@@ -375,669 +347,320 @@ export default function TripForm() {
         }
       });
     } catch (requestError) {
-      setError(requestError?.message || translateApiError(t, requestError));
+      setFormError(requestError?.message || translateApiError(t, requestError));
     } finally {
       setSubmitting(false);
       setSubmissionStage('');
     }
   };
 
-  const hasParsedContent =
-    parsed && (parsed.days || parsed.budget || parsed.preferences.length > 0);
-  const missing = parsed
-    ? [
-        !parsed.days ? t('form.sentence.missingDays') : null,
-        !parsed.budget ? t('form.sentence.missingBudget') : null,
-        parsed.preferences.length === 0 ? t('form.sentence.missingPreferences') : null
-      ].filter(Boolean)
-    : [];
+  const hl = (key) => (highlighted.has(key) ? HIGHLIGHT_RING : '');
+  const advancedCustomCount = countCustomizedAdvanced(form);
+  const errorText = (field) => (fieldErrors[field] ? t(`form.validation.${fieldErrors[field]}`) : '');
 
   return (
     <>
-    <form
-      onSubmit={handleSubmit}
-      className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 shadow-soft backdrop-blur"
-      noValidate
-    >
-      {/* Header Form: Chuyển đổi giữa Form chi tiết & Điền 1 câu */}
-      <div className="border-b border-slate-200/80 bg-slate-50/70 px-4 py-3 sm:px-5">
-        <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1">
-          <button
-            type="button"
-            onClick={() => changeMode('form')}
-            className={cn(
-              'flex-1 rounded-lg px-3 py-2 text-xs font-bold transition-all duration-200 ease-out-strong active:scale-[0.98]',
-              mode === 'form'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'text-slate-500 hover:text-slate-900'
-            )}
-            aria-pressed={mode === 'form'}
-          >
-            📋 Lập kế hoạch theo cụm tiêu chí
-          </button>
-          <button
-            type="button"
-            onClick={() => changeMode('sentence')}
-            className={cn(
-              'flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-all duration-200 ease-out-strong active:scale-[0.98]',
-              mode === 'sentence'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'text-slate-500 hover:text-slate-900'
-            )}
-            aria-pressed={mode === 'sentence'}
-          >
-            <Wand2 className="h-3.5 w-3.5" />
-            {t('form.tab.sentence')}
-          </button>
-        </div>
-      </div>
-
-      <div className="space-y-6 p-4 sm:p-6">
-        {mode === 'form' ? (
-          <>
-            {/* 📍 CỤM 1: THÔNG TIN CƠ BẢN */}
-            <section className="space-y-4 pt-1">
-              <div className="flex items-center gap-2 border-b border-slate-200/60 pb-2.5">
-                <span className="grid h-6 w-6 place-items-center rounded-lg bg-brand-600 text-white text-xs font-bold">
-                  1
-                </span>
-                <h3 className="font-display text-sm font-extrabold text-slate-900">
-                  Thông tin cơ bản & Ngân sách
-                </h3>
-              </div>
-
-              <div>
-                <label className="label" htmlFor="trip-start">
-                  Nơi ở / Điểm xuất phát tại TP.HCM
-                </label>
-                <div className="relative">
-                  <MapPin className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-500" />
-                  <input
-                    ref={startRef}
-                    id="trip-start"
-                    type="text"
-                    value={startLocation}
-                    onChange={(event) => {
-                      setStartLocation(event.target.value);
-                      if (errorField === 'start') clearError();
-                    }}
-                    placeholder={t('form.startPlaceholder')}
-                    maxLength={200}
-                    className="input pl-10"
-                  />
-                </div>
-                {/* Suggestions chip */}
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {DISTRICT_SUGGESTIONS.slice(0, 4).map((district) => (
-                    <button
-                      key={district}
-                      type="button"
-                      onClick={() => setStartLocation(district)}
-                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-brand-300 hover:text-brand-700 transition-colors"
-                    >
-                      {district.split(',')[0]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <span id="trip-days-label" className="label">
-                    {t('form.daysLabel')}
-                  </span>
-                  <div
-                    role="group"
-                    aria-labelledby="trip-days-label"
-                    className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-1.5"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => changeDays(-1)}
-                      disabled={days <= 1}
-                      aria-label={t('form.daysDecrease')}
-                      className="grid h-9 w-9 place-items-center rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-[0.94] disabled:opacity-40"
-                    >
-                      <Minus className="h-4 w-4" />
-                    </button>
-                    <span className="font-display text-lg font-extrabold text-slate-900">
-                      {t('common.days', { count: days })}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => changeDays(1)}
-                      disabled={days >= 14}
-                      aria-label={t('form.daysIncrease')}
-                      className="grid h-9 w-9 place-items-center rounded-lg bg-brand-600 text-white shadow-sm hover:bg-brand-700 active:scale-[0.94] disabled:opacity-40"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <p className="mt-1.5 text-xs font-medium text-slate-600">{t('form.daysHint')}</p>
-                </div>
-
-                <div>
-                  <label className="label" htmlFor="trip-budget">
-                    Tổng ngân sách dự kiến (VND)
-                  </label>
-                  <div className="relative">
-                    <Wallet className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-accent-500" />
-                    <input
-                      ref={budgetRef}
-                      id="trip-budget"
-                      type="number"
-                      inputMode="numeric"
-                      min="0"
-                      step="50000"
-                      value={budget || ''}
-                      onChange={(event) => {
-                        setBudget(Number(event.target.value));
-                        if (errorField === 'budget') clearError();
-                      }}
-                      className="input pl-10 pr-14 font-semibold"
-                    />
-                    <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-extrabold tracking-wider text-slate-500">
-                      VND
-                    </span>
-                  </div>
-                  <p className="mt-1.5 text-xs font-medium text-slate-600">
-                    ≈ {formatVnd(budget, lang)} · Mức chi tiêu tổng chuyến đi
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {BUDGET_PRESETS.map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setBudget(value)}
-                    className={cn(
-                      'rounded-full border px-3 py-1.5 text-xs font-bold transition-all',
-                      budget === value
-                        ? 'border-accent-400 bg-accent-50 text-accent-700 ring-1 ring-accent-300'
-                        : 'border-slate-200 bg-white text-slate-500 hover:border-accent-300 hover:text-accent-700'
-                    )}
-                  >
-                    {compactVnd(value)} ₫
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            {/* 👥 CỤM 2: THÀNH PHẦN ĐOÀN & PHƯƠNG TIỆN */}
-            <section className="space-y-4 pt-5 border-t border-slate-200/70">
-              <div className="flex items-center gap-2 border-b border-slate-200/60 pb-2.5">
-                <span className="grid h-6 w-6 place-items-center rounded-lg bg-brand-600 text-white text-xs font-bold">
-                  2
-                </span>
-                <h3 className="font-display text-sm font-extrabold text-slate-900">
-                  Thành phần đoàn & Phương tiện di chuyển
-                </h3>
-              </div>
-
-              <div>
-                <label className="label">Đối tượng chuyến đi</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {GROUP_OPTIONS.map((opt) => {
-                    const Icon = opt.icon;
-                    const isSelected = groupType === opt.id;
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => setGroupType(opt.id)}
-                        className={cn(
-                          'flex flex-col items-start p-2.5 rounded-xl border text-left transition-all',
-                          isSelected
-                            ? 'border-brand-500 bg-brand-50 text-brand-900 ring-1 ring-brand-300'
-                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                        )}
-                      >
-                        <div className="flex items-center justify-between w-full mb-1">
-                          <Icon className={cn('h-4 w-4', isSelected ? 'text-brand-600' : 'text-slate-400')} />
-                          {isSelected && <Check className="h-3.5 w-3.5 text-brand-600" />}
-                        </div>
-                        <span className="text-xs font-bold leading-tight">{opt.label}</span>
-                        <span className="text-[11px] text-slate-600 mt-0.5 line-clamp-1">{opt.desc}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <label className="label">Phương tiện di chuyển chủ đạo</label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {TRANSPORT_OPTIONS.map((opt) => {
-                    const Icon = opt.icon;
-                    const isSelected = transportMode === opt.id;
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => setTransportMode(opt.id)}
-                        className={cn(
-                          'flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition-all',
-                          isSelected
-                            ? 'border-brand-500 bg-brand-50 text-brand-900 ring-1 ring-brand-300'
-                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                        )}
-                      >
-                        <div
-                          className={cn(
-                            'grid h-8 w-8 shrink-0 place-items-center rounded-lg',
-                            isSelected ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600'
-                          )}
-                        >
-                          <Icon className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-bold leading-tight">{opt.label}</p>
-                          <p className="text-[11px] text-slate-600 truncate">{opt.desc}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </section>
-
-            {/* ⚡ CỤM 3: NHỊP ĐỘ & KHUNG GIỜ SINH HOẠT */}
-            <section className="space-y-4 pt-5 border-t border-slate-200/70">
-              <div className="flex items-center gap-2 border-b border-slate-200/60 pb-2.5">
-                <span className="grid h-6 w-6 place-items-center rounded-lg bg-brand-600 text-white text-xs font-bold">
-                  3
-                </span>
-                <h3 className="font-display text-sm font-extrabold text-slate-900">
-                  Nhịp độ & Khung giờ sinh hoạt
-                </h3>
-              </div>
-
-              <div>
-                <label className="label">Nhịp độ chuyến đi (Pace)</label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {PACE_OPTIONS.map((opt) => {
-                    const isSelected = pace === opt.id;
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => setPace(opt.id)}
-                        className={cn(
-                          'p-2.5 rounded-xl border text-left transition-all',
-                          isSelected
-                            ? 'border-brand-500 bg-brand-50 text-brand-900 ring-1 ring-brand-300'
-                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                        )}
-                      >
-                        <span className="text-xs font-bold block">{opt.label}</span>
-                        <span className="text-[11px] text-slate-600 mt-0.5 block leading-tight">{opt.desc}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <label className="label">Thói quen sinh hoạt ưu tiên</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setScheduleProfile('early_bird')}
-                    className={cn(
-                      'flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all',
-                      scheduleProfile === 'early_bird'
-                        ? 'border-amber-400 bg-amber-50 text-amber-900 ring-1 ring-amber-300'
-                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                    )}
-                  >
-                    <Sun className="h-5 w-5 text-amber-500 shrink-0" />
-                    <div>
-                      <p className="text-xs font-bold leading-tight">Dậy sớm ngắm phố</p>
-                      <p className="text-[11px] text-slate-600 mt-0.5">Khởi hành 6h30 - 7h00 sáng</p>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setScheduleProfile('night_owl')}
-                    className={cn(
-                      'flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all',
-                      scheduleProfile === 'night_owl'
-                        ? 'border-indigo-400 bg-indigo-50 text-indigo-900 ring-1 ring-indigo-300'
-                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                    )}
-                  >
-                    <Moon className="h-5 w-5 text-indigo-500 shrink-0" />
-                    <div>
-                      <p className="text-xs font-bold leading-tight">Cú đêm & Nightlife</p>
-                      <p className="text-[11px] text-slate-600 mt-0.5">Hoạt động trưa đến 24h đêm</p>
-                    </div>
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            {/* 🍜 CỤM 4: SỞ THÍCH & LƯU Ý ĐẶC BIỆT */}
-            <section className="space-y-4 pt-5 border-t border-slate-200/70">
-              <div className="flex items-center gap-2 border-b border-slate-200/60 pb-2.5">
-                <span className="grid h-6 w-6 place-items-center rounded-lg bg-brand-600 text-white text-xs font-bold">
-                  4
-                </span>
-                <h3 className="font-display text-sm font-extrabold text-slate-900">
-                  Sở thích du lịch & Lưu ý sức khỏe / Thời tiết
-                </h3>
-              </div>
-
-              <div>
-                <div className="flex items-end justify-between gap-2 mb-2">
-                  <span className="label !mb-0">{t('form.preferencesLabel')}</span>
-                  <span className="text-xs font-bold text-slate-500">
-                    {preferences.length}/4 · Chọn tối đa 4 sở thích
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {preferenceOptions.map((preference) => {
-                    const meta = getCategoryMeta(PREFERENCE_CATEGORY[preference]);
-                    const Icon = meta.icon;
-                    const selected = preferences.includes(preference);
-                    const maxed = preferences.length >= 4 && !selected;
-                    return (
-                      <button
-                        key={preference}
-                        type="button"
-                        onClick={() => togglePreference(preference)}
-                        disabled={maxed}
-                        aria-pressed={selected}
-                        className={cn(
-                          'flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-bold transition-all',
-                          selected
-                            ? 'border-brand-500 bg-brand-50 text-brand-700 ring-1 ring-brand-200'
-                            : 'border-slate-200 bg-white text-slate-600 hover:border-brand-200',
-                          maxed && 'cursor-not-allowed opacity-45'
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            'grid h-7 w-7 shrink-0 place-items-center rounded-lg border',
-                            selected ? 'border-white bg-white' : meta.tile
-                          )}
-                        >
-                          <Icon className="h-3.5 w-3.5" />
-                        </span>
-                        <span className="min-w-0 flex-1 leading-tight">
-                          {t(`preference.${preference}`)}
-                        </span>
-                        {selected && <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={3} />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <label className="label">Lưu ý sức khỏe & Thời tiết</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {SPECIAL_NOTES.map((note) => {
-                    const selected = specialNotes.includes(note.id);
-                    return (
-                      <button
-                        key={note.id}
-                        type="button"
-                        onClick={() => toggleSpecialNote(note.id)}
-                        className={cn(
-                          'flex items-center gap-2 p-2 rounded-xl border text-left text-xs font-semibold transition-all',
-                          selected
-                            ? 'border-emerald-500 bg-emerald-50 text-emerald-900 ring-1 ring-emerald-300'
-                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                        )}
-                      >
-                        <span className="text-base">{note.emoji}</span>
-                        <span className="flex-1 leading-tight text-[11px] font-bold">{note.label}</span>
-                        {selected && <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </section>
-          </>
-        ) : (
-          /* Sentence Mode giữ nguyên tính năng điền tự nhiên */
-          <>
-            <div>
-              <div className="flex items-end justify-between gap-2">
-                <label className="label !mb-0" htmlFor="trip-sentence">
-                  {t('form.sentenceLabel')}
-                </label>
-                <span className="pb-0.5 text-xs font-bold text-slate-500">
-                  {t('form.sentenceHint', { count: sentence.length })}
-                </span>
-              </div>
-              <textarea
-                ref={sentenceRef}
-                id="trip-sentence"
-                rows={4}
-                maxLength={500}
-                value={sentence}
-                onChange={handleSentenceChange}
-                placeholder={t('form.sentencePlaceholder')}
-                className="input mt-2 resize-none leading-relaxed"
-              />
+      <form onSubmit={handleSubmit} noValidate aria-busy={submitting}
+        className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-soft">
+        <fieldset disabled={submitting} className="min-w-0 space-y-5 p-4 sm:p-6">
+          <div className="rounded-2xl border border-brand-100 bg-brand-50/50 p-3.5">
+            <label htmlFor="trip-quickfill" className="mb-1.5 flex items-center gap-1.5 text-sm font-bold text-slate-900">
+              <Wand2 className="h-4 w-4 text-brand-600" aria-hidden="true" />
+              {t('form.quickFill.label')}
+            </label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input ref={sentenceRef} id="trip-quickfill" type="text" maxLength={500} value={sentence}
+                onChange={(event) => { setSentence(event.target.value); if (quickFillError) setQuickFillError(''); }}
+                onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); handleQuickFill(); } }}
+                placeholder={t('form.quickFill.placeholder')}
+                aria-invalid={Boolean(quickFillError) || undefined}
+                aria-describedby={quickFillError ? 'trip-quickfill-error' : 'trip-quickfill-hint'}
+                className={cn('input min-w-0 flex-1 bg-white py-2.5 text-sm',
+                  quickFillError && 'border-rose-400 focus:border-rose-500 focus:ring-rose-100')} />
+              <button type="button" onClick={() => handleQuickFill()}
+                className="btn-secondary min-h-11 shrink-0 border-brand-200 px-4 py-2.5 text-xs font-bold text-brand-700 hover:bg-brand-50">
+                {t('form.quickFill.apply')}
+              </button>
             </div>
-
-            <div className="flex flex-wrap gap-1.5">
+            <FieldError id="trip-quickfill-error" message={quickFillError} />
+            {!quickFillError && <p id="trip-quickfill-hint" className="mt-1.5 text-xs text-slate-600">{t('form.quickFill.hint')}</p>}
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {[t('form.sentence.sample1'), t('form.sentence.sample2')].map((sample) => (
-                <button
-                  key={sample}
-                  type="button"
-                  onClick={() => {
-                    setSentence(sample);
-                    setParsed(null);
-                    clearError();
-                  }}
-                  className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-2.5 py-1.5 text-left text-xs font-medium text-slate-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition-all"
-                >
+                <button key={sample} type="button" onClick={() => { setSentence(sample); handleQuickFill(sample); }}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-left text-xs font-medium text-slate-600 transition-colors hover:border-brand-300 hover:text-brand-700">
                   “{sample}”
                 </button>
               ))}
             </div>
-
-            <button
-              type="button"
-              onClick={handleParse}
-              className="btn-secondary w-full !py-2.5 text-xs"
-            >
-              <Wand2 className="h-4 w-4 text-brand-600" />
-              {t('form.sentence.extract')}
-            </button>
-
-            {parsed && (
-              <div
-                className={cn(
-                  'rounded-2xl border p-3.5 animate-fade-up',
-                  hasParsedContent ? 'border-emerald-200 bg-emerald-50/70' : 'border-amber-200 bg-amber-50/70'
-                )}
-              >
-                <p
-                  className={cn(
-                    'flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.14em]',
-                    hasParsedContent ? 'text-emerald-700' : 'text-amber-700'
-                  )}
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  {t('form.sentence.parsed')}
+            {parseSummary && (
+              <div role="status" aria-live="polite" className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 text-xs text-emerald-900">
+                <p className="flex items-center gap-1.5 font-bold text-emerald-800">
+                  <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  {t('form.sentence.parsed', { count: parseSummary.count })}
                 </p>
-
-                {hasParsedContent && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {parsed.days && (
-                      <span className="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs font-bold text-emerald-800">
-                        {t('form.sentence.parsedDays', { count: parsed.days })}
-                      </span>
-                    )}
-                    {parsed.budget && (
-                      <span className="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs font-bold text-emerald-800">
-                        {t('form.sentence.parsedBudget', {
-                          budget: formatVnd(parsed.budget, lang)
-                        })}
-                      </span>
-                    )}
-                  </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {parseSummary.badges.map((badge) => (
+                    <span key={badge} className="rounded-full border border-emerald-200 bg-white px-2.5 py-0.5 font-semibold text-emerald-800">{badge}</span>
+                  ))}
+                </div>
+                {parseSummary.missing.length > 0 && (
+                  <p className="mt-1.5 text-emerald-800">{t('form.sentence.missing', { list: parseSummary.missing.join(', ') })}</p>
                 )}
               </div>
             )}
-          </>
-        )}
-
-        {error && (
-          <p
-            id="trip-form-error"
-            role="alert"
-            className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"
-          >
-            {error}
-          </p>
-        )}
-
-        <button type="submit" disabled={submitting} className="btn-primary w-full !py-4 shadow-lift text-sm font-extrabold">
-          {submitting ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {submissionStage === 'concept'
-                ? (lang === 'vi' ? 'Gemini đang đề xuất concept (khoảng 15–30 giây)...' : 'Gemini is proposing a trip concept (approx. 15–30s)...')
-                : submissionStage === 'generate'
-                  ? (lang === 'vi' ? 'Gemini đang thiết kế chi tiết lịch trình (khoảng 30–45 giây)...' : 'Gemini is designing detailed itinerary (approx. 30–45s)...')
-                  : (lang === 'vi' ? 'Đang lưu lịch trình...' : 'Saving your itinerary...')}
-            </>
-          ) : (
-            <>
-              Bắt đầu tạo lịch trình du lịch TP.HCM
-              <ArrowRight className="h-4 w-4 ml-1" />
-            </>
-          )}
-        </button>
-      </div>
-    </form>
-    {concept && (
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="trip-concept-title"
-        className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
-      >
-        <section className="w-full max-w-xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
-          <header className="flex items-start justify-between gap-4 border-b border-slate-100 bg-brand-50/70 p-5 sm:p-6">
-            <div>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white px-2.5 py-1 text-[10px] font-bold text-brand-700">
-                <Sparkles className="h-3 w-3" />
-                {concept.source === 'fallback'
-                  ? (lang === 'vi' ? 'Gợi ý dự phòng' : 'Fallback suggestion')
-                  : (lang === 'vi' ? 'Đề xuất từ Gemini' : 'Gemini suggestion')}
-              </span>
-              <h2 id="trip-concept-title" className="mt-2 font-display text-xl font-extrabold text-slate-900">
-                {lang === 'vi' ? 'Concept chuyến đi của bạn' : 'Your trip concept'}
-              </h2>
-            </div>
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={() => { setConcept(null); setPendingTrip(null); clearError(); }}
-              className="rounded-full p-2 text-slate-500 hover:bg-white disabled:opacity-50"
-              aria-label={lang === 'vi' ? 'Đóng concept' : 'Close concept'}
-            >
-              ×
-            </button>
-          </header>
-
-          <div className="max-h-[70vh] space-y-4 overflow-y-auto p-5 sm:p-6">
-            {concept.source === 'fallback' && (
-              <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
-                {concept.fallback_reason
-                  ? (lang === 'vi'
-                      ? 'Không kết nối được Gemini. Khi bạn đồng ý, hệ thống sẽ tạo lịch trình dự phòng và báo rõ nguồn kết quả.'
-                      : 'Could not reach Gemini. If you approve, the app will create a fallback itinerary and label its source.')
-                  : lang === 'vi'
-                  ? 'Gemini chưa trả lời được. Đây là concept dự phòng được tạo từ danh sách địa điểm có sẵn.'
-                  : 'Gemini did not respond. This fallback concept was created from the available place catalog.'}
-              </p>
-            )}
-            <p className="text-sm leading-relaxed text-slate-700">{concept.summary}</p>
-
-            {concept.highlights?.length > 0 && (
-              <section>
-                <h3 className="text-xs font-extrabold uppercase tracking-wide text-slate-500">{lang === 'vi' ? 'Điểm nổi bật' : 'Highlights'}</h3>
-                <ul className="mt-2 space-y-1.5">
-                  {concept.highlights.map((highlight, index) => (
-                    <li key={`${highlight}-${index}`} className="flex gap-2 text-sm text-slate-700">
-                      <span className="text-brand-600">•</span>{highlight}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            {concept.recommended_districts?.length > 0 && (
-              <section>
-                <h3 className="text-xs font-extrabold uppercase tracking-wide text-slate-500">{lang === 'vi' ? 'Các quận dự kiến' : 'Recommended districts'}</h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {concept.recommended_districts.map((district) => (
-                    <span key={district} className="rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-bold text-brand-800">
-                      {district}
-                    </span>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            <section>
-              <h3 className="text-xs font-extrabold uppercase tracking-wide text-slate-500">{lang === 'vi' ? 'Lộ trình gợi ý' : 'Suggested route'}</h3>
-              <p className="mt-1 text-sm text-slate-700">{concept.route_overview}</p>
-            </section>
-
-            <p className="rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-800">
-              {concept.confirmation_question}
-            </p>
-            {error && (
-              <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">
-                {error}
-              </p>
-            )}
-            {submitting && (
-              <p role="status" className="flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 p-3 text-xs font-semibold text-brand-800">
-                <Loader2 className="h-4 w-4 animate-spin text-brand-600 shrink-0" />
-                {submissionStage === 'generate'
-                  ? (lang === 'vi' ? 'Gemini đang thiết kế và sắp xếp các điểm đến (khoảng 30–45 giây)...' : 'Gemini is arranging your stops (approx. 30–45s)...')
-                  : (lang === 'vi' ? 'Đang lưu lịch trình của bạn...' : 'Saving your itinerary...')}
-              </p>
-            )}
           </div>
 
-          <footer className="flex flex-col-reverse gap-2 border-t border-slate-100 p-5 sm:flex-row sm:justify-end sm:p-6">
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={() => { setConcept(null); setPendingTrip(null); clearError(); }}
-              className="btn-secondary"
-            >
-              {lang === 'vi' ? 'Để sau' : 'Not now'}
+          <div className={cn('min-w-0', hl('start_location'))}>
+            <label className="label" htmlFor="trip-start">{t('form.startLabel')}</label>
+            <div className="relative">
+              <MapPin className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-600" aria-hidden="true" />
+              <input ref={startRef} id="trip-start" type="text" maxLength={200} value={form.start_location}
+                onChange={(event) => update({ start_location: event.target.value })}
+                placeholder={t('form.startPlaceholder')} aria-required="true"
+                aria-invalid={Boolean(fieldErrors.start_location) || undefined}
+                aria-describedby={fieldErrors.start_location ? 'trip-start-error' : undefined}
+                className={cn('input pl-10', fieldErrors.start_location && 'border-rose-400 focus:border-rose-500 focus:ring-rose-100')} />
+            </div>
+            <FieldError id="trip-start-error" message={errorText('start_location')} />
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {START_LOCATION_SUGGESTIONS.map((item) => (
+                <button key={item.value} type="button" onClick={() => update({ start_location: item.value })}
+                  className={cn('rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors',
+                    form.start_location === item.value ? 'border-brand-400 bg-brand-50 text-brand-700'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-700')}>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className={cn('min-w-0', hl('days'))}>
+              <span id="trip-days-label" className="label">{t('form.daysLabel')}</span>
+              <Stepper id="trip-days" labelledBy="trip-days-label" value={form.days} min={1} max={14}
+                label={t('common.days', { count: form.days })} decreaseLabel={t('form.daysDecrease')} increaseLabel={t('form.daysIncrease')}
+                invalid={Boolean(fieldErrors.days)}
+                describedBy={fieldErrors.days ? 'trip-days-error' : form.days > LONG_TRIP_DAYS ? 'trip-days-hint' : undefined}
+                onChange={(nextDays) => update(daysPatch(form, nextDays))} />
+              <FieldError id="trip-days-error" message={errorText('days')} />
+              {!fieldErrors.days && form.days > LONG_TRIP_DAYS && (
+                <p id="trip-days-hint" className="mt-1.5 text-xs text-amber-700">{t('form.daysLongHint')}</p>
+              )}
+            </div>
+
+            <div className={cn('min-w-0', hl('group_size'))}>
+              <span id="trip-group-size-label" className="label">{t('form.options.group_size')}</span>
+              {form.companions === 'solo' || form.companions === 'couple' ? (
+                <div id="trip-group-size" aria-labelledby="trip-group-size-label"
+                  className="flex min-h-[3.125rem] items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3.5">
+                  <span className="font-display text-base font-extrabold text-slate-900">{t('form.options.groupCount', { count: form.group_size })}</span>
+                  <span className="text-xs font-medium text-slate-500">{t('form.options.groupFixed')}</span>
+                </div>
+              ) : (
+                <Stepper id="trip-group-size" labelledBy="trip-group-size-label" value={form.group_size} min={2} max={20}
+                  label={t('form.options.groupCount', { count: form.group_size })}
+                  decreaseLabel={t('form.options.groupDecrease')} increaseLabel={t('form.options.groupIncrease')}
+                  invalid={Boolean(fieldErrors.group_size)} describedBy={fieldErrors.group_size ? 'trip-group-size-error' : undefined}
+                  onChange={(size) => update(groupSizePatch(form, size))} />
+              )}
+              <FieldError id="trip-group-size-error" message={errorText('group_size')} />
+            </div>
+          </div>
+
+          <fieldset className={cn('min-w-0', hl('companions'))}>
+            <legend className="label">{t('form.options.companions')}</legend>
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+              {TRIP_OPTION_VALUES.companions.map((option) => {
+                const Icon = COMPANION_ICONS[option];
+                const selected = form.companions === option;
+                return (
+                  <button key={option} type="button" aria-pressed={selected} onClick={() => update(companionsPatch(form, option))}
+                    className={cn('flex min-h-11 items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-colors',
+                      selected ? 'border-brand-500 bg-brand-50 text-brand-700'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-slate-900')}>
+                    <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span>{t(`form.option.companions.${option}`)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          <div className={cn('min-w-0', hl('budget'))}>
+            <div className="flex items-baseline justify-between gap-2">
+              <label className="label" htmlFor="trip-budget">{t('form.budgetLabel')}</label>
+              {form.budget_preset === null && <span className="text-xs font-semibold text-slate-500">{t('form.budgetCustomTag')}</span>}
+            </div>
+            <div className="relative">
+              <Wallet className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-accent-500" aria-hidden="true" />
+              <input ref={budgetRef} id="trip-budget" type="number" inputMode="numeric" min="0" max="1000000000" step="50000"
+                value={budgetDraft ?? String(form.budget)}
+                onChange={(event) => { setBudgetDraft(event.target.value); update(customBudgetPatch(form, event.target.value)); }}
+                onBlur={() => { if (budgetDraft !== null && Number(budgetDraft) > 0) setBudgetDraft(null); }} aria-required="true"
+                aria-invalid={Boolean(fieldErrors.budget) || undefined}
+                aria-describedby={fieldErrors.budget ? 'trip-budget-error' : 'trip-budget-hint'}
+                className={cn('input pl-10 pr-14 font-semibold', fieldErrors.budget && 'border-rose-400 focus:border-rose-500 focus:ring-rose-100')} />
+              <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold tracking-wider text-slate-500">VND</span>
+            </div>
+            <FieldError id="trip-budget-error" message={errorText('budget')} />
+            <p id="trip-budget-hint" className="mt-1.5 text-xs text-slate-600">{t('form.budgetHint', { count: form.group_size, days: form.days })}</p>
+            <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label={t('form.budgetPresets')}>
+              {BUDGET_PER_PERSON_PER_DAY.map((perPerson) => {
+                const total = budgetPresetTotal(perPerson, form.days, form.group_size);
+                const active = form.budget_preset === perPerson && form.budget === total;
+                return (
+                  <button key={perPerson} type="button" aria-pressed={active}
+                    aria-label={t('form.budgetPresetLabel', { amount: compactVnd(perPerson, lang), total: compactVnd(total, lang) })}
+                    onClick={() => { setBudgetDraft(null); update(budgetPresetPatch(form, perPerson)); }}
+                    className={cn('min-h-10 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
+                      active ? 'border-accent-500 bg-accent-50 text-accent-700'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-accent-300 hover:text-accent-700')}>
+                    {t('form.budgetPreset', { amount: compactVnd(perPerson, lang) })}
+                    <span className="ml-1 font-normal text-slate-500">= {compactVnd(total, lang)} ₫</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className={cn('min-w-0', hl('preferences'))}>
+            <div className="flex items-baseline justify-between gap-2">
+              <span id="trip-preferences-label" className="label">{t('form.preferencesLabel')}</span>
+              <span className="text-xs font-medium text-slate-500">{t('form.preferencesHint')}</span>
+            </div>
+            <div ref={preferencesRef} tabIndex={-1} role="group" aria-labelledby="trip-preferences-label"
+              aria-invalid={Boolean(fieldErrors.preferences) || undefined}
+              aria-describedby={fieldErrors.preferences ? 'trip-preferences-error' : undefined}
+              className="grid grid-cols-2 gap-1.5 outline-none sm:grid-cols-3">
+              {preferenceOptions.map((preference) => {
+                const meta = getCategoryMeta(PREFERENCE_CATEGORY[preference]);
+                const Icon = meta.icon;
+                const selected = form.preferences.includes(preference);
+                return (
+                  <button key={preference} type="button" role="checkbox" aria-checked={selected}
+                    onClick={() => update({ preferences: toggleListValue(form.preferences, preference) })}
+                    className={cn('flex min-h-11 min-w-0 items-center gap-2 rounded-xl border px-2.5 py-2 text-left text-xs font-bold transition-colors',
+                      selected ? 'border-brand-500 bg-brand-50 text-brand-700'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-slate-900')}>
+                    <span className={cn('grid h-7 w-7 shrink-0 place-items-center rounded-lg border',
+                      selected ? 'border-brand-200 bg-white text-brand-600' : meta.tile)}>
+                      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1 leading-tight">{t(`preference.${preference}`)}</span>
+                    {selected && <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={3} aria-hidden="true" />}
+                  </button>
+                );
+              })}
+            </div>
+            <FieldError id="trip-preferences-error" message={errorText('preferences')} />
+          </div>
+
+          <div className="rounded-2xl border border-slate-200">
+            <button type="button" aria-expanded={advancedOpen} aria-controls="trip-advanced-panel"
+              onClick={() => setAdvancedOpen((open) => !open)}
+              className="flex min-h-11 w-full items-center justify-between gap-2 rounded-2xl px-4 py-3 text-left transition-colors hover:bg-slate-50">
+              <span className="min-w-0">
+                <span className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                  {t('form.advanced')}
+                  {advancedCustomCount > 0 && (
+                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-bold text-brand-700">
+                      {t('form.advancedActive', { count: advancedCustomCount })}
+                    </span>
+                  )}
+                </span>
+                <span className="mt-0.5 block text-xs text-slate-600">{t('form.advancedHint')}</span>
+              </span>
+              <ChevronDown className={cn('h-4 w-4 shrink-0 text-slate-500 transition-transform', advancedOpen && 'rotate-180')} aria-hidden="true" />
             </button>
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={handleApproveConcept}
-              className="btn-primary"
-            >
-              {submitting
-                ? (lang === 'vi' ? 'Đang xử lý...' : 'Working...')
-                : (lang === 'vi' ? 'Đồng ý, tạo lịch trình' : 'Approve and create itinerary')}
-              {!submitting && <ArrowRight className="ml-1 h-4 w-4" />}
-            </button>
-          </footer>
-        </section>
-      </div>
-    )}
+
+            <div id="trip-advanced-panel" hidden={!advancedOpen} className="space-y-4 border-t border-slate-200 p-4">
+              <OptionChips name="pace" values={TRIP_OPTION_VALUES.pace} value={form.pace}
+                highlighted={highlighted.has('pace')} onChange={(pace) => update({ pace })} />
+              <OptionChips name="transport_mode" values={TRIP_OPTION_VALUES.transport_mode} value={form.transport_mode}
+                highlighted={highlighted.has('transport_mode')} onChange={(transport_mode) => update({ transport_mode })} />
+              <OptionChips name="dietary" values={FORM_DIETARY} value={form.dietary} multiple
+                highlighted={highlighted.has('dietary')} onChange={(dietary) => update({ dietary })} />
+
+              <fieldset className={cn('min-w-0', hl('avoid_districts'))}>
+                <legend className="label">{t('form.options.avoid_districts')}</legend>
+                <div className="flex flex-wrap gap-1.5">
+                  {CATALOG_DISTRICTS.map(({ name }) => {
+                    const selected = form.avoid_districts.includes(name);
+                    const disabled = !selected && form.avoid_districts.length >= MAX_AVOID_DISTRICTS;
+                    return (
+                      <button key={name} type="button" aria-pressed={selected} disabled={disabled}
+                        onClick={() => update({ avoid_districts: toggleListValue(form.avoid_districts, name) })}
+                        className={cn('min-h-10 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45',
+                          selected ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300')}>
+                        {name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1.5 text-xs text-slate-600">{t('form.options.avoidHint', { max: MAX_AVOID_DISTRICTS })}</p>
+                {form.avoid_districts.includes('Quận 1') && (
+                  <p role="status" className="mt-1.5 flex items-start gap-1.5 text-xs font-semibold text-amber-700">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span>{t('form.options.avoidDistrict1')}</span>
+                  </p>
+                )}
+              </fieldset>
+
+              <div className="min-w-0 space-y-2">
+                <label className="label" htmlFor="trip-special-notes">{t('form.options.special_notes')}</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {TRIP_OPTION_VALUES.quick_notes.map((noteId) => {
+                    const selected = form.quick_notes.includes(noteId);
+                    return (
+                      <button key={noteId} type="button" aria-pressed={selected}
+                        onClick={() => update({ quick_notes: toggleListValue(form.quick_notes, noteId) })}
+                        className={cn('min-h-10 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors',
+                          selected ? 'border-emerald-400 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300')}>
+                        {t(`form.option.quick_notes.${noteId}`)}
+                      </button>
+                    );
+                  })}
+                </div>
+                <input ref={notesRef} id="trip-special-notes" type="text" maxLength={400} value={form.custom_notes}
+                  onChange={(event) => update({ custom_notes: event.target.value })}
+                  placeholder={t('form.options.specialNotesPlaceholder')}
+                  aria-invalid={Boolean(fieldErrors.special_notes) || undefined}
+                  aria-describedby={fieldErrors.special_notes ? 'trip-special-notes-error' : undefined}
+                  className="input py-2.5 text-sm" />
+                <FieldError id="trip-special-notes-error" message={errorText('special_notes')} />
+              </div>
+            </div>
+          </div>
+
+          {formError && (
+            <p id="trip-form-error" role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-semibold text-rose-700">
+              {formError}
+            </p>
+          )}
+
+          <button type="submit" disabled={submitting} className="btn-primary min-h-12 w-full text-sm font-bold">
+            {submitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                {submissionStage === 'concept' ? t('form.stage.concept')
+                  : submissionStage === 'generate' ? t('form.stage.generate') : t('form.stage.save')}
+              </>
+            ) : (
+              <>
+                {t('form.submit')}
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </>
+            )}
+          </button>
+        </fieldset>
+      </form>
+
+      {concept && (
+        <ConceptDialog concept={concept} submitting={submitting} submissionStage={submissionStage}
+          error={formError} lang={lang} t={t}
+          onClose={() => { setConcept(null); setPendingTrip(null); setFormError(''); }}
+          onApprove={handleApproveConcept} />
+      )}
     </>
   );
 }

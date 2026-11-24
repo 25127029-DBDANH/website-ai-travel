@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -17,6 +17,9 @@ class TripConceptRequest(BaseModel):
     preferences: list[str] = Field(min_length=1)
     pace: Literal["relaxed", "moderate", "packed"]
     special_notes: str = Field(default="", max_length=500)
+    # Giới hạn để chuỗi người dùng nhập không phình prompt Gemini (chống prompt injection dài).
+    dietary: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list, max_length=5)
+    avoid_districts: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list, max_length=3)
 
 
 class ConceptResponse(BaseModel):
