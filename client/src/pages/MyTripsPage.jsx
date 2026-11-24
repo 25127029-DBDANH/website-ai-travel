@@ -8,7 +8,6 @@ import {
   Pencil,
   Plus,
   Share2,
-  Sparkles,
   Trash2,
   Wallet,
   X
@@ -104,24 +103,24 @@ function TripCard({ trip, lang, t, menuOpen, onToggleMenu, onRename, onDuplicate
   };
 
   return (
-    <article className="group relative flex h-full flex-col rounded-3xl border border-slate-200/80 bg-white shadow-card ring-1 ring-slate-900/5 transition-[transform,border-color,box-shadow] duration-300 ease-out-strong hover:-translate-y-1 hover:border-brand-200 hover:shadow-lift">
-      <div className="relative h-32 shrink-0 overflow-hidden rounded-t-3xl sm:h-36">
+    <article className="group relative flex h-full flex-col rounded-2xl border border-slate-200 bg-white transition-[border-color,box-shadow] duration-200 ease-out-strong hover:border-slate-300 hover:shadow-lift">
+      <div className="relative h-32 shrink-0 overflow-hidden rounded-t-2xl bg-slate-100 sm:h-36">
         {cover ? (
           <img
             src={cover}
             alt={trip.cover_place_name || ''}
             loading="lazy"
             decoding="async"
-            className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out-strong group-hover:scale-[1.06]"
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-out-strong group-hover:scale-[1.03]"
           />
         ) : (
-          <div className="bg-saigon-dawn absolute inset-0" />
+          <div className="grid h-full w-full place-items-center bg-brand-50 text-brand-300">
+            <Luggage className="h-8 w-8" />
+          </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/65 via-slate-900/10 to-transparent" />
-        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 to-accent-400" />
 
         {trip.is_shared ? (
-          <span className="absolute bottom-2.5 left-3 inline-flex items-center gap-1 rounded-full border border-white/20 bg-slate-900/55 px-2 py-0.5 text-[9.5px] font-bold text-white backdrop-blur">
+          <span className="absolute bottom-2.5 left-3 inline-flex items-center gap-1 rounded-full bg-slate-900/85 px-2.5 py-0.5 text-[10px] font-bold text-white">
             <Link2 className="h-3 w-3" />
             {t('myTrips.shared')}
           </span>
@@ -137,7 +136,7 @@ function TripCard({ trip, lang, t, menuOpen, onToggleMenu, onRename, onDuplicate
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             onClick={onToggleMenu}
-            className="touch-target grid place-items-center rounded-full bg-white/85 p-1.5 text-slate-500 shadow-sm backdrop-blur transition-[transform,color,background-color] duration-200 ease-out-strong hover:bg-white hover:text-slate-900 active:scale-90"
+            className="touch-target grid place-items-center rounded-full border border-slate-200 bg-white p-1.5 text-slate-600 shadow-sm transition-[transform,color,background-color] duration-200 ease-out-strong hover:text-slate-900 active:scale-90"
           >
             <EllipsisVertical className="h-4 w-4" />
           </button>
@@ -357,27 +356,20 @@ export default function MyTripsPage() {
 
   if (DEMO) {
     return (
-      <div className="min-h-screen bg-slate-100/70">
+      <div className="min-h-screen bg-slate-50">
         <SiteHeader />
         <main className="mx-auto w-full max-w-6xl px-4 pb-16 pt-6 sm:px-6 lg:px-8">
           <div className="page-hero">
-            <div className="pointer-events-none absolute -right-14 -top-16 h-48 w-48 rounded-full bg-white/10 blur-2xl" />
-            <div className="pointer-events-none absolute -bottom-20 -left-12 h-44 w-44 rounded-full border-[18px] border-white/10" />
-            <div className="vn-lotus-light absolute inset-0 opacity-70" aria-hidden="true" />
-            <div className="relative flex flex-wrap items-end justify-between gap-3">
+            <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
-                <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white">
-                  <Sparkles className="h-3 w-3" />
-                  {t('brand.name')}
-                </p>
-                <h1 className="mt-1.5 font-display text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
+                <h1 className="font-display text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
                   {t('myTrips.title')}
                 </h1>
                 <p className="mt-1 text-sm font-medium text-brand-100">{t('myTrips.subtitle')}</p>
               </div>
               <Link
                 to="/#plan"
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-slate-900 shadow-glow transition-[transform,background-color] duration-200 ease-out-strong hover:-translate-y-0.5 hover:bg-brand-50 active:translate-y-0 active:scale-[0.97]"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-slate-900 transition-[transform,background-color] duration-200 ease-out-strong hover:bg-brand-50 active:scale-[0.97]"
               >
                 <Plus className="h-4 w-4" />
                 {t('nav.newTrip')}
@@ -387,7 +379,7 @@ export default function MyTripsPage() {
 
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2].map((index) => (
-              <Black key={index} className="h-64 w-full rounded-3xl" />
+              <Black key={index} className="h-64 w-full rounded-2xl" />
             ))}
           </div>
         </main>
@@ -396,27 +388,20 @@ export default function MyTripsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100/70">
+    <div className="min-h-screen bg-slate-50">
       <SiteHeader />
       <main className="mx-auto w-full max-w-6xl px-4 pb-16 pt-6 sm:px-6 lg:px-8">
         <div className="page-hero">
-          <div className="pointer-events-none absolute -right-14 -top-16 h-48 w-48 rounded-full bg-white/10 blur-2xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-12 h-44 w-44 rounded-full border-[18px] border-white/10" />
-          <div className="vn-lotus-light absolute inset-0 opacity-70" aria-hidden="true" />
-          <div className="relative flex flex-wrap items-end justify-between gap-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white">
-                <Sparkles className="h-3 w-3" />
-                {t('brand.name')}
-              </p>
-              <h1 className="mt-1.5 font-display text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
+              <h1 className="font-display text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
                 {t('myTrips.title')}
               </h1>
               <p className="mt-1 text-sm font-medium text-brand-100">{t('myTrips.subtitle')}</p>
             </div>
             <Link
               to="/#plan"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-slate-900 shadow-glow transition-[transform,background-color] duration-200 ease-out-strong hover:-translate-y-0.5 hover:bg-brand-50 active:translate-y-0 active:scale-[0.97]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-slate-900 transition-[transform,background-color] duration-200 ease-out-strong hover:bg-brand-50 active:scale-[0.97]"
             >
               <Plus className="h-4 w-4" />
               {t('nav.newTrip')}
@@ -429,28 +414,26 @@ export default function MyTripsPage() {
             {[0, 1, 2].map((index) => (
               <div
                 key={index}
-                className="h-40 animate-pulse rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100"
+                className="h-40 animate-pulse rounded-2xl border border-slate-200 bg-slate-100"
               />
             ))}
           </div>
         ) : error ? (
-          <div className="mt-6 rounded-3xl border border-rose-200 bg-white p-8 text-center shadow-card">
+          <div className="mt-6 rounded-2xl border border-rose-200 bg-white p-8 text-center">
             <p className="text-sm font-semibold text-rose-600">{error}</p>
             <button type="button" onClick={() => loadTrips()} className="btn-primary mt-4 text-xs">
               {t('common.retry')}
             </button>
           </div>
         ) : trips.length === 0 ? (
-          <div className="relative mt-10 flex flex-col items-center overflow-hidden rounded-3xl border-2 border-dashed border-slate-200 bg-gradient-to-b from-slate-50 to-white p-10 text-center sm:mt-16">
-            <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-brand-100/60 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-20 -left-16 h-44 w-44 rounded-full bg-accent-100/50 blur-3xl" />
-            <span className="relative grid h-16 w-16 place-items-center rounded-3xl bg-gradient-to-br from-brand-600 to-accent-500 text-white shadow-glow ring-4 ring-brand-50">
+          <div className="mt-10 flex flex-col items-center rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center sm:mt-14">
+            <span className="grid h-14 w-14 place-items-center rounded-2xl bg-brand-50 text-brand-700">
               <Luggage className="h-7 w-7" />
             </span>
             <h2 className="mt-5 font-display text-xl font-extrabold text-slate-900">
               {t('myTrips.empty.title')}
             </h2>
-            <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-500">
+            <p className="mt-2 max-w-sm text-sm leading-relaxed text-slate-600">
               {t('myTrips.empty.body')}
             </p>
             <Link to="/#plan" className="btn-primary mt-6 text-xs">
@@ -496,7 +479,7 @@ export default function MyTripsPage() {
         )}
 
         {bannerVisible ? (
-          <section className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-gradient-to-r from-brand-50 via-white to-brand-50 px-4 py-3 shadow-sm">
+          <section className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3">
             <div className="flex min-w-0 items-start gap-2.5">
               <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white text-brand-700">
                 <Luggage className="h-4 w-4" />

@@ -2,6 +2,7 @@
 // Google Calendar sync, and VITE_USE_BACKEND toggle between FastAPI Backend (Khang/Lam/Đạt) and Mock Data.
 // Authors: Diệp Bảo Danh (API Gateway Lead), Đỗ Nguyễn An Khang (Auth & Trip CRUD), Lê Hữu Lam (Gemini AI), Ngô Tấn Đạt (Places)
 import { getAuthToken, clearAuthToken, getSessionId } from './auth.js';
+import { selectMarqueePhotos } from './marqueePhotos.js';
 
 const RAW_API_BASE = (import.meta.env?.VITE_API_BASE || 'http://localhost:8000').replace(/\/$/, '');
 const API_ORIGIN = RAW_API_BASE.replace(/\/api\/v1$/, '');
@@ -127,7 +128,7 @@ export const PLACES = [
     latitude: 10.7698,
     longitude: 106.6995,
     estimated_cost: 30000,
-    photo_url: photo('museum.jpg'),
+    photo_url: photo('saigon-river.jpg'),
     editorial_score: 4.8,
     is_indoor: true,
     opening_hours: ['08:00 - 17:00'],
@@ -143,7 +144,7 @@ export const PLACES = [
     latitude: 10.7798,
     longitude: 106.6998,
     estimated_cost: 0,
-    photo_url: photo('independence-palace-source.jpg'),
+    photo_url: photo('saigon-river.jpg'),
     editorial_score: 4.7,
     is_indoor: true,
     opening_hours: ['07:30 - 18:00'],
@@ -709,7 +710,7 @@ export const PLACES = [
     latitude: 10.8010,
     longitude: 106.6975,
     estimated_cost: 45000,
-    photo_url: photo('street-food.jpg'),
+    photo_url: photo('pho.png'),
     editorial_score: 4.6,
     is_indoor: false,
     opening_hours: ['16:00 - 23:30'],
@@ -757,7 +758,7 @@ export const PLACES = [
     latitude: 10.8250,
     longitude: 106.7260,
     estimated_cost: 95000,
-    photo_url: photo('street-food.jpg'),
+    photo_url: photo('pho.png'),
     editorial_score: 4.5,
     is_indoor: true,
     opening_hours: ['10:00 - 22:00'],
@@ -823,7 +824,7 @@ export const PLACES = [
     latitude: 10.7615,
     longitude: 106.7005,
     estimated_cost: 95000,
-    photo_url: photo('street-food.jpg'),
+    photo_url: photo('pho.png'),
     editorial_score: 4.7,
     is_indoor: false,
     opening_hours: ['15:00 - 23:30'],
@@ -839,7 +840,7 @@ export const PLACES = [
     latitude: 10.7635,
     longitude: 106.7040,
     estimated_cost: 50000,
-    photo_url: photo('street-food.jpg'),
+    photo_url: photo('pho.png'),
     editorial_score: 4.7,
     is_indoor: true,
     opening_hours: ['06:00 - 22:00'],
@@ -903,7 +904,7 @@ export const PLACES = [
     latitude: 10.7610,
     longitude: 106.6985,
     estimated_cost: 35000,
-    photo_url: photo('street-food.jpg'),
+    photo_url: photo('pho.png'),
     editorial_score: 4.6,
     is_indoor: false,
     opening_hours: ['10:00 - 21:00'],
@@ -953,7 +954,7 @@ export const PLACES = [
     latitude: 10.7965,
     longitude: 106.6850,
     estimated_cost: 80000,
-    photo_url: photo('street-food.jpg'),
+    photo_url: photo('pho.png'),
     editorial_score: 4.7,
     is_indoor: true,
     opening_hours: ['08:00 - 23:00'],
@@ -1049,7 +1050,7 @@ export const PLACES = [
     latitude: 10.8030,
     longitude: 106.6820,
     estimated_cost: 30000,
-    photo_url: photo('street-food.jpg'),
+    photo_url: photo('pho.png'),
     editorial_score: 4.7,
     is_indoor: true,
     opening_hours: ['11:30 - 18:30'],
@@ -1309,7 +1310,7 @@ export const PLACES = [
     latitude: 10.7410,
     longitude: 106.7040,
     estimated_cost: 45000,
-    photo_url: photo('street-food.jpg'),
+    photo_url: photo('pho.png'),
     editorial_score: 4.6,
     is_indoor: true,
     opening_hours: ['11:00 - 21:00'],
@@ -2220,18 +2221,13 @@ export const api = {
     return { reply, messages: [userMessage, assistantMessage], quick_replies: [], status: 'completed', updated_itinerary: entry.items, budget_summary: summary };
   },
 
-  listPhotos: async (limit = 20) => ({
-    photos: PLACES.slice(0, Math.max(0, Number(limit) || 20)).map((place, index) => ({
-      place_id: `photo-${index}`,
-      photo_url: place.photo_url,
-      name: place.place_name,
-      name_vi: place.place_name,
-      district: place.district,
-      category: place.category,
-      photo_credit: 'Ảnh tư liệu dự án TP.HCM',
-      photo_source_url: ''
-    }))
-  })
+  listPhotos: async (limit = 20) => {
+    const parsed = Number(limit);
+    const max = Number.isFinite(parsed) ? Math.max(0, parsed) : 20;
+    return {
+      photos: selectMarqueePhotos(PLACES).slice(0, max)
+    };
+  }
 };
 
 export function assetUrl(value) {

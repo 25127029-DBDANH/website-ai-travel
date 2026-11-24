@@ -130,8 +130,8 @@ export default function SharedTripPage() {
       <div className="min-h-screen bg-slate-100/70">
         <SiteHeader />
         <main className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6">
-          <div className="mx-auto flex max-w-md flex-col items-center rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-card">
-            <span className="grid h-16 w-16 place-items-center rounded-3xl bg-gradient-to-br from-brand-100 to-accent-100 text-brand-700">
+          <div className="mx-auto flex max-w-md flex-col items-center rounded-2xl border border-slate-200 bg-white p-8 text-center">
+            <span className="grid h-14 w-14 place-items-center rounded-2xl bg-brand-50 text-brand-700">
               <MapPin className="h-7 w-7" />
             </span>
             <h1 className="mt-5 font-display text-xl font-extrabold text-slate-900">

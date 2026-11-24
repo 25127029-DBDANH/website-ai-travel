@@ -8,7 +8,7 @@ import { checkPassword, checkUsername } from '../lib/passwordPolicy.js';
 import Modal from './Modal.jsx';
 
 export default function AuthModal() {
-  const { lang, t } = useI18n();
+  const { t } = useI18n();
   const { isAuthOpen, authMode, closeAuth, login, register } = useAuth();
 
   const [mode, setMode] = useState(authMode);
@@ -135,12 +135,10 @@ export default function AuthModal() {
         </>
       }
     >
-      <div className="relative">
-        <div className="pointer-events-none absolute -right-16 -top-20 h-44 w-44 rounded-full bg-brand-100/70 blur-3xl" />
-        <div className="relative">
-          <span className="mx-auto mb-4 grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-brand-600 to-accent-500 text-white shadow-glow">
-            <UserRound className="h-5 w-5" />
-          </span>
+      <div>
+        <span className="mx-auto mb-4 grid h-11 w-11 place-items-center rounded-xl bg-brand-50 text-brand-700">
+          <UserRound className="h-5 w-5" />
+        </span>
           <div className="grid grid-cols-2 gap-1 rounded-full bg-slate-100 p-1">
             <button type="button" onClick={() => switchMode('login')} aria-pressed={isLogin} className={tabClass(isLogin)}>
               {t('auth.tab.login')}
@@ -247,21 +245,16 @@ export default function AuthModal() {
             ) : null}
           </form>
 
-          <p className="mt-4 text-center text-[11.5px] leading-relaxed text-slate-500">
-            {isLogin
-              ? (lang === 'vi' ? 'Chưa có tài khoản? ' : t('auth.footer.login'))
-              : t('auth.footer.register')}{' '}
+          <p className="mt-4 text-center text-xs leading-relaxed text-slate-600">
+            {isLogin ? t('auth.footer.login') : t('auth.footer.register')}{' '}
             <button
               type="button"
               onClick={() => switchMode(isLogin ? 'register' : 'login')}
               className="rounded font-bold text-brand-700 transition-colors duration-200 ease-out-strong hover:underline"
             >
-              {isLogin
-                ? (lang === 'vi' ? 'Đăng ký' : t('auth.switch.register'))
-                : t('auth.switch.login')}
+              {isLogin ? t('auth.switch.register') : t('auth.switch.login')}
             </button>
           </p>
-        </div>
       </div>
     </Modal>
   );

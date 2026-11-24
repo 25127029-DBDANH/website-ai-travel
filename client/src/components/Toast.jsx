@@ -21,7 +21,7 @@ export default function Toast({ message, tone = 'error', onClose }) {
       role="status"
       aria-live="polite"
       className={cn(
-        'fixed bottom-24 right-4 z-[70] flex max-w-sm items-start gap-2.5 rounded-2xl border px-4 py-3 text-sm font-medium shadow-soft animate-fade-up lg:bottom-6 lg:right-6',
+        'fixed bottom-24 right-4 z-[70] flex max-w-sm items-start gap-2.5 rounded-2xl border px-4 py-3 text-sm font-medium shadow-lift animate-fade-up lg:bottom-6 lg:right-6',
         tone === 'success'
           ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
           : 'border-rose-200 bg-rose-50 text-rose-800'

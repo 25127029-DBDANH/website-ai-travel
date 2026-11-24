@@ -50,17 +50,11 @@ export default {
         ],
         display: ['"Be Vietnam Pro"', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif']
       },
-      backgroundImage: {
-        'saigon-dawn':
-          'linear-gradient(135deg, #f9a8d4 0%, #fda4af 22%, #fdba74 55%, #c4b5fd 100%)',
-        'saigon-dusk':
-          'linear-gradient(135deg, #fda4af 0%, #c4b5fd 45%, #1e3a8a 100%)'
-      },
       boxShadow: {
-        soft: '0 18px 50px -24px rgba(15, 23, 42, 0.28)',
-        card: '0 10px 30px -18px rgba(15, 23, 42, 0.25)',
+        soft: '0 16px 40px -24px rgba(15, 23, 42, 0.24)',
+        card: '0 8px 24px -18px rgba(15, 23, 42, 0.2)',
         lift: '0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px -8px rgb(15 23 42 / 0.12)',
-        glow: '0 20px 60px -20px rgba(37, 99, 235, 0.45)'
+        glow: '0 1px 2px rgba(15, 23, 42, 0.08)'
       },
       borderRadius: {
         '4xl': '2rem'

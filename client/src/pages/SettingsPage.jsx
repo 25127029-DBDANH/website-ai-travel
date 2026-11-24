@@ -16,8 +16,8 @@ function SignInCard() {
   const { openAuth } = useAuth();
 
   return (
-    <div className="mx-auto mt-10 flex max-w-md flex-col items-center rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-card sm:mt-16">
-      <span className="grid h-16 w-16 place-items-center rounded-3xl bg-gradient-to-br from-brand-100 to-accent-100 text-brand-700">
+    <div className="mx-auto mt-10 flex max-w-md flex-col items-center rounded-2xl border border-slate-200 bg-white p-8 text-center sm:mt-16">
+      <span className="grid h-14 w-14 place-items-center rounded-2xl bg-brand-50 text-brand-700">
         <SettingsIcon className="h-7 w-7" />
       </span>
       <h1 className="mt-5 font-display text-xl font-extrabold text-slate-900">
@@ -166,8 +166,7 @@ export default function SettingsPage() {
         <SiteHeader />
         <main className="mx-auto w-full max-w-2xl px-4 pb-16 pt-6 sm:px-6 lg:px-8">
           <div className="page-hero !p-5">
-            <div className="pointer-events-none absolute -right-12 -top-14 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
-            <div className="relative">
+            <div>
               <h1 className="font-display text-2xl font-extrabold tracking-tight text-white">
                 {t('settings.title')}
               </h1>
@@ -176,7 +175,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="mt-4 grid gap-4">
-            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-card">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5">
               <h2 className="font-display text-sm font-extrabold text-slate-900">
                 {t('settings.account.title')}
               </h2>
@@ -186,7 +185,7 @@ export default function SettingsPage() {
               </div>
             </section>
 
-            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-card">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5">
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="grid gap-1.5">
                   <span className="label !mb-0">{t('settings.tone')}</span>
@@ -206,7 +205,7 @@ export default function SettingsPage() {
               </button>
             </section>
 
-            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-card">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5">
               <h2 className="font-display text-sm font-extrabold text-slate-900">
                 {t('settings.password.title')}
               </h2>
@@ -228,7 +227,7 @@ export default function SettingsPage() {
               </button>
             </section>
 
-            <section className="rounded-3xl border border-rose-200 bg-white p-5 shadow-card">
+            <section className="rounded-2xl border border-rose-200 bg-white p-5">
               <h2 className="font-display text-sm font-extrabold text-rose-700">
                 {t('settings.danger.title')}
               </h2>
@@ -257,8 +256,7 @@ export default function SettingsPage() {
         ) : settings ? (
           <>
             <div className="page-hero !p-5">
-              <div className="pointer-events-none absolute -right-12 -top-14 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
-              <div className="relative">
+              <div>
                 <h1 className="font-display text-2xl font-extrabold tracking-tight text-white">
                   {t('settings.title')}
                 </h1>
@@ -266,8 +264,8 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="mt-4 flex items-center gap-3 rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50/80 to-white px-4 py-3 ring-1 ring-slate-900/5">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-600 to-accent-500 font-display text-base font-extrabold text-white shadow-glow">
+            <div className="mt-4 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-600 font-display text-base font-extrabold text-white">
                 {(user.display_name || user.username).charAt(0).toUpperCase()}
               </span>
               <div className="min-w-0">
@@ -288,7 +286,7 @@ export default function SettingsPage() {
 
             <form
               onSubmit={handleSave}
-              className="mt-5 grid gap-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-card sm:p-6"
+              className="mt-5 grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6"
             >
               <label className="grid gap-1.5">
                 <span className="label !mb-0">{t('settings.tone')}</span>
@@ -323,23 +321,23 @@ export default function SettingsPage() {
               </div>
             </form>
 
-            <section className="mt-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-card ring-1 ring-slate-900/5 sm:p-6">
+            <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
               <div className="flex items-center gap-2.5">
-                <span className="grid h-8 w-8 place-items-center rounded-xl bg-brand-50 text-brand-700 ring-1 ring-brand-100">
+                <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-50 text-brand-700">
                   <ShieldCheck className="h-4 w-4" />
                 </span>
                 <h2 className="font-display text-base font-extrabold text-slate-900">
                   {t('settings.privacy.title')}
                 </h2>
               </div>
-              <p className="mt-2 text-xs leading-relaxed text-slate-500">
+              <p className="mt-2 text-xs leading-relaxed text-slate-600">
                 {t('settings.privacy.body')}
               </p>
             </section>
 
-            <section className="mt-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-card ring-1 ring-slate-900/5 sm:p-6">
+            <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
               <div className="flex items-center gap-2.5">
-                <span className="grid h-8 w-8 place-items-center rounded-xl bg-brand-50 text-brand-700 ring-1 ring-brand-100">
+                <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-50 text-brand-700">
                   <KeyRound className="h-4 w-4" />
                 </span>
                 <h2 className="font-display text-base font-extrabold text-slate-900">
@@ -502,9 +500,9 @@ export default function SettingsPage() {
               )}
             </section>
 
-            <section className="mt-5 rounded-3xl border border-rose-200 bg-gradient-to-br from-rose-50/60 to-white p-5 shadow-card ring-1 ring-rose-100 sm:p-6">
+            <section className="mt-5 rounded-2xl border border-rose-200 bg-white p-5 sm:p-6">
               <div className="flex items-center gap-2.5">
-                <span className="grid h-8 w-8 place-items-center rounded-xl bg-rose-50 text-rose-600 ring-1 ring-rose-200">
+                <span className="grid h-8 w-8 place-items-center rounded-lg bg-rose-50 text-rose-600">
                   <Trash2 className="h-4 w-4" />
                 </span>
                 <h2 className="font-display text-base font-extrabold text-rose-700">
