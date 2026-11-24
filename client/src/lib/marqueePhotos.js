@@ -49,6 +49,65 @@ export function selectMarqueePhotos(places) {
   return selected;
 }
 
+function normalizePhotoUrlKey(photoUrl) {
+  if (typeof photoUrl !== 'string') return '';
+  return photoUrl.trim().split('?')[0].split('#')[0].trim();
+}
+
+export function shuffle(list, rng = Math.random) {
+  if (!Array.isArray(list)) return [];
+  const random = typeof rng === 'function' ? rng : Math.random;
+  const copy = [...list];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.min(i, Math.max(0, Math.floor(random() * (i + 1))));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+export function pickRandomUniquePhotos(places, { limit = 20, rng = Math.random } = {}) {
+  if (!Array.isArray(places)) return [];
+  const parsed = Number(limit);
+  const max = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 20;
+  if (max === 0) return [];
+
+  const eligible = places.filter(
+    (place) =>
+      place &&
+      typeof place === 'object' &&
+      place.is_active !== false &&
+      typeof place.photo_url === 'string' &&
+      normalizePhotoUrlKey(place.photo_url).length > 0
+  );
+
+  const shuffled = shuffle(eligible, rng);
+  const seenUrls = new Set();
+  const picked = [];
+
+  for (const place of shuffled) {
+    const url = place.photo_url.trim();
+    const key = normalizePhotoUrlKey(url);
+    if (!key || seenUrls.has(key)) continue;
+
+    seenUrls.add(key);
+    const name = place.name ?? place.place_name ?? '';
+    picked.push({
+      place_id: place.id ?? place.place_id ?? `photo-${picked.length}`,
+      photo_url: url,
+      name,
+      name_vi: place.name_vi || name,
+      district: place.district ?? '',
+      category: place.category ?? '',
+      photo_credit: /unsplash\.com/i.test(url) ? 'Unsplash' : '',
+      photo_source_url: ''
+    });
+
+    if (picked.length >= max) break;
+  }
+
+  return picked;
+}
+
 export function buildMarqueeTrack(cards, { reduced = false, minHalfCards = MIN_MARQUEE_HALF_CARDS } = {}) {
   if (!Array.isArray(cards) || cards.length === 0) return [];
   if (reduced) return cards;

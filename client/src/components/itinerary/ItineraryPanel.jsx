@@ -11,7 +11,8 @@ import {
   Zap
 } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useOpenPlace, usePlaceDrawer } from '../../context/PlaceDrawerContext.jsx';
 import { DEMO } from '../../demo.jsx';
 import { useI18n } from '../../i18n/I18nContext.jsx';
 import { downloadIcsFile } from '../../lib/api.js';
@@ -22,7 +23,6 @@ import Modal from '../Modal.jsx';
 import BudgetOverview from './BudgetOverview.jsx';
 import EmptyItinerary from './EmptyItinerary.jsx';
 import OverflowMenu from './OverflowMenu.jsx';
-import PlaceDetailModal from './PlaceDetailModal.jsx';
 import PlanLoading from './PlanLoading.jsx';
 import TimelineItem from './TimelineItem.jsx';
 import TransitConnector from './TransitConnector.jsx';
@@ -184,6 +184,8 @@ export default function ItineraryPanel({
   demo = DEMO
 }) {
   const { lang, t } = useI18n();
+  const openPlace = useOpenPlace();
+  const { syncStopItems } = usePlaceDrawer();
   const [focusRequest, setFocusRequest] = useState(null);
   const [rainMode, setRainMode] = useState(false);
   const [trafficMode, setTrafficMode] = useState(false);
@@ -194,7 +196,6 @@ export default function ItineraryPanel({
   const [showChecklistModal, setShowChecklistModal] = useState(false);
   const [calendarSyncSuccess, setCalendarSyncSuccess] = useState(false);
   const [checkedItems, setCheckedItems] = useState(['1', '4', '6']);
-  const [selectedDetailPlace, setSelectedDetailPlace] = useState(null);
   const [rideTargetPlace, setRideTargetPlace] = useState(null);
 
   const reduced = useReducedMotion();
@@ -217,12 +218,12 @@ export default function ItineraryPanel({
     if (routeSignature) revealedRoute.current = routeSignature;
   }, [routeSignature]);
 
-  const handleLocate = (item) => {
+  const handleLocate = useCallback((item) => {
     setFocusRequest({
       key: `${item.day_number}-${item.order_index}`,
       token: Date.now()
     });
-  };
+  }, []);
 
   const handleSelectDay = (day) => {
     setFocusRequest(null);
@@ -245,15 +246,48 @@ export default function ItineraryPanel({
   const dayCount = Number(trip?.days) || 1;
   const memberCount = Number(trip?.member_count) || (trip?.companion === 'solo' ? 1 : 4);
 
+  const buildPlaceActions = useCallback(
+    (stop) => ({
+      stop,
+      memberCount,
+      swapping: Boolean(swappingKey),
+      onToggleAccept,
+      onSwap,
+      onToggleVisited,
+      onLocate: handleLocate,
+      allowBookRide: true,
+      onOpenCheckin: onOpenLiveMode
+        ? () => {
+            onOpenLiveMode();
+          }
+        : undefined
+    }),
+    [
+      memberCount,
+      swappingKey,
+      onToggleAccept,
+      onSwap,
+      onToggleVisited,
+      handleLocate,
+      onOpenLiveMode
+    ]
+  );
+
+  const handleOpenDetail = useCallback(
+    (stop) => {
+      if (!stop) return;
+      openPlace({
+        id: stop.place_id || stop.id,
+        seed: stop,
+        actions: buildPlaceActions(stop)
+      });
+    },
+    [openPlace, buildPlaceActions]
+  );
+
   useEffect(() => {
-    if (!selectedDetailPlace) return;
-    const updated = items.find(
-      (it) =>
-        it.day_number === selectedDetailPlace.day_number &&
-        it.order_index === selectedDetailPlace.order_index
-    );
-    if (updated) setSelectedDetailPlace(updated);
-  }, [items]);
+    syncStopItems(items, buildPlaceActions);
+  }, [items, buildPlaceActions, syncStopItems]);
 
   const visitedCount = useMemo(
     () => dayItems.filter((i) => i.visited).length,
@@ -512,7 +546,7 @@ export default function ItineraryPanel({
                   stops={dayItems}
                   activeDay={activeDay}
                   focusRequest={focusRequest}
-                  onOpenDetail={(stop) => setSelectedDetailPlace(stop)}
+                  onOpenDetail={handleOpenDetail}
                   trafficMode={trafficMode}
                   isPanelMode={true}
                   className="h-full w-full"
@@ -633,7 +667,7 @@ export default function ItineraryPanel({
                               onSwap={onSwap}
                               onToggleAccept={onToggleAccept}
                               onToggleVisited={onToggleVisited}
-                              onOpenDetail={(it) => setSelectedDetailPlace(it)}
+                              onOpenDetail={handleOpenDetail}
                               onLocate={handleLocate}
                               onBookRide={(it) => setRideTargetPlace(it)}
                               swapping={swappingKey === key}
@@ -650,26 +684,6 @@ export default function ItineraryPanel({
           </div>
         )}
       </section>
-
-      {/* CHI TIẾT ĐIỂM DỪNG */}
-      {selectedDetailPlace ? (
-        <PlaceDetailModal
-          stop={selectedDetailPlace}
-          memberCount={memberCount}
-          isOpen={Boolean(selectedDetailPlace)}
-          onClose={() => setSelectedDetailPlace(null)}
-          onToggleAccept={onToggleAccept}
-          onSwap={onSwap}
-          onOpenCheckin={
-            onOpenLiveMode
-              ? () => {
-                  onOpenLiveMode();
-                }
-              : undefined
-          }
-          swapping={Boolean(swappingKey)}
-        />
-      ) : null}
 
       {/* GỌI XE TRỰC TIẾP TỪ MENU "⋯" */}
       <RidePickerModal

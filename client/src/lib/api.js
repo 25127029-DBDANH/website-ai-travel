@@ -2,7 +2,7 @@
 // Google Calendar sync, and VITE_USE_BACKEND toggle between FastAPI Backend (Khang/Lam/Đạt) and Mock Data.
 // Authors: Diệp Bảo Danh (API Gateway Lead), Đỗ Nguyễn An Khang (Auth & Trip CRUD), Lê Hữu Lam (Gemini AI), Ngô Tấn Đạt (Places)
 import { getAuthToken, clearAuthToken, getSessionId } from './auth.js';
-import { selectMarqueePhotos } from './marqueePhotos.js';
+import { pickRandomUniquePhotos, selectMarqueePhotos, shuffle } from './marqueePhotos.js';
 
 const RAW_API_BASE = (import.meta.env?.VITE_API_BASE || 'http://localhost:8000').replace(/\/$/, '');
 const API_ORIGIN = RAW_API_BASE.replace(/\/api\/v1$/, '');
@@ -1864,7 +1864,7 @@ export const api = {
   },
   getPlaceDetail: async (placeId) => {
     if (!isBackendEnabled()) {
-      const found = PLACES.find((p) => p.place_id === placeId || p.id === placeId) || PLACES[0];
+      const found = PLACES.find((p) => p.place_id === placeId || p.id === placeId) || null;
       return found;
     }
     return request('GET', `/api/v1/places/${placeId}`);
@@ -2223,9 +2223,41 @@ export const api = {
 
   listPhotos: async (limit = 20) => {
     const parsed = Number(limit);
-    const max = Number.isFinite(parsed) ? Math.max(0, parsed) : 20;
+    const max = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 20;
+    if (max === 0) return { photos: [] };
+
+    if (isBackendEnabled()) {
+      try {
+        const offset = Math.floor(Math.random() * 241);
+        const paths = offset > 0
+          ? [`/api/v1/places/search?limit=100&offset=${offset}`, '/api/v1/places/search?limit=100&offset=0']
+          : ['/api/v1/places/search?limit=100&offset=0'];
+        const responses = await Promise.allSettled(paths.map((path) => request('GET', path)));
+        const seenIds = new Set();
+        const combined = [];
+        for (const settled of responses) {
+          if (settled.status !== 'fulfilled') continue;
+          const results = Array.isArray(settled.value?.results) ? settled.value.results : [];
+          for (const item of results) {
+            if (!item || typeof item !== 'object') continue;
+            if (item.id != null) {
+              if (seenIds.has(item.id)) continue;
+              seenIds.add(item.id);
+            }
+            combined.push(item);
+          }
+        }
+        const photos = pickRandomUniquePhotos(combined, { limit: max });
+        if (photos.length > 0) {
+          return { photos };
+        }
+      } catch {
+        // Fallback to local curated catalog below without throwing.
+      }
+    }
+
     return {
-      photos: selectMarqueePhotos(PLACES).slice(0, max)
+      photos: shuffle(selectMarqueePhotos(PLACES)).slice(0, max)
     };
   }
 };
