@@ -1,70 +1,17 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { X } from 'lucide-react';
-import { useEffect, useId, useRef } from 'react';
+import { useId, useRef } from 'react';
+import { useFocusTrap } from '../hooks/useFocusTrap.js';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { cn } from '../lib/cn.js';
-
-const FOCUSABLE =
-  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export default function Modal({ open, onClose, title, children, footer, className }) {
   const { t } = useI18n();
   const reduced = useReducedMotion();
   const titleId = useId();
   const dialogRef = useRef(null);
-  const previouslyFocused = useRef(null);
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        onClose?.();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const node = dialogRef.current;
-      if (!node) return;
-      const focusable = Array.from(node.querySelectorAll(FOCUSABLE)).filter(
-        (el) => el.offsetParent !== null
-      );
-      if (focusable.length === 0) {
-        event.preventDefault();
-        node.focus();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (!node.contains(document.activeElement)) {
-        event.preventDefault();
-        first.focus();
-      } else if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    previouslyFocused.current = document.activeElement;
-    const node = dialogRef.current;
-    const target = node?.querySelector(FOCUSABLE) ?? node;
-    target?.focus();
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      if (previouslyFocused.current instanceof HTMLElement) {
-        previouslyFocused.current.focus();
-      }
-      previouslyFocused.current = null;
-    };
-  }, [open]);
+  useFocusTrap({ active: open, containerRef: dialogRef, onClose });
 
   return (
     <AnimatePresence>

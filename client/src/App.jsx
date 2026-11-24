@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom';
 import AuthModal from './components/AuthModal.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
+import { PlaceDrawerProvider } from './context/PlaceDrawerContext.jsx';
 import { I18nProvider } from './i18n/I18nContext.jsx';
 import LandingPage from './pages/LandingPage.jsx';
 import MyTripsPage from './pages/MyTripsPage.jsx';
@@ -52,17 +53,19 @@ export default function App() {
       <AuthProvider>
         <MotionConfig reducedMotion="user">
           <BrowserRouter>
-            <RouteEffects />
-            <SmoothScroll />
-            <Routes>
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/trips" element={<MyTripsPage />} />
-              <Route path="/trip/:id" element={<TripPage />} />
-              <Route path="/s/:token" element={<SharedTripPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="*" element={<NotFoundPage />} />
-            </Routes>
-            <AuthModal />
+            <PlaceDrawerProvider>
+              <RouteEffects />
+              <SmoothScroll />
+              <Routes>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/trips" element={<MyTripsPage />} />
+                <Route path="/trip/:id" element={<TripPage />} />
+                <Route path="/s/:token" element={<SharedTripPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="*" element={<NotFoundPage />} />
+              </Routes>
+              <AuthModal />
+            </PlaceDrawerProvider>
           </BrowserRouter>
         </MotionConfig>
       </AuthProvider>

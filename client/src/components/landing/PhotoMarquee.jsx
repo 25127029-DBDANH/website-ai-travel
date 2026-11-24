@@ -6,6 +6,7 @@ import { useI18n } from '../../i18n/I18nContext.jsx';
 import { api, assetUrl } from '../../lib/api.js';
 import { cn } from '../../lib/cn.js';
 import { buildMarqueeTrack } from '../../lib/marqueePhotos.js';
+import { useOpenPlace } from '../../context/PlaceDrawerContext.jsx';
 
 const FALLBACK_SURFACES = [
   'bg-slate-200',
@@ -14,7 +15,7 @@ const FALLBACK_SURFACES = [
   'bg-accent-100'
 ];
 
-function MarqueeCard({ card }) {
+function MarqueeCard({ card, onOpen, isCopy }) {
   return (
     <figure className="relative h-40 w-56 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 transition-transform duration-200 ease-out-strong hover:-translate-y-0.5 sm:h-44 sm:w-64">
       {card.src ? (
@@ -51,6 +52,9 @@ function MarqueeCard({ card }) {
           )}
         </figcaption>
       ) : null}
+      {card.seed && (
+        <button type="button" onClick={onOpen} tabIndex={isCopy ? -1 : 0} aria-hidden={isCopy || undefined} aria-label={card.name} className="absolute inset-0 rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500" />
+      )}
     </figure>
   );
 }
@@ -59,6 +63,7 @@ export default function PhotoMarquee() {
   const { lang, t } = useI18n();
   const [photos, setPhotos] = useState(null);
   const reduced = useReducedMotion();
+  const openPlace = useOpenPlace();
   const [inView, setInView] = useState(false);
   const [pageVisible, setPageVisible] = useState(() => !document.hidden);
   const stripRef = useRef(null);
@@ -110,7 +115,8 @@ export default function PhotoMarquee() {
       name: lang === 'vi' && photo.name_vi ? photo.name_vi : photo.name,
       district: photo.district,
       category: photo.category,
-      src: assetUrl(photo.photo_url)
+      src: assetUrl(photo.photo_url),
+      seed: photo
     }));
   }, [photos, lang]);
 
@@ -192,12 +198,17 @@ export default function PhotoMarquee() {
           <div
             className={cn(
               'flex gap-4 px-4',
-              reduced ? 'w-max' : 'w-max animate-marquee group-hover:[animation-play-state:paused]',
+              reduced ? 'w-max' : 'w-max animate-marquee group-hover:[animation-play-state:paused] group-focus-within:[animation-play-state:paused]',
               !scrolling && !reduced && '[animation-play-state:paused]'
             )}
           >
             {track.map((card, index) => (
-              <MarqueeCard key={`${card.key}-${index}`} card={card} />
+              <MarqueeCard
+                key={`${card.key}-${index}`}
+                card={card}
+                isCopy={index >= cards.length}
+                onOpen={() => openPlace({ id: card.seed.place_id, seed: card.seed })}
+              />
             ))}
           </div>
         </div>
