@@ -23,10 +23,12 @@ from app.schemas.ai import (
     SmartSwapOption,
     SmartSwapRequest,
     SmartSwapResponse,
+    TransitInfoResponse,
     TripConceptRequest,
     TripGenerationRequest,
     TripGenerationResponse,
 )
+from app.utils.transit_calculator import estimate_ride_fares, haversine_km
 
 logger = logging.getLogger(__name__)
 ModelT = TypeVar("ModelT", bound=BaseModel)
@@ -73,6 +75,12 @@ _PREFERENCE_CATEGORIES = {
     "nightlife": "entertainment",
 }
 _RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
+_MODE_SPEED_KMH: dict[str, float] = {
+    "walk": 5.0,
+    "grab_bike": 20.0,
+    "grab_car": 25.0,
+    "public": 15.0,
+}
 _WEEKDAYS_VI = (
     "Thứ Hai",
     "Thứ Ba",
@@ -283,13 +291,24 @@ class GeminiService:
                 fallback=lambda: self._fallback_itinerary(request, places),
             )
             result = self._ground_itinerary(generated, request, places)
+            result = TripGenerationResponse(
+                itinerary_items=self._fill_transit_info(
+                    result.itinerary_items, request.transport_mode,
+                ),
+            )
             return self._with_source(result, source)
         except Exception as error:
             logger.warning(
                 "Using local itinerary fallback after invalid AI output (%s: %s).",
                 type(error).__name__, self._safe_error_message(error),
             )
-            return self._with_source(self._fallback_itinerary(request, places), "fallback")
+            fallback_result = self._fallback_itinerary(request, places)
+            fallback_result = TripGenerationResponse(
+                itinerary_items=self._fill_transit_info(
+                    fallback_result.itinerary_items, request.transport_mode,
+                ),
+            )
+            return self._with_source(fallback_result, "fallback")
 
     async def suggest_swaps(
         self,
@@ -774,6 +793,57 @@ class GeminiService:
         if len(options) < 2:
             raise GeminiServiceError("The verified catalog has fewer than two swap alternatives.")
         return SmartSwapResponse(alternatives=options)
+
+    @staticmethod
+    def _fill_transit_info(
+        items: list[ItineraryItemResponse],
+        transport_mode: str,
+    ) -> list[ItineraryItemResponse]:
+        """Fill ``transit_info`` for the 2nd+ stop of each day using haversine + fare estimation."""
+
+        speed_kmh = _MODE_SPEED_KMH.get(transport_mode, 20.0)
+        _MODE_FARE_MAP: dict[str, str] = {
+            "walk": "",
+            "grab_bike": "Bike",
+            "grab_car": "Car",
+            "public": "Bike",
+        }
+        fare_keyword = _MODE_FARE_MAP.get(transport_mode, "Bike")
+
+        sorted_items = sorted(items, key=lambda it: (it.day_number, it.order_index))
+        result: list[ItineraryItemResponse] = []
+        prev: ItineraryItemResponse | None = None
+        for item in sorted_items:
+            if prev is None or item.day_number != prev.day_number:
+                result.append(item)
+                prev = item
+                continue
+
+            dist_km = round(
+                haversine_km(prev.latitude, prev.longitude, item.latitude, item.longitude),
+                2,
+            )
+            duration_min = max(1, round(dist_km / speed_kmh * 60))
+
+            if transport_mode == "walk":
+                fare_vnd = 0
+            else:
+                fares = estimate_ride_fares(dist_km)
+                matched = [f for f in fares if fare_keyword.lower() in f.vehicle_type.lower()]
+                fare_vnd = matched[0].estimated_fare_vnd if matched else 0
+
+            transit = TransitInfoResponse(
+                distance_km=dist_km,
+                duration_min=duration_min,
+                mode=transport_mode,
+                estimated_fare_vnd=fare_vnd,
+                start_time=prev.end_time,
+                end_time=item.start_time,
+            )
+            updated = item.model_copy(update={"transit_info": transit})
+            result.append(updated)
+            prev = item
+        return result
 
     @staticmethod
     def _ground_itinerary(

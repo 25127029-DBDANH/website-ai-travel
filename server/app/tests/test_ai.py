@@ -483,3 +483,226 @@ def test_ground_itinerary_warns_without_raising_when_must_visit_missing(
 
     assert len(grounded.itinerary_items) == 3
     assert any("p-must" in record.message for record in caplog.records)
+
+
+
+# ---------------------------------------------------------------------------
+# Tests for issue #37: transit_info auto-fill & GeminiService fallback coverage
+# ---------------------------------------------------------------------------
+
+
+def _make_place(
+    place_id: str,
+    district: str,
+    category: str = "food",
+    *,
+    lat: float = 10.77,
+    lon: float = 106.69,
+    place_name: str | None = None,
+) -> dict[str, object]:
+    """Return a minimal place dict with explicit coordinates for transit tests."""
+    return {
+        "place_id": place_id,
+        "place_name": place_name or f"Place {place_id}",
+        "category": category,
+        "description": f"Test stop in {district}.",
+        "address": f"Street, {district}",
+        "district": district,
+        "latitude": lat,
+        "longitude": lon,
+        "estimated_cost": 50_000,
+        "photo_url": "",
+        "editorial_score": 4.5,
+        "is_indoor": True,
+        "opening_hours": ["08:00 - 21:00"],
+        "suggested_duration": 60,
+    }
+
+
+def _generation_payload(
+    places_per_day: int = 3,
+    days: int = 1,
+    transport_mode: str = "grab_bike",
+    **overrides: object,
+) -> dict[str, object]:
+    """Build a TripGenerationRequest payload with an approved concept."""
+    concept = {
+        "summary": "Test concept",
+        "highlights": ["Place A"],
+        "recommended_districts": ["Quận 1"],
+        "route_overview": "Quận 1",
+        "confirmation_question": "OK?",
+    }
+    base: dict[str, object] = {
+        "start_location": "Quận 1, TP. Hồ Chí Minh",
+        "budget": 3_000_000,
+        "days": days,
+        "districts": ["Quận 1"],
+        "places_per_day": places_per_day,
+        "companion": "friends",
+        "member_count": 3,
+        "transport_mode": transport_mode,
+        "preferences": ["food", "culture"],
+        "pace": "moderate",
+        "special_notes": "",
+        "approved_concept": concept,
+    }
+    base.update(overrides)
+    return base
+
+
+@pytest.mark.asyncio
+async def test_suggest_concept_fallback_returns_valid_response() -> None:
+    """suggest_concept returns a valid ConceptResponse when no API key is set."""
+    from app.schemas.ai import PlaceResponse, TripConceptRequest
+    from app.services.gemini_service import GeminiService
+
+    places = [
+        PlaceResponse.model_validate(_make_place("p1", "Quận 1", "food")),
+        PlaceResponse.model_validate(_make_place("p2", "Quận 1", "cafe")),
+        PlaceResponse.model_validate(_make_place("p3", "Quận 1", "sightseeing")),
+    ]
+    service = GeminiService(api_key=None)
+    request = TripConceptRequest.model_validate(_concept_payload())
+    concept = await service.suggest_concept(request, places)
+
+    assert concept.source == "fallback"
+    assert len(concept.recommended_districts) >= 1
+    assert len(concept.highlights) >= 1
+    assert concept.summary
+    assert concept.confirmation_question
+
+
+@pytest.mark.asyncio
+async def test_generate_itinerary_fills_transit_info_for_second_stop_onwards() -> None:
+    """generate_itinerary must set transit_info != None for every stop after the first each day."""
+    from app.schemas.ai import PlaceResponse, TripGenerationRequest
+    from app.services.gemini_service import GeminiService
+
+    # Use different coordinates so haversine produces a non-zero distance
+    places = [
+        PlaceResponse.model_validate(
+            _make_place("q1-a", "Quận 1", "food", lat=10.7769, lon=106.7009)
+        ),
+        PlaceResponse.model_validate(
+            _make_place("q1-b", "Quận 1", "cafe", lat=10.7800, lon=106.6950)
+        ),
+        PlaceResponse.model_validate(
+            _make_place("q1-c", "Quận 1", "sightseeing", lat=10.7750, lon=106.6980)
+        ),
+    ]
+    service = GeminiService(api_key=None)
+    request = TripGenerationRequest.model_validate(
+        _generation_payload(places_per_day=3, days=1, transport_mode="grab_bike")
+    )
+    result = await service.generate_itinerary(request, places)
+
+    assert len(result.itinerary_items) == 3
+    assert result.source == "fallback"
+
+    first_item = result.itinerary_items[0]
+    assert first_item.transit_info is None, "First stop of a day should have no transit_info"
+
+    for item in result.itinerary_items[1:]:
+        assert item.transit_info is not None, (
+            f"Stop {item.order_index} (day {item.day_number}) must have transit_info"
+        )
+        assert item.transit_info.distance_km >= 0
+        assert item.transit_info.duration_min >= 1
+        assert item.transit_info.mode == "grab_bike"
+        assert item.transit_info.estimated_fare_vnd >= 0
+
+
+@pytest.mark.asyncio
+async def test_generate_itinerary_transit_info_uses_correct_transport_mode() -> None:
+    """transit_info.mode must match the transport_mode from the request."""
+    from app.schemas.ai import PlaceResponse, TripGenerationRequest
+    from app.services.gemini_service import GeminiService
+
+    places = [
+        PlaceResponse.model_validate(
+            _make_place("a", "Quận 1", "food", lat=10.776, lon=106.700)
+        ),
+        PlaceResponse.model_validate(
+            _make_place("b", "Quận 1", "cafe", lat=10.780, lon=106.695)
+        ),
+        PlaceResponse.model_validate(
+            _make_place("c", "Quận 1", "sightseeing", lat=10.775, lon=106.698)
+        ),
+    ]
+    service = GeminiService(api_key=None)
+
+    for mode in ("walk", "grab_bike", "grab_car", "public"):
+        request = TripGenerationRequest.model_validate(
+            _generation_payload(transport_mode=mode)
+        )
+        result = await service.generate_itinerary(request, places)
+        for item in result.itinerary_items[1:]:
+            assert item.transit_info is not None
+            assert item.transit_info.mode == mode
+
+
+@pytest.mark.asyncio
+async def test_generate_itinerary_walk_mode_fare_is_zero() -> None:
+    """When transport_mode is walk, estimated_fare_vnd should be 0."""
+    from app.schemas.ai import PlaceResponse, TripGenerationRequest
+    from app.services.gemini_service import GeminiService
+
+    places = [
+        PlaceResponse.model_validate(
+            _make_place("w1", "Quận 1", "food", lat=10.776, lon=106.700)
+        ),
+        PlaceResponse.model_validate(
+            _make_place("w2", "Quận 1", "cafe", lat=10.780, lon=106.695)
+        ),
+        PlaceResponse.model_validate(
+            _make_place("w3", "Quận 1", "sightseeing", lat=10.775, lon=106.698)
+        ),
+    ]
+    service = GeminiService(api_key=None)
+    request = TripGenerationRequest.model_validate(
+        _generation_payload(transport_mode="walk")
+    )
+    result = await service.generate_itinerary(request, places)
+    for item in result.itinerary_items[1:]:
+        assert item.transit_info is not None
+        assert item.transit_info.estimated_fare_vnd == 0
+
+
+@pytest.mark.asyncio
+async def test_suggest_swaps_fallback_returns_valid_alternatives() -> None:
+    """suggest_swaps returns at least 2 valid alternatives in fallback mode."""
+    from app.schemas.ai import ItineraryItemResponse, PlaceResponse, SmartSwapRequest
+    from app.services.gemini_service import GeminiService
+
+    places = [
+        PlaceResponse.model_validate(
+            _make_place("cur", "Quận 1", "culture", place_name="Current Place")
+        ),
+        PlaceResponse.model_validate(
+            _make_place("alt1", "Quận 1", "culture", place_name="Alternative 1")
+        ),
+        PlaceResponse.model_validate(
+            _make_place("alt2", "Quận 1", "culture", place_name="Alternative 2")
+        ),
+        PlaceResponse.model_validate(
+            _make_place("alt3", "Quận 1", "culture", place_name="Alternative 3")
+        ),
+    ]
+    current_item = ItineraryItemResponse(
+        **places[0].model_dump(),
+        day_number=1,
+        order_index=1,
+        time_slot="08:30 - 10:00",
+        start_time="08:30",
+        end_time="10:00",
+    )
+    service = GeminiService(api_key=None)
+    request = SmartSwapRequest(current_item=current_item, reason="Muốn đổi chỗ")
+    result = await service.suggest_swaps(request, places)
+
+    assert result.source == "fallback"
+    assert len(result.alternatives) >= 2
+    for alt in result.alternatives:
+        assert alt.place_id != "cur"
+        assert alt.replacement_reason
