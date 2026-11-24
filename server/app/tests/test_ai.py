@@ -196,9 +196,7 @@ async def test_gemini_service_keeps_places_when_avoid_districts_would_empty_cata
 
 
 @pytest_asyncio.fixture
-async def ai_client(
-    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> AsyncClient:
+async def ai_client(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> AsyncClient:
     from app.api.v1.endpoints import ai as ai_endpoint
     from app.schemas.ai import PlaceResponse
     from app.services.gemini_service import GeminiService
@@ -300,9 +298,7 @@ def test_apply_constraints_filters_closed_places_and_keeps_unparseable_hours() -
         PlaceResponse.model_validate(
             _sample_place("unknown-hours", "Quận 1", opening_hours=["Mở cửa cả ngày"])
         ),
-        PlaceResponse.model_validate(
-            _sample_place("empty-hours", "Quận 1", opening_hours=[])
-        ),
+        PlaceResponse.model_validate(_sample_place("empty-hours", "Quận 1", opening_hours=[])),
         PlaceResponse.model_validate(
             _sample_place("avoid-q7", "Quận 7", opening_hours=["08:00 - 17:00"])
         ),
