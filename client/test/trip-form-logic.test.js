@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { translations } from '../src/i18n/translations.js';
 import { parseTripSentence } from '../src/lib/sentenceParser.js';
@@ -98,6 +98,53 @@ test('parseTripSentence: handles 7 Vietnamese sample sentences including triệu
   assert.equal(s7.days, 2);
   assert.equal(s7.group_size, 3);
   assert.deepEqual(s7.preferences, []);
+});
+
+test('parseTripSentence: parses short dates, relative weekend/weekday, children, and elderly phrases', () => {
+  // 1. Short DD/MM date ("ngày 25/12") + children ("có con nhỏ")
+  const d1 = parseTripSentence('Đi chơi 2 ngày từ ngày 25/12 ở Quận 1, có con nhỏ, thích cà phê', NOW);
+  assert.equal(d1.travel_date, '2026-12-25');
+  assert.equal(d1.days, 2);
+  assert.equal(d1.has_children, true);
+  assert.equal(d1.has_elderly, false);
+  assert.equal(d1.companions, 'family');
+
+  // 2. Short DD/MM without "ngày" + rollover to next year ("5/1") + "em bé"
+  const d2 = parseTripSentence('Đi 3 ngày từ 5/1 với em bé, ngân sách 3tr', NOW);
+  assert.equal(d2.travel_date, '2027-01-05');
+  assert.equal(d2.days, 3);
+  assert.equal(d2.has_children, true);
+
+  // 3. Relative Saturday ("thứ 7 này") + elderly ("ông bà")
+  const d3 = parseTripSentence('Thứ 7 này đưa ông bà đi tham quan Quận 1, 2 triệu', NOW);
+  assert.equal(d3.travel_date, '2026-11-28');
+  assert.equal(d3.has_elderly, true);
+  assert.equal(d3.has_children, false);
+  assert.equal(d3.companions, 'family');
+
+  // 4. Relative weekend ("cuối tuần này") + "bố mẹ lớn tuổi" + "trẻ em"
+  const d4 = parseTripSentence('Cuối tuần này đi cùng bố mẹ lớn tuổi và trẻ em ở Quận 3', NOW);
+  assert.equal(d4.travel_date, '2026-11-28');
+  assert.equal(d4.days, 2);
+  assert.equal(d4.has_elderly, true);
+  assert.equal(d4.has_children, true);
+
+  // 5. "ngày 5/12" must NOT confuse 5 with 5 days, and "người già" sets has_elderly
+  const d5 = parseTripSentence('Ngày 5/12 đưa người già đi ăn uống ở Quận 5', NOW);
+  assert.equal(d5.travel_date, '2026-12-05');
+  assert.equal(d5.days, null);
+  assert.equal(d5.has_elderly, true);
+
+  // Wired into applyParsedToForm and reverts cleanly on re-parse
+  const first = applyParsedToForm(defaultTripForm(), d1);
+  assert.equal(first.form.travel_date, '2026-12-25');
+  assert.equal(first.form.has_children, true);
+  assert.equal(first.form.has_elderly, false);
+
+  const second = applyParsedToForm(first.form, d3, first.parse);
+  assert.equal(second.form.travel_date, '2026-11-28');
+  assert.equal(second.form.has_children, false);
+  assert.equal(second.form.has_elderly, true);
 });
 
 test('clampGroupSize & companionsPatch enforce solo=1, couple=2, groups 2..20, colleagues->friends', () => {
@@ -242,13 +289,20 @@ test('validateTripForm requires start_location, positive budget, and at least on
 });
 
 test('TripForm i18n keys exist in both vi and en and TripForm uses no decorative gradients', () => {
-  const source = readFileSync(new URL('../src/components/TripForm.jsx', import.meta.url), 'utf8');
-  const keys = [...source.matchAll(/t\('((?:form|common|preference)\.[\w.]+)'/g)].map((m) => m[1]);
+  const wizardDir = new URL('../src/components/tripForm/', import.meta.url);
+  const files = [
+    new URL('../src/components/TripForm.jsx', import.meta.url),
+    ...readdirSync(wizardDir)
+      .filter((name) => name.endsWith('.jsx'))
+      .map((name) => new URL(name, wizardDir))
+  ];
+  const combinedSource = files.map((fileUrl) => readFileSync(fileUrl, 'utf8')).join('\n');
+  const keys = [...combinedSource.matchAll(/t\('((?:form|common|preference)\.[\w.]+)'/g)].map((m) => m[1]);
   assert.ok(keys.length > 20);
   for (const lang of ['vi', 'en']) {
     for (const key of keys) {
       assert.ok(translations[lang][key], `Missing translation ${lang}.${key}`);
     }
   }
-  assert.equal(/bg-gradient-to|linear-gradient/.test(source), false);
+  assert.equal(/bg-gradient-to|linear-gradient|radial-gradient|bg-clip-text/.test(combinedSource), false);
 });

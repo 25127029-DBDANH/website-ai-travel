@@ -116,8 +116,8 @@ function hasKeyword(text, keyword) {
 
 function parseDays(text) {
   const dayMatch =
-    text.match(/(\d{1,2})\s*(?:[a-z]+\s+){0,2}?(?:day|days|ngay)\b/i) ||
-    text.match(/\b(?:day|days|ngay)\s*(\d{1,2})\b/i);
+    text.match(/(?<!\/)\b(\d{1,2})\s*(?:[a-z]+\s+){0,2}?(?:day|days|ngay)\b/i) ||
+    text.match(/\b(?:day|days|ngay)\s*(\d{1,2})(?!\s*\/\s*\d)\b/i);
   if (dayMatch) {
     const value = Number(dayMatch[1]);
     if (value >= 1 && value <= 14) return value;
@@ -175,10 +175,19 @@ function parseBudget(text) {
 const COMPANION_PATTERNS = {
   solo: /\b(one person|solo|alone|by myself|mot minh|1 minh)\b/,
   couple: /\b(couple|partner|girlfriend|boyfriend|wife|husband|cap doi|ban gai|ban trai|vo chong|nguoi yeu|romantic|lang man)\b/,
-  family: /\b(family|kids?|children|gia dinh|tre em|con nho|bo me|ba me)\b/,
+  family: /\b(family|kids?|children|gia dinh|tre em|con nho|em be|bo me|ba me|ong ba)\b/,
   colleagues: /\b(colleagues?|coworkers?|company|dong nghiep|cong ty|team building)\b/,
   friends: /\b(friends?|squad|ban be|nhom ban|hoi ban|ban than)\b/
 };
+
+const HAS_CHILDREN_PATTERN =
+  /\b(co con nho|con nho|em be|tre em|tre nho|be nho|with kids?|with children|young kids?|toddler|baby|babies)\b/;
+const NO_CHILDREN_PATTERN =
+  /\b(khong co|khong|no|without)\s+(con nho|em be|tre em|tre nho|kids?|children)\b/;
+const HAS_ELDERLY_PATTERN =
+  /\b(ong ba|bo me lon tuoi|ba me lon tuoi|cha me lon tuoi|nguoi gia|nguoi lon tuoi|elderly|senior citizens?|grandparents?)\b/;
+const NO_ELDERLY_PATTERN =
+  /\b(khong co|khong|no|without)\s+(ong ba|nguoi gia|nguoi lon tuoi|elderly|grandparents?)\b/;
 
 // Check grab_car before grab_bike so "grab car" / "grabcar" does not fall through to "grab".
 const TRANSPORT_PATTERNS = {
@@ -271,17 +280,69 @@ function parseDistricts(text) {
   };
 }
 
+function formatCalendarDate(year, month, day) {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const candidate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    candidate.getUTCFullYear() !== year ||
+    candidate.getUTCMonth() + 1 !== month ||
+    candidate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function nextWeekdayDate(todayStr, targetDow) {
+  const base = new Date(`${todayStr}T00:00:00Z`);
+  const diff = (targetDow - base.getUTCDay() + 7) % 7;
+  return addDateDays(todayStr, diff);
+}
+
+const THIS_WEEKDAY_PATTERNS = [
+  [/\b(cuoi tuan nay|this weekend)\b/, 6],
+  [/\b(thu\s*7\s*nay|thu\s*bay\s*nay|t7\s*nay|this saturday)\b/, 6],
+  [/\b(chu nhat nay|cn\s*nay|this sunday)\b/, 0],
+  [/\b(thu\s*2\s*nay|thu\s*hai\s*nay|this monday)\b/, 1],
+  [/\b(thu\s*3\s*nay|thu\s*ba\s*nay|this tuesday)\b/, 2],
+  [/\b(thu\s*4\s*nay|thu\s*tu\s*nay|this wednesday)\b/, 3],
+  [/\b(thu\s*5\s*nay|thu\s*nam\s*nay|this thursday)\b/, 4],
+  [/\b(thu\s*6\s*nay|thu\s*sau\s*nay|this friday)\b/, 5]
+];
+
 function parseTravelDate(text, now) {
+  const todayStr = hcmcDate(now);
+
   const iso = text.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
-  const local = text.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
-  const explicit = iso
-    ? `${iso[1]}-${iso[2]}-${iso[3]}`
-    : local
-      ? `${local[3]}-${local[2].padStart(2, '0')}-${local[1].padStart(2, '0')}`
-      : null;
-  if (explicit) return explicit;
-  if (/\b(tomorrow|ngay mai)\b/.test(text)) return addDateDays(hcmcDate(now), 1);
-  if (/\b(today|hom nay)\b/.test(text)) return hcmcDate(now);
+  if (iso) {
+    return formatCalendarDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+  }
+
+  const localFull = text.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
+  if (localFull) {
+    return formatCalendarDate(Number(localFull[3]), Number(localFull[2]), Number(localFull[1]));
+  }
+
+  const localShort = text.match(/(?:^|[^0-9/])(?:ngay\s*)?(\d{1,2})\/(\d{1,2})(?!\s*\/\s*\d)\b/);
+  if (localShort) {
+    const day = Number(localShort[1]);
+    const month = Number(localShort[2]);
+    const todayYear = Number(todayStr.slice(0, 4));
+    const thisYearDate = formatCalendarDate(todayYear, month, day);
+    if (thisYearDate) {
+      return thisYearDate >= todayStr ? thisYearDate : formatCalendarDate(todayYear + 1, month, day);
+    }
+    const nextYearDate = formatCalendarDate(todayYear + 1, month, day);
+    if (nextYearDate) return nextYearDate;
+  }
+
+  for (const [pattern, dow] of THIS_WEEKDAY_PATTERNS) {
+    if (pattern.test(text)) return nextWeekdayDate(todayStr, dow);
+  }
+
+  if (/\b(tomorrow|ngay mai)\b/.test(text)) return addDateDays(todayStr, 1);
+  if (/\b(today|hom nay)\b/.test(text)) return todayStr;
   return null;
 }
 
@@ -299,6 +360,8 @@ export function parseTripSentence(sentence, now = new Date()) {
   const rawTransport = firstMatching(normalized, TRANSPORT_PATTERNS);
   const transportation = rawTransport ? AI_TRANSPORT_MODE[rawTransport] || rawTransport : null;
   const { district, start_location, avoid_districts } = parseDistricts(normalized);
+  const has_children = HAS_CHILDREN_PATTERN.test(normalized) && !NO_CHILDREN_PATTERN.test(normalized);
+  const has_elderly = HAS_ELDERLY_PATTERN.test(normalized) && !NO_ELDERLY_PATTERN.test(normalized);
 
   return {
     days: parseDays(normalized),
@@ -308,6 +371,8 @@ export function parseTripSentence(sentence, now = new Date()) {
     transportation,
     pace: firstMatching(normalized, PACE_PATTERNS),
     travel_date: parseTravelDate(normalized, now),
+    has_children,
+    has_elderly,
     group_size: parseGroupSize(normalized),
     dietary: Object.entries(DIETARY_PATTERNS)
       .filter(([, pattern]) => pattern.test(normalized))

@@ -1,9 +1,11 @@
 import { preferenceOptions } from '../i18n/translations.js';
 import {
+  addDateDays,
   AI_TRANSPORT_MODE,
   CATALOG_DISTRICTS,
   defaultTripOptions,
   DISTRICTS,
+  hcmcDate,
   normalizeCompanion,
   normalizeTransportMode,
   PLACES_PER_DAY_BY_PACE,
@@ -16,6 +18,8 @@ export const BUDGET_PER_PERSON_PER_DAY = [500_000, 1_000_000, 2_000_000];
 export const DEFAULT_BUDGET_PER_PERSON_PER_DAY = 1_000_000;
 export const FORM_DIETARY = ['vegetarian', 'vegan', 'no_seafood', 'no_spicy', 'nut_allergy'];
 export const MAX_AVOID_DISTRICTS = 3;
+export const MAX_MUST_VISIT = 5;
+export const MIN_DAY_HOURS_MINUTES = 240;
 export const GROUP_COMPANIONS = ['family', 'friends'];
 export const LONG_TRIP_DAYS = 5;
 
@@ -84,6 +88,12 @@ export function describeFilledFields(keys, form, t, formatVndFn, lang) {
           return t('form.field.dietary', {
             value: form.dietary.map((item) => t(`form.option.dietary.${item}`)).join(', ')
           });
+        case 'travel_date':
+          return form.travel_date ? t('form.field.travel_date', { value: form.travel_date }) : null;
+        case 'has_children':
+          return form.has_children ? t('form.field.has_children') : null;
+        case 'has_elderly':
+          return form.has_elderly ? t('form.field.has_elderly') : null;
         case 'avoid_districts':
           return t('form.field.avoid_districts', { value: form.avoid_districts.join(', ') });
         default:
@@ -113,6 +123,14 @@ export function defaultTripForm(startLocation = 'Quận 1, TP. Hồ Chí Minh') 
     ...defaultTripOptions(),
     start_location: startLocation,
     days,
+    travel_date: '',
+    day_start: '',
+    day_end: '',
+    has_children: false,
+    has_elderly: false,
+    mobility: 'normal',
+    prefer_indoor: false,
+    must_visit: [],
     group_size,
     budget_preset,
     budget: budgetPresetTotal(budget_preset, days, group_size),
@@ -195,19 +213,26 @@ export function districtFromStartLocation(startLocation) {
   return matches.find(([pattern]) => pattern.test(value))?.[1] || 'Quận 1';
 }
 
-export function buildSpecialNotes(quickNotes = [], customNotes = '') {
+export function rawSpecialNotes(quickNotes = [], customNotes = '') {
   const parts = (quickNotes || [])
     .map((id) => QUICK_NOTE_LABELS[id])
     .filter(Boolean);
   const trimmed = String(customNotes || '').trim();
   if (trimmed) parts.push(trimmed);
-  return parts.join(', ').slice(0, 500);
+  return parts.join(', ');
+}
+
+export function buildSpecialNotes(quickNotes = [], customNotes = '') {
+  return rawSpecialNotes(quickNotes, customNotes).slice(0, 500);
 }
 
 function parsedPatch(parsed) {
   const patch = {};
   if (parsed.start_location) patch.start_location = parsed.start_location;
   if (parsed.days) patch.days = parsed.days;
+  if (parsed.travel_date) patch.travel_date = parsed.travel_date;
+  if (parsed.has_children) patch.has_children = true;
+  if (parsed.has_elderly) patch.has_elderly = true;
   if (parsed.budget) {
     patch.budget = parsed.budget;
     patch.budget_preset = null;
@@ -286,7 +311,57 @@ export function applyParsedToForm(form, parsed, lastParse = null) {
   };
 }
 
-export function validateTripForm(form, budgetDraft = null) {
+export function parseTimeToMinutes(value) {
+  const match = String(value || '').trim().match(/^(\d{2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+export function isValidTravelDate(dateStr, now = new Date()) {
+  const value = String(dateStr || '').trim();
+  if (!value) return true;
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (
+    check.getUTCFullYear() !== year ||
+    check.getUTCMonth() + 1 !== month ||
+    check.getUTCDate() !== day
+  ) {
+    return false;
+  }
+  const today = hcmcDate(now);
+  const minDate = addDateDays(today, -1);
+  const maxDate = addDateDays(today, 365);
+  return value >= minDate && value <= maxDate;
+}
+
+export function validateDayHours(dayStart, dayEnd) {
+  const start = String(dayStart || '').trim();
+  const end = String(dayEnd || '').trim();
+  if (!start && !end) return {};
+  if (start && !end) return { day_end: 'day_hours_incomplete' };
+  if (!start && end) return { day_start: 'day_hours_incomplete' };
+
+  const startMins = parseTimeToMinutes(start);
+  const endMins = parseTimeToMinutes(end);
+  const errors = {};
+  if (startMins === null) errors.day_start = 'day_hours';
+  if (endMins === null) errors.day_end = 'day_hours';
+  if (Object.keys(errors).length > 0) return errors;
+  if (endMins - startMins < MIN_DAY_HOURS_MINUTES) {
+    return { day_end: 'day_hours_min' };
+  }
+  return {};
+}
+
+export function validateTripForm(form, budgetDraft = null, now = new Date()) {
   const errors = {};
   const start = String(form.start_location || '').trim();
   if (!start || start.length > 200) {
@@ -294,6 +369,9 @@ export function validateTripForm(form, budgetDraft = null) {
   }
   if (!Number.isInteger(form.days) || form.days < 1 || form.days > 14) {
     errors.days = 'days';
+  }
+  if (!isValidTravelDate(form.travel_date, now)) {
+    errors.travel_date = 'travel_date';
   }
   if (!Number.isInteger(form.group_size) || form.group_size < 1 || form.group_size > 20) {
     errors.group_size = 'group_size';
@@ -313,8 +391,13 @@ export function validateTripForm(form, budgetDraft = null) {
     errors.preferences = 'preferences';
   }
 
-  const notes = buildSpecialNotes(form.quick_notes, form.custom_notes);
-  if (notes.length > 500) {
+  Object.assign(errors, validateDayHours(form.day_start, form.day_end));
+
+  if (Array.isArray(form.must_visit) && form.must_visit.length > MAX_MUST_VISIT) {
+    errors.must_visit = 'must_visit';
+  }
+
+  if (rawSpecialNotes(form.quick_notes, form.custom_notes).length > 500) {
     errors.special_notes = 'special_notes';
   }
 
@@ -337,7 +420,7 @@ export function buildAiRequest(form) {
     .filter((district) => DISTRICTS.includes(district))
     .slice(0, MAX_AVOID_DISTRICTS);
 
-  return {
+  const req = {
     start_location,
     budget: Math.round(Number(form.budget) || 0),
     days,
@@ -352,6 +435,39 @@ export function buildAiRequest(form) {
     dietary,
     avoid_districts
   };
+
+  const travelDate = String(form.travel_date || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(travelDate)) {
+    req.travel_date = travelDate;
+  }
+
+  const dayStart = String(form.day_start || '').trim();
+  const dayEnd = String(form.day_end || '').trim();
+  if (
+    dayStart &&
+    dayEnd &&
+    Object.keys(validateDayHours(dayStart, dayEnd)).length === 0
+  ) {
+    req.day_start = dayStart;
+    req.day_end = dayEnd;
+  }
+
+  if (form.has_children === true) req.has_children = true;
+  if (form.has_elderly === true) req.has_elderly = true;
+  if (form.mobility === 'limited') req.mobility = 'limited';
+  if (form.prefer_indoor === true) req.prefer_indoor = true;
+
+  const mustVisitIds = [];
+  for (const item of form.must_visit || []) {
+    const id = typeof item === 'string' ? item.trim() : String(item?.id ?? item?.place_id ?? '').trim();
+    if (id && !mustVisitIds.includes(id)) mustVisitIds.push(id);
+    if (mustVisitIds.length >= MAX_MUST_VISIT) break;
+  }
+  if (mustVisitIds.length > 0) {
+    req.must_visit_ids = mustVisitIds;
+  }
+
+  return req;
 }
 
 export function buildTripCreatePayload(aiRequest, generated, source = 'form') {

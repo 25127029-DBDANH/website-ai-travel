@@ -129,6 +129,9 @@ export function hasParsedTripContent(parsed) {
         parsed.start_location ||
         parsed.district ||
         parsed.pace ||
+        parsed.travel_date ||
+        parsed.has_children ||
+        parsed.has_elderly ||
         parsed.dietary?.length ||
         parsed.avoid_districts?.length)
   );
