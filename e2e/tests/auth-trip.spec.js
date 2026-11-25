@@ -67,7 +67,7 @@ test('register, logout/login, create a trip via form, and verify it in My Trips'
   });
 
   await test.step('Create a trip through the wizard and verify itinerary stops', async () => {
-    const tripBasicsHeading = page.getByRole('heading', { level: 3, name: 'Trip basics' });
+    const tripBasicsHeading = page.getByRole('heading', { level: 3, name: 'Trip basics', exact: true });
     await tripBasicsHeading.scrollIntoViewIfNeeded();
     await expect(tripBasicsHeading).toBeVisible();
 
@@ -77,21 +77,21 @@ test('register, logout/login, create a trip via form, and verify it in My Trips'
     const nextButton = page.getByRole('button', { name: 'Next', exact: true });
 
     await nextButton.click();
-    await expect(page.getByRole('heading', { level: 3, name: 'Who is going' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 3, name: 'Who is going', exact: true })).toBeVisible();
 
     await nextButton.click();
-    await expect(page.getByRole('heading', { level: 3, name: 'Budget' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 3, name: 'Budget', exact: true })).toBeVisible();
 
     await nextButton.click();
-    await expect(page.getByRole('heading', { level: 3, name: 'Style & pace' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 3, name: 'Style & pace', exact: true })).toBeVisible();
 
     await nextButton.click();
     await expect(
-      page.getByRole('heading', { level: 3, name: 'Food & transit' })
+      page.getByRole('heading', { level: 3, name: 'Food & transit', exact: true })
     ).toBeVisible();
 
     await page.getByRole('button', { name: 'Skip, review' }).click();
-    await expect(page.getByRole('heading', { level: 3, name: 'Review trip' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 3, name: 'Review trip', exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Build my itinerary' }).click();
 
