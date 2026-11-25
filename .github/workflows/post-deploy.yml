@@ -1,20 +1,39 @@
 name: Post-Deploy Smoke
 
 on:
-  push:
-    branches: [main]
+  workflow_call:
+    inputs:
+      expected_commit:
+        description: "Expected backend git commit SHA (defaults to github.sha)"
+        required: false
+        type: string
+        default: ""
+      require_commit:
+        description: "Require /health/ready commit to match expected_commit"
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: "Expected backend git commit SHA (optional)"
+        required: false
+        type: string
+        default: ""
+      require_commit:
+        description: "Require /health/ready commit to match expected_commit"
+        required: false
+        type: boolean
+        default: false
   schedule:
     # 07:00 giờ Việt Nam (UTC+7) hằng ngày
     - cron: "0 0 * * *"
-  # Vercel GitHub integration tạo sự kiện deployment_status (hiện vẫn hỗ trợ song song với repository_dispatch)
-  deployment_status:
 
 permissions:
   contents: read
 
 concurrency:
-  group: post-deploy-${{ github.event_name }}-${{ github.sha }}
+  group: post-deploy-${{ github.workflow }}-${{ github.event_name }}-${{ inputs.expected_commit || github.sha }}
   cancel-in-progress: false
 
 jobs:
@@ -22,12 +41,6 @@ jobs:
     name: Post-deploy smoke (production)
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    # Chỉ chạy khi không phải deployment_status, hoặc deployment_status là Production thành công
-    if: >-
-      github.event_name != 'deployment_status' ||
-      (github.event.deployment_status.state == 'success' &&
-      (github.event.deployment_status.environment == 'Production' ||
-      github.event.deployment.environment == 'Production'))
 
     steps:
       - name: Check production URL variables
@@ -56,39 +69,6 @@ jobs:
       - name: Checkout repository
         if: steps.config.outputs.configured == 'true'
         uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Determine backend commit requirement
-        id: commit_policy
-        if: steps.config.outputs.configured == 'true'
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BEFORE: ${{ github.event.before }}
-          SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          REQUIRE_COMMIT="false"
-          if [ "$EVENT_NAME" = "push" ]; then
-            if [ -z "$BEFORE" ] || [[ "$BEFORE" =~ ^0+$ ]]; then
-              REQUIRE_COMMIT="true"
-              echo "INFO: Initial/zero before SHA on push; requiring backend commit match."
-            elif CHANGED_FILES="$(git diff --name-only "$BEFORE" "$SHA")"; then
-              if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(server/|render\.yaml$)'; then
-                REQUIRE_COMMIT="true"
-                echo "INFO: Backend or render.yaml changed; requiring backend commit match."
-              else
-                REQUIRE_COMMIT="false"
-                echo "INFO: No server/ or render.yaml changes in push; skipping backend commit match."
-              fi
-            else
-              REQUIRE_COMMIT="true"
-              echo "INFO: git diff failed for ${BEFORE}..${SHA}; requiring backend commit match."
-            fi
-          else
-            echo "INFO: Event ${EVENT_NAME}; skipping backend commit match."
-          fi
-          echo "require_commit=${REQUIRE_COMMIT}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Python
         if: steps.config.outputs.configured == 'true'
@@ -108,10 +88,10 @@ jobs:
         if: steps.config.outputs.configured == 'true'
         env:
           PROD_API_URL: ${{ steps.config.outputs.api_url }}
-          EXPECTED_COMMIT: ${{ github.sha }}
-          # push vào main chỉ bắt buộc commit khớp github.sha khi server/ hoặc render.yaml thay đổi (theo buildFilter trên Render);
-          # schedule/workflow_dispatch/deployment_status hoặc push chỉ sửa client/ chỉ cần status == ready
-          REQUIRE_COMMIT: ${{ steps.commit_policy.outputs.require_commit }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit || github.sha }}
+          # Caller (deploy.yml) truyền require_commit=true khi server/ hoặc render.yaml thay đổi;
+          # schedule / workflow_dispatch mặc định false (chỉ kiểm tra status == ready)
+          REQUIRE_COMMIT: ${{ inputs.require_commit == true }}
         run: |
           python - <<'PY'
           import json

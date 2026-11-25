@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -75,14 +76,67 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 # CORS
 # ---------------------------------------------------------------------------
-_cors_raw = os.getenv("CORS_ORIGINS") or os.getenv("FRONTEND_ORIGINS") or settings.CORS_ORIGINS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[origin.strip() for origin in _cors_raw.split(",") if origin.strip()],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def _parse_cors_origins(raw: str) -> list[str]:
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
+def _resolve_cors_origin_regex(raw_regex: str | None) -> str | None:
+    """Validate optional CORS_ORIGIN_REGEX; return None when unset or invalid.
+
+    Anchor the regex with ``^...$`` and scope it to this project and Vercel
+    team slug, for example::
+
+        ^https://website-ai-travel-[a-z0-9-]+-<team-slug>\\.vercel\\.app$
+
+    Never use ``.*\\.vercel\\.app``, which would open CORS to every app on Vercel.
+    """
+    if not raw_regex:
+        return None
+    pattern = raw_regex.strip()
+    if not pattern:
+        return None
+    try:
+        re.compile(pattern)
+    except re.error as exc:
+        logger.warning(
+            "Invalid CORS_ORIGIN_REGEX %r (%s); ignoring regex and using CORS_ORIGINS only.",
+            pattern,
+            exc,
+        )
+        return None
+    return pattern
+
+
+def configure_cors(
+    application: FastAPI,
+    *,
+    cors_origins: str | None = None,
+    cors_origin_regex: str | None = None,
+) -> None:
+    """Attach CORSMiddleware using explicit origins and optional preview regex."""
+    raw_origins = (
+        cors_origins
+        if cors_origins is not None
+        else (os.getenv("CORS_ORIGINS") or os.getenv("FRONTEND_ORIGINS") or settings.CORS_ORIGINS)
+    )
+    if cors_origin_regex is not None:
+        raw_regex = cors_origin_regex
+    elif "CORS_ORIGIN_REGEX" in os.environ:
+        raw_regex = os.environ["CORS_ORIGIN_REGEX"]
+    else:
+        raw_regex = settings.CORS_ORIGIN_REGEX
+
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=_parse_cors_origins(raw_origins),
+        allow_origin_regex=_resolve_cors_origin_regex(raw_regex),
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+
+configure_cors(app)
 
 # ---------------------------------------------------------------------------
 # Router (already prefixed with /api/v1)

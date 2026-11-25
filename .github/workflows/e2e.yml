@@ -1,18 +1,17 @@
 name: E2E (Playwright)
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.workflow != 'Deploy production' && github.ref != 'refs/heads/main' }}
 
 jobs:
   e2e:

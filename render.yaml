@@ -17,8 +17,8 @@ services:
     # Kiểm tra kết nối DB thật (SELECT 1) và bảng places đã seed trước khi Render chuyển traffic sang bản deploy mới
     healthCheckPath: /health/ready
 
-    # Chỉ tự động deploy khi toàn bộ CI checks trên nhánh liên kết (main) pass
-    autoDeployTrigger: checksPass
+    # Tắt auto-deploy: deploy do GitHub Actions gọi deploy hook
+    autoDeployTrigger: "off"
 
     # Đường dẫn buildFilter tính từ gốc repository (không phụ thuộc rootDir)
     buildFilter:
@@ -54,4 +54,8 @@ services:
       - key: GOOGLE_PLACES_API_KEY
         sync: false
       - key: CORS_ORIGINS
+        sync: false
+      # Regex domain Vercel preview của project (PR preview gọi API production). Ví dụ:
+      # ^https://website-ai-travel-[a-z0-9-]+-<team-slug>\.vercel\.app$  (KHÔNG dùng .*\.vercel\.app)
+      - key: CORS_ORIGIN_REGEX
         sync: false

@@ -39,7 +39,7 @@ Backend xác thực ID token trả về từ nút **Google Sign-In (GIS)**, nên
 > **Thứ tự:** Render đọc `render.yaml` từ nhánh `main`, nên chỉ làm bước này **sau khi PR thêm `render.yaml` đã merge**. Bước 1 và 2 làm trước được.
 
 - [ ] Mở [Render Dashboard](https://dashboard.render.com) → **New + → Blueprint**.
-- [ ] Kết nối GitHub và chọn repository này (nhánh `main`). Render sẽ tự đọc file [`render.yaml`](../render.yaml) ở gốc repo (`saigon-guide-api`, region Singapore, Python `3.12.11`, `autoDeployTrigger: checksPass`).
+- [ ] Kết nối GitHub và chọn repository này (nhánh `main`). Render sẽ tự đọc file [`render.yaml`](../render.yaml) ở gốc repo (`saigon-guide-api`, region Singapore, Python `3.12.11`, `autoDeployTrigger: "off"` — deploy do GitHub Actions gọi deploy hook).
 - [ ] Nhập các biến môi trường `sync: false` được Render hỏi trên giao diện:
   - `DATABASE_URL`: chuỗi pooled Neon từ bước 1.
   - `GEMINI_API_KEY`: API key Gemini từ Google AI Studio.
@@ -79,7 +79,7 @@ Backend xác thực ID token trả về từ nút **Google Sign-In (GIS)**, nên
 
 ## 6. Bật Branch Protection trên GitHub cho `main`
 
-Nhờ `autoDeployTrigger: checksPass` trong `render.yaml`, Render chỉ tự động deploy khi các check CI trên `main` xanh.
+Branch Protection chặn merge PR khi check CI chưa xanh; sau khi merge vào `main`, workflow `Deploy production` ([`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml)) điều khiển toàn bộ quá trình kiểm tra và deploy Render → Vercel → Smoke.
 
 - [ ] Vào GitHub repo → **Settings → Branches** (hoặc **Rules → Rulesets**) → tạo rule cho nhánh `main`.
 - [ ] Bật **Require a pull request before merging** (khuyến nghị).
@@ -112,21 +112,61 @@ Nhờ `autoDeployTrigger: checksPass` trong `render.yaml`, Render chỉ tự đ�
 
 ---
 
-## 9. Luồng CI/CD Tổng Quan
+## 9. CI/CD bằng GitHub Actions
+
+GitHub Actions điều khiển toàn bộ quá trình deploy production qua [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml). Render và Vercel **không** tự deploy theo Git nữa — chỉ deploy khi toàn bộ CI (`ci.yml`, `api-smoke.yml`, `e2e.yml`) trên `main` đã xanh, theo thứ tự **Backend → Frontend → Smoke production**.
+
+### Sơ đồ luồng
 
 ```mermaid
 flowchart LR
-    Dev["Developer push / PR"] --> GHA["GitHub Actions CI"]
-    GHA --> FE["Frontend: npm test + npm run build"]
-    GHA --> BE["Backend: ruff + pytest"]
-    GHA --> PG["Postgres 16: create_tables x2 + seed_places"]
-    FE --> Gate{"CI pass trên main?"}
-    BE --> Gate
-    PG --> Gate
-    Gate -- "Pass" --> Render["Render autoDeployTrigger: checksPass (server/**)"]
-    Gate -- "Fail" --> Block["Chặn deploy backend"]
-    Render --> Neon[("Neon Postgres Singapore")]
-    Dev --> Vercel["Vercel Auto Deploy (client/)"]
-    Vercel --> User["Trình duyệt người dùng"]
-    User --> Render
+    Dev["Push / Merge vào main"] --> CD["deploy.yml (concurrency: deploy-production)"]
+    CD --> CI["ci.yml (FE + BE + Postgres + Docker)"]
+    CD --> API["api-smoke.yml (Postgres + uvicorn)"]
+    CD --> E2E["e2e.yml (Playwright)"]
+    CD --> Diff["changes (git diff server/** & render.yaml)"]
+    CI --> Gate{"Tất cả CI pass?"}
+    API --> Gate
+    E2E --> Gate
+    Diff --> Gate
+    Gate -- "Fail" --> Stop["Chặn deploy production"]
+    Gate -- "Pass & backend đổi" --> BE["deploy-backend: Render Deploy Hook (?ref=sha) + poll /health/ready"]
+    Gate -- "Pass & chỉ đổi FE/docs" --> FE["deploy-frontend: Vercel CLI (pull → build --prod → deploy --prebuilt --prod)"]
+    BE --> FE
+    FE --> Smoke["post-deploy.yml: /health/ready + smoke_api --prod + Vercel SPA + CORS"]
+    BE -.-> Neon[("Neon Postgres Singapore")]
 ```
+
+### Secrets và Variables cần cấu hình trên GitHub
+
+- **Nơi đặt:** GitHub repo → **Settings → Environments → New environment** tên `production` (nên đặt toàn bộ secret deploy trong environment `production`, hoặc trong **Settings → Secrets and variables → Actions → Secrets**). Các biến URL không nhạy cảm đặt tại **Settings → Secrets and variables → Actions → Variables**: `PROD_API_URL`, `PROD_WEB_URL`.
+- Nếu thiếu bất kỳ secret nào dưới đây, job deploy sẽ **fail ngay với `::error::`** (không skip im lặng).
+
+| Tên | Loại | Cách lấy |
+| --- | --- | --- |
+| `RENDER_DEPLOY_HOOK_URL` | Secret | Render Dashboard → service `saigon-guide-api` → **Settings → Deploy Hook** → copy URL (`https://api.render.com/deploy/srv-...?key=...`). Giữ bí mật, không in ra log. |
+| `VERCEL_TOKEN` | Secret | Vercel Dashboard → **Account Settings → Tokens → Create Token** (chọn scope phù hợp với team/tài khoản chứa project). |
+| `VERCEL_ORG_ID` | Secret | Chạy `npx vercel link` trong thư mục `client/` rồi mở `client/.vercel/project.json`, lấy giá trị `orgId` *(không commit thư mục `.vercel/`)*. |
+| `VERCEL_PROJECT_ID` | Secret | Lấy giá trị `projectId` trong cùng file `client/.vercel/project.json` sau bước `vercel link`. |
+| `PROD_API_URL` | Variable | URL backend Render, ví dụ `https://saigon-guide-api.onrender.com` (không có `/` cuối). |
+| `PROD_WEB_URL` | Variable | URL frontend Vercel, ví dụ `https://saigon-guide.vercel.app` (không có `/` cuối). |
+
+> **Lưu ý về Root Directory = `client` khi chạy Vercel CLI:** Trong `deploy.yml`, các lệnh `vercel pull`, `vercel build --prod`, và `vercel deploy --prebuilt --prod` chạy ở **gốc repository** (không `cd client`), vì Vercel CLI đọc `rootDirectory: "client"` từ `.vercel/project.json` sau bước `vercel pull` và tự trỏ vào `client/` khi build.
+
+### 2 việc bắt buộc tắt trên Dashboard
+
+Để tránh Render hoặc Vercel tự deploy song song với GitHub Actions:
+
+1. **Render:** `saigon-guide-api` → **Settings → Build & Deploy → Auto-Deploy = Off** *(đã đồng bộ trong [`render.yaml`](../render.yaml) với `autoDeployTrigger: "off"`).*
+2. **Vercel:** Project → **Settings → Git** tắt tự động deploy theo Git *(đã đồng bộ trong [`client/vercel.json`](../client/vercel.json) với `"git": { "deploymentEnabled": false }`; preview deployment do workflow riêng quản lý).*
+
+### Preview cho từng PR (`preview.yml`)
+
+- Dùng chung 3 secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`. Thiếu secret hoặc PR từ fork thì workflow **skip** (không fail).
+- Preview gọi **API production**. Trên Render đặt `CORS_ORIGIN_REGEX` = `^https://website-ai-travel-[a-z0-9-]+-<team-slug>\.vercel\.app$` (thay `<team-slug>`). **Không** dùng `.*\.vercel\.app`.
+- Trên Vercel đặt env `VITE_*` cho môi trường **Preview**. Nếu bật Deployment Protection cho Preview thì bước `curl` kiểm preview sẽ nhận 401.
+
+### Cách Rollback khi production gặp sự cố
+
+- **Backend (Render):** Mở **Render Dashboard → `saigon-guide-api` → Events** (hoặc **Deploys**) → chọn bản deploy ổn định gần nhất → bấm **Rollback to this deploy**.
+- **Frontend (Vercel):** Chạy `vercel rollback` bằng Vercel CLI (hoặc mở **Vercel Dashboard → Project → Deployments** → chọn bản deploy ổn định trước đó → bấm **… → Promote to Production**).
