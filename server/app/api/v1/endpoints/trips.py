@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user, get_optional_user
+from app.core.dependencies import get_current_user
 from app.db.models import Trip, User
 from app.db.session import get_db
 from app.schemas.trip import (
@@ -91,7 +91,11 @@ def _compute_budget(trip: Trip, items: list[dict]) -> BudgetSummary:
     total = activities_total + transit_total
     target = trip.budget or 0
     pct = round((total / target) * 100) if target else 0
-    health = "over_budget" if total > target else ("near_budget" if total > target * 0.85 else "under_budget")
+    health = (
+        "over_budget"
+        if total > target
+        else ("near_budget" if total > target * 0.85 else "under_budget")
+    )
 
     return BudgetSummary(
         total_budget=target,
@@ -349,7 +353,9 @@ async def update_trip(
         trip.place_count = len(payload.itinerary_items)
         if payload.itinerary_items:
             trip.cover_photo = payload.itinerary_items[0].get("photo_url") or trip.cover_photo
-            trip.cover_place_name = payload.itinerary_items[0].get("place_name") or trip.cover_place_name
+            trip.cover_place_name = (
+                payload.itinerary_items[0].get("place_name") or trip.cover_place_name
+            )
         trip.total_estimated = _compute_budget(trip, payload.itinerary_items).total_estimated
     trip.updated_at = utc_now()
     await db.flush()
@@ -470,7 +476,6 @@ async def create_share_link(
         await db.flush()
         await db.refresh(trip)
 
-    base = str(request.base_url).rstrip("/")
     # Share URL points to frontend
     share_url = f"{request.headers.get('origin', 'http://localhost:5173')}/s/{trip.share_token}"
     return ShareResponse(token=trip.share_token, share_url=share_url)

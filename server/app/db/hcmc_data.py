@@ -1851,6 +1851,7 @@ async def seed_places() -> None:
     Compatible with both SQLite (aiosqlite) and PostgreSQL (asyncpg).
     """
     from sqlalchemy import select
+
     from app.db.models import Place
     from app.db.session import AsyncSessionLocal
 

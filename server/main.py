@@ -1,6 +1,7 @@
 """
 main.py — FastAPI application entry point for Sài Gòn Guide.
-Authors : Đỗ Nguyễn An Khang (Auth & Trips), Ngô Tấn Đạt (Places), Lê Hữu Lam (Gemini AI), Đàng Minh Hạo (Calendar)
+Authors : Đỗ Nguyễn An Khang (Auth & Trips), Ngô Tấn Đạt (Places),
+          Lê Hữu Lam (Gemini AI), Đàng Minh Hạo (Calendar)
 """
 
 from __future__ import annotations
@@ -12,18 +13,19 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 load_dotenv()
 
-from app.api.v1.api import api_router
-from app.core.config import settings
-from app.db.models import Place
-from app.db.session import AsyncSessionLocal, create_tables, engine
-from app.services.gemini_service import GeminiService
+from app.api.v1.api import api_router  # noqa: E402
+from app.core.config import settings  # noqa: E402
+from app.db.models import Place  # noqa: E402
+from app.db.session import AsyncSessionLocal, create_tables, engine, get_db  # noqa: E402
+from app.services.gemini_service import GeminiService  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -73,9 +75,7 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 # CORS
 # ---------------------------------------------------------------------------
-_cors_raw = (
-    os.getenv("CORS_ORIGINS") or os.getenv("FRONTEND_ORIGINS") or settings.CORS_ORIGINS
-)
+_cors_raw = os.getenv("CORS_ORIGINS") or os.getenv("FRONTEND_ORIGINS") or settings.CORS_ORIGINS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in _cors_raw.split(",") if origin.strip()],
@@ -112,6 +112,11 @@ async def root():
     return {"status": "ok", "app": "Sài Gòn Guide API", "version": "2.0.0"}
 
 
+def _get_commit() -> str | None:
+    commit = os.getenv("RENDER_GIT_COMMIT", "").strip()
+    return commit or None
+
+
 @app.get("/health", tags=["Health"])
 async def health_check():
     return {
@@ -119,6 +124,37 @@ async def health_check():
         "service": "Sài Gòn Guide API (FastAPI)",
         "database": "SQLite / PostgreSQL Ready (SQLAlchemy ORM)",
         "version": "2.0.0",
+        "commit": _get_commit(),
+    }
+
+
+@app.get("/health/ready", tags=["Health"])
+async def readiness_check(db: AsyncSession = Depends(get_db)):
+    try:
+        await db.execute(text("SELECT 1"))
+        places_count = await db.scalar(select(func.count()).select_from(Place))
+    except Exception as exc:
+        logger.warning("Readiness check failed: %s", type(exc).__name__)
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "error": type(exc).__name__},
+        )
+
+    if not places_count or places_count <= 0:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "error": "empty_places_catalog"},
+        )
+
+    return {
+        "status": "ready",
+        "db": "ok",
+        "places": int(places_count),
+        "commit": _get_commit(),
     }
 
 

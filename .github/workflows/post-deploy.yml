@@ -1,0 +1,292 @@
+name: Post-Deploy Smoke
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # 07:00 giờ Việt Nam (UTC+7) hằng ngày
+    - cron: "0 0 * * *"
+  # Vercel GitHub integration tạo sự kiện deployment_status (hiện vẫn hỗ trợ song song với repository_dispatch)
+  deployment_status:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: post-deploy-${{ github.event_name }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  post-deploy-smoke:
+    name: Post-deploy smoke (production)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    # Chỉ chạy khi không phải deployment_status, hoặc deployment_status là Production thành công
+    if: >-
+      github.event_name != 'deployment_status' ||
+      (github.event.deployment_status.state == 'success' &&
+      (github.event.deployment_status.environment == 'Production' ||
+      github.event.deployment.environment == 'Production'))
+
+    steps:
+      - name: Check production URL variables
+        id: config
+        env:
+          RAW_API_URL: ${{ vars.PROD_API_URL }}
+          RAW_WEB_URL: ${{ vars.PROD_WEB_URL }}
+        run: |
+          API_URL="${RAW_API_URL%/}"
+          WEB_URL="${RAW_WEB_URL%/}"
+
+          if [ -z "$API_URL" ] || [ -z "$WEB_URL" ]; then
+            echo "::notice::Skipping post-deploy smoke: repository variables PROD_API_URL and/or PROD_WEB_URL are not set."
+            {
+              echo "### Post-deploy smoke skipped"
+              echo "Repository variables \`PROD_API_URL\` and \`PROD_WEB_URL\` must both be configured before running production smoke checks."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+          echo "api_url=${API_URL}" >> "$GITHUB_OUTPUT"
+          echo "web_url=${WEB_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        if: steps.config.outputs.configured == 'true'
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Determine backend commit requirement
+        id: commit_policy
+        if: steps.config.outputs.configured == 'true'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          REQUIRE_COMMIT="false"
+          if [ "$EVENT_NAME" = "push" ]; then
+            if [ -z "$BEFORE" ] || [[ "$BEFORE" =~ ^0+$ ]]; then
+              REQUIRE_COMMIT="true"
+              echo "INFO: Initial/zero before SHA on push; requiring backend commit match."
+            elif CHANGED_FILES="$(git diff --name-only "$BEFORE" "$SHA")"; then
+              if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(server/|render\.yaml$)'; then
+                REQUIRE_COMMIT="true"
+                echo "INFO: Backend or render.yaml changed; requiring backend commit match."
+              else
+                REQUIRE_COMMIT="false"
+                echo "INFO: No server/ or render.yaml changes in push; skipping backend commit match."
+              fi
+            else
+              REQUIRE_COMMIT="true"
+              echo "INFO: git diff failed for ${BEFORE}..${SHA}; requiring backend commit match."
+            fi
+          else
+            echo "INFO: Event ${EVENT_NAME}; skipping backend commit match."
+          fi
+          echo "require_commit=${REQUIRE_COMMIT}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        if: steps.config.outputs.configured == 'true'
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: server/requirements.txt
+
+      - name: Install smoke script dependencies
+        if: steps.config.outputs.configured == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "httpx>=0.27"
+
+      - name: Wait for Render backend readiness (/health/ready)
+        if: steps.config.outputs.configured == 'true'
+        env:
+          PROD_API_URL: ${{ steps.config.outputs.api_url }}
+          EXPECTED_COMMIT: ${{ github.sha }}
+          # push vào main chỉ bắt buộc commit khớp github.sha khi server/ hoặc render.yaml thay đổi (theo buildFilter trên Render);
+          # schedule/workflow_dispatch/deployment_status hoặc push chỉ sửa client/ chỉ cần status == ready
+          REQUIRE_COMMIT: ${{ steps.commit_policy.outputs.require_commit }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import time
+          import httpx
+
+          api_url = os.environ["PROD_API_URL"].rstrip("/")
+          expected_commit = os.environ["EXPECTED_COMMIT"]
+          require_commit = os.environ["REQUIRE_COMMIT"].lower() == "true"
+          url = f"{api_url}/health/ready"
+
+          timeout_seconds = 15 * 60
+          interval_seconds = 15
+          deadline = time.monotonic() + timeout_seconds
+
+          last_status = None
+          last_body = ""
+          attempt = 0
+
+          while True:
+              attempt += 1
+              try:
+                  response = httpx.get(url, timeout=20.0, follow_redirects=True)
+                  last_status = response.status_code
+                  last_body = response.text[:1000]
+                  if response.status_code == 200:
+                      payload = response.json()
+                      status = payload.get("status")
+                      db = payload.get("db")
+                      places = payload.get("places")
+                      commit = payload.get("commit")
+                      ready = status == "ready" and db == "ok" and isinstance(places, int) and places > 0
+                      commit_ok = (not require_commit) or (commit == expected_commit)
+                      if ready and commit_ok:
+                          print(
+                              f"PASS [poll /health/ready]: attempt={attempt} "
+                              f"status={status} db={db} places={places} commit={commit}"
+                          )
+                          sys.exit(0)
+                      print(
+                          f"WAIT [poll /health/ready]: attempt={attempt} HTTP 200 "
+                          f"status={status!r} db={db!r} places={places!r} "
+                          f"commit={commit!r} expected={expected_commit!r} require_commit={require_commit}"
+                      )
+                  else:
+                      print(
+                          f"WAIT [poll /health/ready]: attempt={attempt} HTTP {response.status_code} "
+                          f"body={last_body}"
+                      )
+              except Exception as exc:
+                  last_status = type(exc).__name__
+                  last_body = str(exc)
+                  print(f"WAIT [poll /health/ready]: attempt={attempt} error={last_status}: {last_body}")
+
+              if time.monotonic() >= deadline:
+                  print(
+                      f"FAIL [poll /health/ready]: timed out after {timeout_seconds}s "
+                      f"(url={url}, require_commit={require_commit}, expected_commit={expected_commit}). "
+                      f"Last status={last_status}, last body={last_body}",
+                      file=sys.stderr,
+                  )
+                  sys.exit(1)
+
+              time.sleep(interval_seconds)
+          PY
+
+      - name: Run API smoke against production
+        if: steps.config.outputs.configured == 'true'
+        env:
+          PROD_API_URL: ${{ steps.config.outputs.api_url }}
+        run: |
+          if [ ! -f server/scripts/smoke_api.py ]; then
+            echo "FAIL [api smoke]: server/scripts/smoke_api.py not found." >&2
+            exit 1
+          fi
+          python server/scripts/smoke_api.py --base-url "${PROD_API_URL}" --prod
+
+      - name: Smoke check Vercel frontend & SPA rewrite
+        if: steps.config.outputs.configured == 'true'
+        env:
+          PROD_WEB_URL: ${{ steps.config.outputs.web_url }}
+        run: |
+          set -euo pipefail
+
+          INDEX_BODY="$(mktemp)"
+          ASSET_HEADERS="$(mktemp)"
+          ASSET_BODY="$(mktemp)"
+          SPA_BODY="$(mktemp)"
+          trap 'rm -f "$INDEX_BODY" "$ASSET_HEADERS" "$ASSET_BODY" "$SPA_BODY"' EXIT
+
+          # 1. GET /
+          INDEX_STATUS="$(curl -sS -L --max-time 30 -o "$INDEX_BODY" -w "%{http_code}" "${PROD_WEB_URL}/")"
+          if [ "$INDEX_STATUS" != "200" ]; then
+            echo "FAIL [frontend /]: expected HTTP 200, got ${INDEX_STATUS}" >&2
+            head -c 500 "$INDEX_BODY" >&2 || true
+            exit 1
+          fi
+          if ! grep -q '<div id="root">' "$INDEX_BODY"; then
+            echo "FAIL [frontend /]: missing <div id=\"root\"> in HTML response" >&2
+            head -c 500 "$INDEX_BODY" >&2 || true
+            exit 1
+          fi
+          echo "PASS [frontend /]: HTTP 200 with <div id=\"root\">"
+
+          # 2. Fetch first /assets/*.js referenced by index.html
+          ASSET_PATH="$(grep -oE '/assets/[^"'\'' <>]+\.js' "$INDEX_BODY" | head -n 1 || true)"
+          if [ -z "$ASSET_PATH" ]; then
+            echo "FAIL [frontend /assets/*.js]: no /assets/*.js bundle found in ${PROD_WEB_URL}/" >&2
+            head -c 500 "$INDEX_BODY" >&2 || true
+            exit 1
+          fi
+
+          ASSET_STATUS="$(curl -sS -L --max-time 30 -D "$ASSET_HEADERS" -o "$ASSET_BODY" -w "%{http_code}" "${PROD_WEB_URL}${ASSET_PATH}")"
+          ASSET_CT="$(grep -i '^content-type:' "$ASSET_HEADERS" | tail -n 1 | tr -d '\r' || true)"
+          if [ "$ASSET_STATUS" != "200" ]; then
+            echo "FAIL [frontend asset ${ASSET_PATH}]: expected HTTP 200, got ${ASSET_STATUS}" >&2
+            head -c 500 "$ASSET_BODY" >&2 || true
+            exit 1
+          fi
+          if [ ! -s "$ASSET_BODY" ] || ! echo "$ASSET_CT" | grep -iq 'javascript'; then
+            echo "FAIL [frontend asset ${ASSET_PATH}]: unexpected body or content-type (${ASSET_CT})" >&2
+            head -c 300 "$ASSET_BODY" >&2 || true
+            exit 1
+          fi
+          echo "PASS [frontend asset ${ASSET_PATH}]: HTTP 200 (${ASSET_CT})"
+
+          # 3. GET /trip/demo (SPA rewrite via client/vercel.json)
+          SPA_STATUS="$(curl -sS -L --max-time 30 -o "$SPA_BODY" -w "%{http_code}" "${PROD_WEB_URL}/trip/demo")"
+          if [ "$SPA_STATUS" != "200" ]; then
+            echo "FAIL [frontend /trip/demo]: expected HTTP 200, got ${SPA_STATUS}" >&2
+            head -c 500 "$SPA_BODY" >&2 || true
+            exit 1
+          fi
+          if ! grep -q '<div id="root">' "$SPA_BODY"; then
+            echo "FAIL [frontend /trip/demo]: missing <div id=\"root\"> (SPA rewrite may be broken)" >&2
+            head -c 500 "$SPA_BODY" >&2 || true
+            exit 1
+          fi
+          echo "PASS [frontend /trip/demo]: HTTP 200 with SPA root"
+
+      - name: Smoke check CORS preflight from frontend origin
+        if: steps.config.outputs.configured == 'true'
+        env:
+          PROD_API_URL: ${{ steps.config.outputs.api_url }}
+          PROD_WEB_URL: ${{ steps.config.outputs.web_url }}
+        run: |
+          set -euo pipefail
+
+          CORS_HEADERS="$(mktemp)"
+          CORS_BODY="$(mktemp)"
+          trap 'rm -f "$CORS_HEADERS" "$CORS_BODY"' EXIT
+
+          CORS_STATUS="$(curl -sS --max-time 30 -D "$CORS_HEADERS" -o "$CORS_BODY" -w "%{http_code}" \
+            -X OPTIONS \
+            -H "Origin: ${PROD_WEB_URL}" \
+            -H "Access-Control-Request-Method: GET" \
+            -H "Access-Control-Request-Headers: Authorization, Content-Type" \
+            "${PROD_API_URL}/api/v1/places/search")"
+
+          ALLOW_ORIGIN="$(grep -i '^access-control-allow-origin:' "$CORS_HEADERS" | tail -n 1 | sed -E 's/^[^:]+:[[:space:]]*//' | tr -d '\r' || true)"
+
+          if [ "$CORS_STATUS" != "200" ] && [ "$CORS_STATUS" != "204" ]; then
+            echo "FAIL [CORS preflight]: expected HTTP 200/204, got ${CORS_STATUS}" >&2
+            cat "$CORS_HEADERS" >&2 || true
+            cat "$CORS_BODY" >&2 || true
+            exit 1
+          fi
+
+          if [ "$ALLOW_ORIGIN" != "$PROD_WEB_URL" ] && [ "$ALLOW_ORIGIN" != "*" ]; then
+            echo "FAIL [CORS preflight]: access-control-allow-origin='${ALLOW_ORIGIN}', expected '${PROD_WEB_URL}'" >&2
+            cat "$CORS_HEADERS" >&2 || true
+            cat "$CORS_BODY" >&2 || true
+            exit 1
+          fi
+
+          echo "PASS [CORS preflight]: HTTP ${CORS_STATUS}, access-control-allow-origin=${ALLOW_ORIGIN}"

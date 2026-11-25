@@ -54,7 +54,7 @@ jobs:
           python -m pip install -r requirements-dev.txt
       - name: Check test formatting and lint
         run: |
-          ruff check app/tests
+          ruff check app main.py scripts
           ruff format --check app/tests
       - name: Run tests with coverage
         env:
@@ -103,3 +103,45 @@ jobs:
           JWT_SECRET: ci-only-not-a-secret
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ci?sslmode=disable
         run: python scripts/smoke_db.py
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build server image
+        run: docker build -t saigon-guide-server ./server
+      - name: Build client image
+        run: docker build --build-arg VITE_API_BASE=/ -t saigon-guide-client ./client
+      - name: Validate docker compose config
+        run: docker compose config -q
+      - name: Start db and server with docker compose
+        run: |
+          if ! docker compose up -d --build --wait db server; then
+            docker compose logs --tail=50 server
+            exit 1
+          fi
+      - name: Verify places search endpoint
+        run: |
+          BODY=$(curl -sS -w "\n%{http_code}" "http://localhost:8000/api/v1/places/search?limit=1")
+          STATUS=$(printf '%s' "$BODY" | tail -n1)
+          JSON=$(printf '%s' "$BODY" | sed '$d')
+          echo "HTTP $STATUS: $JSON"
+          if [ "$STATUS" != "200" ]; then
+            docker compose logs --tail=50 server
+            exit 1
+          fi
+          if ! printf '%s' "$JSON" | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          assert data.get("total", 0) >= 1, f"Expected total >= 1, got {data}"
+          results = data.get("results", [])
+          assert len(results) >= 1 and results[0].get("name"), f"Expected non-empty results, got {data}"
+          '; then
+            docker compose logs --tail=50 server
+            exit 1
+          fi
+      - name: Tear down docker compose
+        if: always()
+        run: docker compose down -v

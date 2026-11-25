@@ -20,7 +20,6 @@ from app.schemas.ai import (
 from app.services.gemini_service import GeminiService, GeminiServiceError
 from app.services.places_service import search_places
 
-
 router = APIRouter(prefix="/ai", tags=["AI"])
 DBSession = Annotated[AsyncSession, Depends(get_db)]
 

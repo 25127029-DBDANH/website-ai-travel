@@ -126,7 +126,8 @@ def _validate_coordinate(lat: float, lon: float, point_label: str = "Tọa độ
         )
     if not (-180.0 <= lon <= 180.0):
         raise InvalidCoordinateError(
-            f"{point_label} có kinh độ (longitude)={lon} không hợp lệ (phải nằm trong [-180.0, 180.0])."
+            f"{point_label} có kinh độ (longitude)={lon} không hợp lệ "
+            "(phải nằm trong [-180.0, 180.0])."
         )
 
 
