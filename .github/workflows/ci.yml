@@ -2,17 +2,18 @@ name: CI
 
 on:
   push:
-    branches: [main, "feature/**"]
+    branches: ["feature/**"]
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.workflow != 'Deploy production' && github.ref != 'refs/heads/main' }}
 
 jobs:
   frontend:

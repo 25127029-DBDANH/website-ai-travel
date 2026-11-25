@@ -1,0 +1,258 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
+  api-smoke:
+    name: API smoke
+    uses: ./.github/workflows/api-smoke.yml
+
+  e2e:
+    name: E2E (Playwright)
+    uses: ./.github/workflows/e2e.yml
+
+  changes:
+    name: Detect backend changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.detect.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check backend file changes
+        id: detect
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          BACKEND_CHANGED="false"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            BACKEND_CHANGED="true"
+            echo "INFO: workflow_dispatch — treating backend as changed."
+          elif [ -z "$BEFORE" ] || [[ "$BEFORE" =~ ^0+$ ]]; then
+            BACKEND_CHANGED="true"
+            echo "INFO: Initial/zero before SHA — treating backend as changed."
+          elif CHANGED_FILES="$(git diff --name-only "$BEFORE" "$SHA")"; then
+            if printf '%s\n' "$CHANGED_FILES" | grep -Eq '^(server/|render\.yaml$)'; then
+              BACKEND_CHANGED="true"
+              echo "INFO: Backend files (server/ or render.yaml) changed."
+            else
+              BACKEND_CHANGED="false"
+              echo "INFO: No server/ or render.yaml changes; skipping backend deploy."
+            fi
+          else
+            BACKEND_CHANGED="true"
+            echo "INFO: git diff failed for ${BEFORE}..${SHA}; defaulting to backend deploy."
+          fi
+          echo "backend=${BACKEND_CHANGED}" >> "$GITHUB_OUTPUT"
+
+  deploy-backend:
+    name: Deploy backend (Render)
+    needs: [ci, api-smoke, e2e, changes]
+    if: needs.changes.outputs.backend == 'true'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Trigger Render Deploy Hook
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          PROD_API_URL: ${{ vars.PROD_API_URL }}
+          EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          MISSING=""
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "::error::Missing required secret RENDER_DEPLOY_HOOK_URL for production backend deploy."
+            MISSING="true"
+          fi
+          if [ -z "$PROD_API_URL" ]; then
+            echo "::error::Missing required repository variable PROD_API_URL for backend readiness check."
+            MISSING="true"
+          fi
+          if [ -n "$MISSING" ]; then
+            exit 1
+          fi
+
+          # Render Deploy Hook hỗ trợ query param ref=<commit sha> để deploy đúng commit
+          case "$RENDER_DEPLOY_HOOK_URL" in
+            *\?*) HOOK_WITH_REF="${RENDER_DEPLOY_HOOK_URL}&ref=${EXPECTED_COMMIT}" ;;
+            *)    HOOK_WITH_REF="${RENDER_DEPLOY_HOOK_URL}?ref=${EXPECTED_COMMIT}" ;;
+          esac
+          echo "::add-mask::${HOOK_WITH_REF}"
+
+          RESP_FILE="$(mktemp)"
+          trap 'rm -f "$RESP_FILE"' EXIT
+
+          HTTP_CODE="$(curl -fsS -X POST -o "$RESP_FILE" -w "%{http_code}" "$HOOK_WITH_REF")"
+          echo "Render Deploy Hook accepted (HTTP ${HTTP_CODE}) for commit ${EXPECTED_COMMIT}."
+          if [ -s "$RESP_FILE" ]; then
+            head -c 500 "$RESP_FILE"
+            echo ""
+          fi
+
+      - name: Wait for Render backend readiness (/health/ready)
+        env:
+          PROD_API_URL: ${{ vars.PROD_API_URL }}
+          EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          import time
+          import urllib.error
+          import urllib.request
+
+          api_url = os.environ["PROD_API_URL"].rstrip("/")
+          expected_commit = os.environ["EXPECTED_COMMIT"]
+          url = f"{api_url}/health/ready"
+
+          timeout_seconds = 15 * 60
+          interval_seconds = 15
+          deadline = time.monotonic() + timeout_seconds
+
+          last_status = None
+          last_body = ""
+          attempt = 0
+
+          while True:
+              attempt += 1
+              try:
+                  req = urllib.request.Request(url, headers={"User-Agent": "saigon-guide-cd/1.0"})
+                  with urllib.request.urlopen(req, timeout=20) as resp:
+                      last_status = resp.status
+                      last_body = resp.read().decode("utf-8", errors="replace")[:1000]
+                      if resp.status == 200:
+                          payload = json.loads(last_body)
+                          status = payload.get("status")
+                          db = payload.get("db")
+                          places = payload.get("places")
+                          commit = payload.get("commit")
+                          ready = status == "ready" and db == "ok" and isinstance(places, int) and places > 0
+                          if ready and commit == expected_commit:
+                              print(
+                                  f"PASS [deploy-backend /health/ready]: attempt={attempt} "
+                                  f"status={status} db={db} places={places} commit={commit}"
+                              )
+                              sys.exit(0)
+                          print(
+                              f"WAIT [deploy-backend /health/ready]: attempt={attempt} HTTP 200 "
+                              f"status={status!r} db={db!r} places={places!r} "
+                              f"commit={commit!r} expected={expected_commit!r}"
+                          )
+                      else:
+                          print(f"WAIT [deploy-backend /health/ready]: attempt={attempt} HTTP {resp.status} body={last_body}")
+              except urllib.error.HTTPError as exc:
+                  last_status = exc.code
+                  last_body = exc.read().decode("utf-8", errors="replace")[:1000]
+                  print(f"WAIT [deploy-backend /health/ready]: attempt={attempt} HTTP {exc.code} body={last_body}")
+              except Exception as exc:
+                  last_status = type(exc).__name__
+                  last_body = str(exc)
+                  print(f"WAIT [deploy-backend /health/ready]: attempt={attempt} error={last_status}: {last_body}")
+
+              if time.monotonic() >= deadline:
+                  print(
+                      f"::error::Render backend readiness timed out after {timeout_seconds}s "
+                      f"(url={url}, expected_commit={expected_commit}). "
+                      f"Last status={last_status}, last body={last_body}",
+                      file=sys.stderr,
+                  )
+                  sys.exit(1)
+
+              time.sleep(interval_seconds)
+          PY
+
+  deploy-frontend:
+    name: Deploy frontend (Vercel)
+    needs: [ci, api-smoke, e2e, changes, deploy-backend]
+    if: >-
+      always() &&
+      !cancelled() &&
+      needs.ci.result == 'success' &&
+      needs.api-smoke.result == 'success' &&
+      needs.e2e.result == 'success' &&
+      needs.changes.result == 'success' &&
+      (needs.deploy-backend.result == 'success' || needs.deploy-backend.result == 'skipped')
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      # ID thô; bước Verify cắt khoảng trắng/xuống dòng thừa rồi export VERCEL_ORG_ID/PROJECT_ID qua GITHUB_ENV
+      RAW_VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      RAW_VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Verify Vercel secrets
+        run: |
+          set -euo pipefail
+          MISSING=""
+          for VAR_NAME in VERCEL_TOKEN RAW_VERCEL_ORG_ID RAW_VERCEL_PROJECT_ID; do
+            if [ -z "${!VAR_NAME:-}" ]; then
+              echo "::error::Missing required secret ${VAR_NAME} for production frontend deploy."
+              MISSING="true"
+            fi
+          done
+          if [ -n "$MISSING" ]; then
+            exit 1
+          fi
+          ORG_ID="$(printf '%s' "$RAW_VERCEL_ORG_ID" | tr -d '[:space:]')"
+          PROJECT_ID="$(printf '%s' "$RAW_VERCEL_PROJECT_ID" | tr -d '[:space:]')"
+          echo "VERCEL_ORG_ID len=${#ORG_ID} (team_…=29), VERCEL_PROJECT_ID len=${#PROJECT_ID} (prj_…=32)"
+          { echo "VERCEL_ORG_ID=${ORG_ID}"; echo "VERCEL_PROJECT_ID=${PROJECT_ID}"; } >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Install Vercel CLI (pinned)
+        run: npm install --global vercel@66.6.0
+
+      # Vercel project đặt Root Directory = client trong project settings:
+      # chạy từ gốc repo để vercel build đọc project.settings.rootDirectory = "client" (tránh lặp path client/client)
+      - name: Pull Vercel project settings and production env
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build frontend with Vercel CLI
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy prebuilt frontend to Vercel production
+        run: |
+          set -euo pipefail
+          DEPLOY_URL="$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")"
+          echo "Production frontend deployed to: ${DEPLOY_URL}"
+          {
+            echo "### Frontend deployed (Vercel production)"
+            echo "- URL: ${DEPLOY_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  smoke:
+    name: Post-deploy smoke
+    needs: [changes, deploy-frontend]
+    uses: ./.github/workflows/post-deploy.yml
+    with:
+      expected_commit: ${{ github.sha }}
+      require_commit: ${{ needs.changes.outputs.backend == 'true' }}

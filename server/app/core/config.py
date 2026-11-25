@@ -31,6 +31,11 @@ class Settings(BaseSettings):
         "http://localhost:5173,http://localhost:3000,"
         "http://127.0.0.1:5173,http://127.0.0.1:3000"
     )
+    # Optional regex for dynamic preview origins (e.g. Vercel PR previews).
+    # Must be anchored with ^...$ and scoped to this project and Vercel team slug, e.g.:
+    #   ^https://website-ai-travel-[a-z0-9-]+-<team-slug>\.vercel\.app$
+    # Never use broad patterns like .*\.vercel\.app (would open CORS to every Vercel app).
+    CORS_ORIGIN_REGEX: str = ""
 
     GEMINI_API_KEY: str = ""
     GOOGLE_CLIENT_ID: str = ""

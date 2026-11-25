@@ -1,0 +1,218 @@
+name: Preview deploy
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: preview-deploy-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    name: Vercel preview deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check preview deploy prerequisites
+        id: check
+        env:
+          IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+          HAS_VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN != '' }}
+          HAS_VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID != '' }}
+          HAS_VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID != '' }}
+        run: |
+          set -euo pipefail
+
+          if [ "$IS_FORK" = "true" ] || [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+            echo "::notice::Skipping Vercel preview deploy: pull request originates from a fork."
+            {
+              echo "### Preview deploy skipped"
+              echo "Pull request originates from a fork; repository secrets are unavailable."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          MISSING=""
+          [ "$HAS_VERCEL_TOKEN" != "true" ] && MISSING="${MISSING} VERCEL_TOKEN"
+          [ "$HAS_VERCEL_ORG_ID" != "true" ] && MISSING="${MISSING} VERCEL_ORG_ID"
+          [ "$HAS_VERCEL_PROJECT_ID" != "true" ] && MISSING="${MISSING} VERCEL_PROJECT_ID"
+          MISSING="${MISSING# }"
+
+          if [ -n "$MISSING" ]; then
+            echo "::notice::Skipping Vercel preview deploy: missing repository secret(s): ${MISSING}."
+            {
+              echo "### Preview deploy skipped"
+              echo "Missing repository secret(s): \`${MISSING}\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        if: steps.check.outputs.should_deploy == 'true'
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        if: steps.check.outputs.should_deploy == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install Vercel CLI
+        if: steps.check.outputs.should_deploy == 'true'
+        run: npm install --global vercel@66.6.0
+
+      - name: Pull Vercel preview configuration
+        if: steps.check.outputs.should_deploy == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          # Cắt khoảng trắng/xuống dòng thừa do dán secret; in độ dài (không in giá trị) để chẩn đoán
+          VERCEL_ORG_ID="$(printf '%s' "$VERCEL_ORG_ID" | tr -d '[:space:]')"; VERCEL_PROJECT_ID="$(printf '%s' "$VERCEL_PROJECT_ID" | tr -d '[:space:]')"; export VERCEL_ORG_ID VERCEL_PROJECT_ID
+          echo "VERCEL_ORG_ID len=${#VERCEL_ORG_ID} (team_…=29), VERCEL_PROJECT_ID len=${#VERCEL_PROJECT_ID} (prj_…=32)"
+          set -euo pipefail
+          # Chạy từ gốc repo: project Vercel đã cấu hình Root Directory = client,
+          # nên CLI đọc rootDirectory từ .vercel/project.json và tự build thư mục client/.
+          vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+
+      - name: Build Vercel preview artifacts
+        if: steps.check.outputs.should_deploy == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          # Cắt khoảng trắng/xuống dòng thừa do dán secret; in độ dài (không in giá trị) để chẩn đoán
+          VERCEL_ORG_ID="$(printf '%s' "$VERCEL_ORG_ID" | tr -d '[:space:]')"; VERCEL_PROJECT_ID="$(printf '%s' "$VERCEL_PROJECT_ID" | tr -d '[:space:]')"; export VERCEL_ORG_ID VERCEL_PROJECT_ID
+          echo "VERCEL_ORG_ID len=${#VERCEL_ORG_ID} (team_…=29), VERCEL_PROJECT_ID len=${#VERCEL_PROJECT_ID} (prj_…=32)"
+          set -euo pipefail
+          vercel build --token="$VERCEL_TOKEN"
+
+      - name: Deploy prebuilt preview to Vercel
+        id: deploy
+        if: steps.check.outputs.should_deploy == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Cắt khoảng trắng/xuống dòng thừa do dán secret; in độ dài (không in giá trị) để chẩn đoán
+          VERCEL_ORG_ID="$(printf '%s' "$VERCEL_ORG_ID" | tr -d '[:space:]')"; VERCEL_PROJECT_ID="$(printf '%s' "$VERCEL_PROJECT_ID" | tr -d '[:space:]')"; export VERCEL_ORG_ID VERCEL_PROJECT_ID
+          echo "VERCEL_ORG_ID len=${#VERCEL_ORG_ID} (team_…=29), VERCEL_PROJECT_ID len=${#VERCEL_PROJECT_ID} (prj_…=32)"
+          set -euo pipefail
+          RAW_OUTPUT="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN")"
+          PREVIEW_URL="$(printf '%s\n' "$RAW_OUTPUT" | grep -Eo 'https://[^[:space:]]+' | tail -n 1 || true)"
+
+          if [ -z "$PREVIEW_URL" ]; then
+            echo "::error::Failed to parse preview URL from vercel deploy output." >&2
+            printf '%s\n' "$RAW_OUTPUT" >&2
+            exit 1
+          fi
+
+          PREVIEW_URL="${PREVIEW_URL%/}"
+          echo "Preview URL: ${PREVIEW_URL}"
+          echo "url=${PREVIEW_URL}" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Vercel Preview Deployed"
+            echo "- **URL:** ${PREVIEW_URL}"
+            echo "- **Commit:** \`${COMMIT_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create or update PR preview comment
+        if: steps.check.outputs.should_deploy == 'true'
+        uses: actions/github-script@v9
+        env:
+          PREVIEW_URL: ${{ steps.deploy.outputs.url }}
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+        with:
+          script: |
+            const marker = "<!-- preview-deploy -->";
+            const previewUrl = process.env.PREVIEW_URL;
+            const commitSha = process.env.COMMIT_SHA;
+            const shortSha = commitSha.slice(0, 7);
+
+            const body = [
+              marker,
+              "### Vercel Preview Deploy",
+              "",
+              `- **Preview URL:** ${previewUrl}`,
+              `- **Commit:** \`${shortSha}\` (${commitSha})`,
+              "- **Backend API:** Production (Render)",
+            ].join("\n");
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+
+            const existing = comments.find(
+              (comment) => typeof comment.body === "string" && comment.body.includes(marker),
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+              core.info(`Updated preview comment #${existing.id}`);
+            } else {
+              const created = await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+              core.info(`Created preview comment #${created.data.id}`);
+            }
+
+      - name: Verify preview URL serves app root
+        if: steps.check.outputs.should_deploy == 'true'
+        env:
+          PREVIEW_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+
+          BODY_FILE="$(mktemp)"
+          trap 'rm -f "$BODY_FILE"' EXIT
+
+          STATUS="000"
+          for ATTEMPT in 1 2 3; do
+            STATUS="$(curl -sS -L --max-time 30 -o "$BODY_FILE" -w "%{http_code}" "${PREVIEW_URL}/" || echo "000")"
+            if [ "$STATUS" = "200" ] && grep -q '<div id="root">' "$BODY_FILE"; then
+              echo "PASS [preview /]: HTTP 200 with <div id=\"root\"> (attempt ${ATTEMPT})"
+              exit 0
+            fi
+            echo "WAIT [preview /]: attempt=${ATTEMPT} HTTP=${STATUS}"
+            if [ "$ATTEMPT" -lt 3 ]; then
+              sleep 5
+            fi
+          done
+
+          echo "FAIL [preview /]: expected HTTP 200 with <div id=\"root\">, got HTTP ${STATUS}" >&2
+          head -c 500 "$BODY_FILE" >&2 || true
+          echo "" >&2
+          exit 1
