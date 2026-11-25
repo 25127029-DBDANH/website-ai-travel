@@ -82,6 +82,9 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
+          # Cắt khoảng trắng/xuống dòng thừa do dán secret; in độ dài (không in giá trị) để chẩn đoán
+          VERCEL_ORG_ID="$(printf '%s' "$VERCEL_ORG_ID" | tr -d '[:space:]')"; VERCEL_PROJECT_ID="$(printf '%s' "$VERCEL_PROJECT_ID" | tr -d '[:space:]')"; export VERCEL_ORG_ID VERCEL_PROJECT_ID
+          echo "VERCEL_ORG_ID len=${#VERCEL_ORG_ID} (team_…=29), VERCEL_PROJECT_ID len=${#VERCEL_PROJECT_ID} (prj_…=32)"
           set -euo pipefail
           # Chạy từ gốc repo: project Vercel đã cấu hình Root Directory = client,
           # nên CLI đọc rootDirectory từ .vercel/project.json và tự build thư mục client/.
@@ -94,6 +97,9 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
+          # Cắt khoảng trắng/xuống dòng thừa do dán secret; in độ dài (không in giá trị) để chẩn đoán
+          VERCEL_ORG_ID="$(printf '%s' "$VERCEL_ORG_ID" | tr -d '[:space:]')"; VERCEL_PROJECT_ID="$(printf '%s' "$VERCEL_PROJECT_ID" | tr -d '[:space:]')"; export VERCEL_ORG_ID VERCEL_PROJECT_ID
+          echo "VERCEL_ORG_ID len=${#VERCEL_ORG_ID} (team_…=29), VERCEL_PROJECT_ID len=${#VERCEL_PROJECT_ID} (prj_…=32)"
           set -euo pipefail
           vercel build --token="$VERCEL_TOKEN"
 
@@ -106,6 +112,9 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          # Cắt khoảng trắng/xuống dòng thừa do dán secret; in độ dài (không in giá trị) để chẩn đoán
+          VERCEL_ORG_ID="$(printf '%s' "$VERCEL_ORG_ID" | tr -d '[:space:]')"; VERCEL_PROJECT_ID="$(printf '%s' "$VERCEL_PROJECT_ID" | tr -d '[:space:]')"; export VERCEL_ORG_ID VERCEL_PROJECT_ID
+          echo "VERCEL_ORG_ID len=${#VERCEL_ORG_ID} (team_…=29), VERCEL_PROJECT_ID len=${#VERCEL_PROJECT_ID} (prj_…=32)"
           set -euo pipefail
           RAW_OUTPUT="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN")"
           PREVIEW_URL="$(printf '%s\n' "$RAW_OUTPUT" | grep -Eo 'https://[^[:space:]]+' | tail -n 1 || true)"

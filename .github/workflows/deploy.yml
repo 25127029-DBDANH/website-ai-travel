@@ -200,14 +200,15 @@ jobs:
     timeout-minutes: 15
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      # ID thô; bước Verify cắt khoảng trắng/xuống dòng thừa rồi export VERCEL_ORG_ID/PROJECT_ID qua GITHUB_ENV
+      RAW_VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      RAW_VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
       - name: Verify Vercel secrets
         run: |
           set -euo pipefail
           MISSING=""
-          for VAR_NAME in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+          for VAR_NAME in VERCEL_TOKEN RAW_VERCEL_ORG_ID RAW_VERCEL_PROJECT_ID; do
             if [ -z "${!VAR_NAME:-}" ]; then
               echo "::error::Missing required secret ${VAR_NAME} for production frontend deploy."
               MISSING="true"
@@ -216,6 +217,10 @@ jobs:
           if [ -n "$MISSING" ]; then
             exit 1
           fi
+          ORG_ID="$(printf '%s' "$RAW_VERCEL_ORG_ID" | tr -d '[:space:]')"
+          PROJECT_ID="$(printf '%s' "$RAW_VERCEL_PROJECT_ID" | tr -d '[:space:]')"
+          echo "VERCEL_ORG_ID len=${#ORG_ID} (team_…=29), VERCEL_PROJECT_ID len=${#PROJECT_ID} (prj_…=32)"
+          { echo "VERCEL_ORG_ID=${ORG_ID}"; echo "VERCEL_PROJECT_ID=${PROJECT_ID}"; } >> "$GITHUB_ENV"
 
       - uses: actions/checkout@v7
 
