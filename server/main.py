@@ -25,7 +25,7 @@ load_dotenv()
 from app.api.v1.api import api_router  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.db.models import Place  # noqa: E402
-from app.db.session import AsyncSessionLocal, create_tables, engine, get_db  # noqa: E402
+from app.db.session import create_tables, engine, get_db  # noqa: E402
 from app.services.gemini_service import GeminiService  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -43,15 +43,10 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     )
     try:
         await create_tables()
-        async with AsyncSessionLocal() as session:
-            place_count = await session.scalar(select(func.count()).select_from(Place))
-        if not place_count:
-            from app.db.hcmc_data import seed_places
+        from app.db.hcmc_data import seed_places
 
-            await seed_places()
-            logger.info("Seeded the local HCMC place catalog.")
-        else:
-            logger.info("Using existing place catalog (%s places).", place_count)
+        await seed_places()
+        logger.info("Synchronized the local HCMC place catalog.")
     except Exception:
         logger.exception("Database initialization or place seeding failed.")
     try:

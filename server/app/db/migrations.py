@@ -8,8 +8,6 @@ runs `ALTER TABLE ... ADD COLUMN` for any missing nullable column declared in
 
 How to add a new column later:
   Append a single `(table_name, column_name, ddl_type)` tuple to `COLUMN_MIGRATIONS`.
-  Ghi chú: Đạt có thể dùng đúng danh sách này cho `places.photo_is_generic`, ví dụ:
-      ("places", "photo_is_generic", "BOOLEAN")
 """
 
 from __future__ import annotations
@@ -22,10 +20,11 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 logger = logging.getLogger(__name__)
 
-# Declarative list of additive nullable columns: (table, column, sql_ddl_type)
+# Declarative list of additive columns: (table, column, sql_ddl_type)
 COLUMN_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ("users", "email", "VARCHAR(254)"),
     ("users", "google_sub", "VARCHAR(64)"),
+    ("places", "photo_is_generic", "BOOLEAN NOT NULL DEFAULT TRUE"),
 )
 
 # Declarative list of indexes: (index_name, table, column, is_unique)

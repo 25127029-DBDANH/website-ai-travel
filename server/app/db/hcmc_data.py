@@ -20,6 +20,7 @@ import asyncio
 import json
 import logging
 from itertools import cycle
+from typing import Any
 from uuid import uuid4
 
 # Imports for seeding are deferred to seed_places() so importing PLACES
@@ -28,28 +29,31 @@ from uuid import uuid4
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Photo URL pools — real Unsplash images, cycled per category
+# Photo URL pools — verified 200 OK Unsplash images, cycled per category
 # ---------------------------------------------------------------------------
 _POOLS: dict[str, list[str]] = {
     "attraction": [
         "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&q=80",
         "https://images.unsplash.com/photo-1569154941061-e231b4725ef1?w=800&q=80",
-        "https://images.unsplash.com/photo-1510146009-1f6a19c08e34?w=800&q=80",
         "https://images.unsplash.com/photo-1517479149777-5f3b1511d5ad?w=800&q=80",
-        "https://images.unsplash.com/photo-1491685792450-4a9e0eb1e714?w=800&q=80",
-        "https://images.unsplash.com/photo-1577083573408-5f27a4abb20b?w=800&q=80",
+        "https://images.unsplash.com/photo-1508804185872-d7badad00f7d?w=800&q=80",
+        "https://images.unsplash.com/photo-1528127269322-539801943592?w=800&q=80",
+        "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=800&q=80",
     ],
     "food": [
         "https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?w=800&q=80",
         "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&q=80",
-        "https://images.unsplash.com/photo-1540189002340-98a1c8c56d31?w=800&q=80",
-        "https://images.unsplash.com/photo-1626132627393-83f4a9f0dfa8?w=800&q=80",
         "https://images.unsplash.com/photo-1583473848882-f9a5bc7fd2ee?w=800&q=80",
         "https://images.unsplash.com/photo-1512058564366-18510be2db19?w=800&q=80",
         "https://images.unsplash.com/photo-1536098561742-ca998e48cbcc?w=800&q=80",
         "https://images.unsplash.com/photo-1548943487-a2e4e43b4853?w=800&q=80",
-        "https://images.unsplash.com/photo-1559559853-d1a4c5d95cd6?w=800&q=80",
         "https://images.unsplash.com/photo-1600803907087-f56d462fd26b?w=800&q=80",
+        "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&q=80",
+        "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&q=80",
+        "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&q=80",
+        "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80",
+        "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=800&q=80",
+        "https://images.unsplash.com/photo-1565958011703-44f9829ba187?w=800&q=80",
     ],
     "cafe": [
         "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&q=80",
@@ -59,33 +63,39 @@ _POOLS: dict[str, list[str]] = {
         "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80",
         "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=800&q=80",
         "https://images.unsplash.com/photo-1453614512568-c4024d13c247?w=800&q=80",
-        "https://images.unsplash.com/photo-1612342395040-73d73e8c7ea8?w=800&q=80",
-        "https://images.unsplash.com/photo-1497515114629-f8c9fb4e4664?w=800&q=80",
-        "https://images.unsplash.com/photo-1543652437-a594f1d2b7b6?w=800&q=80",
+        "https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=800&q=80",
+        "https://images.unsplash.com/photo-1507133750040-4a8f57021571?w=800&q=80",
+        "https://images.unsplash.com/photo-1498804103079-a6351b050096?w=800&q=80",
+        "https://images.unsplash.com/photo-1511920170033-f8396924c348?w=800&q=80",
     ],
     "culture": [
-        "https://images.unsplash.com/photo-1564507592333-a7e537a76296?w=800&q=80",
-        "https://images.unsplash.com/photo-1565060169194-19fabf63012b?w=800&q=80",
-        "https://images.unsplash.com/photo-1518998053-7b0f3bd67684?w=800&q=80",
-        "https://images.unsplash.com/photo-1579245032-c9c34a7ced3a?w=800&q=80",
-        "https://images.unsplash.com/photo-1555985023-b4cd2cc2e360?w=800&q=80",
         "https://images.unsplash.com/photo-1553913861-c0fddf2619ee?w=800&q=80",
+        "https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=800&q=80",
+        "https://images.unsplash.com/photo-1524492412937-b28074a5d7da?w=800&q=80",
+        "https://images.unsplash.com/photo-1544644181-1484b3fdfc62?w=800&q=80",
+        "https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=800&q=80",
+        "https://images.unsplash.com/photo-1512100356356-de1b84283e18?w=800&q=80",
+        "https://images.unsplash.com/photo-1596422846543-75c6fc197f07?w=800&q=80",
     ],
     "shopping": [
         "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=800&q=80",
-        "https://images.unsplash.com/photo-1555529669-e69be0bc048d?w=800&q=80",
         "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&q=80",
-        "https://images.unsplash.com/photo-1572601025-7f88cbc0b2b5?w=800&q=80",
+        "https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=800&q=80",
+        "https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=800&q=80",
+        "https://images.unsplash.com/photo-1481437156560-3205f6a55735?w=800&q=80",
     ],
     "park": [
         "https://images.unsplash.com/photo-1569154941061-e231b4725ef1?w=800&q=80",
         "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=800&q=80",
-        "https://images.unsplash.com/photo-1587474503-6b1d1a9eb72c?w=800&q=80",
+        "https://images.unsplash.com/photo-1448375240586-882707db888b?w=800&q=80",
+        "https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=800&q=80",
+        "https://images.unsplash.com/photo-1473448912268-2022ce9509d8?w=800&q=80",
     ],
     "entertainment": [
-        "https://images.unsplash.com/photo-1573483616090-5eb8abe73ef8?w=800&q=80",
-        "https://images.unsplash.com/photo-1604999565976-8913ad2ddb37?w=800&q=80",
         "https://images.unsplash.com/photo-1560419015-7c427e8ae5ba?w=800&q=80",
+        "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&q=80",
+        "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&q=80",
+        "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=800&q=80",
     ],
 }
 _CYCLES = {k: cycle(v) for k, v in _POOLS.items()}
@@ -96,18 +106,59 @@ def _photo(cat: str) -> str:
 
 
 def _p(
-    name: str, name_vi: str, address: str, district: str,
-    lat: float, lng: float, category: str, is_indoor: bool,
-    open_t: str, close_t: str, fee: int, rating: float,
-    desc: str, tags: list[str],
+    name: str,
+    name_vi: str,
+    address: str,
+    district: str,
+    lat: float,
+    lng: float,
+    category: str,
+    is_indoor: bool,
+    open_t: str,
+    close_t: str,
+    fee: int,
+    rating: float,
+    desc: str,
+    tags: list[str],
+    photo: str | None = None,
+    photo_is_generic: bool = True,
 ) -> dict:
+    photo_url = photo if photo is not None else _photo(category)
+
+    # Realistic pricing: Never allow 0 VND for food or cafe!
+    if fee == 0:
+        if category == "food":
+            fee = 55000  # realistic average dining cost per person
+        elif category == "cafe":
+            fee = 45000  # realistic average drink cost per person
+
+    # Realistic indoor setting: dining & cafe spots have indoor spaces unless street stalls
+    if category in ("food", "cafe") and not is_indoor:
+        outdoor_keywords = (
+            "chợ đêm", "vỉa hè", "xe đẩy", "lộ thiên", "công viên", "bờ kè", "lề đường"
+        )
+        lower_context = f"{name} {name_vi} {desc}".lower()
+        if not any(k in lower_context for k in outdoor_keywords):
+            is_indoor = True
+
     return dict(
         id=str(uuid4()),
-        name=name, name_vi=name_vi, address=address, district=district,
-        latitude=lat, longitude=lng, category=category, is_indoor=is_indoor,
-        open_time=open_t, close_time=close_t, entry_fee_vnd=fee,
-        average_rating=rating, photo_url=_photo(category),
-        description=desc, tags=json.dumps(tags, ensure_ascii=False),
+        name=name,
+        name_vi=name_vi,
+        address=address,
+        district=district,
+        latitude=lat,
+        longitude=lng,
+        category=category,
+        is_indoor=is_indoor,
+        open_time=open_t,
+        close_time=close_t,
+        entry_fee_vnd=fee,
+        average_rating=rating,
+        photo_url=photo_url,
+        photo_is_generic=photo_is_generic,
+        description=desc,
+        tags=json.dumps(tags, ensure_ascii=False),
         is_active=True,
     )
 
@@ -121,7 +172,9 @@ _Q1 = [
        "1 Công xã Paris, Bến Nghé, Quận 1", "Quận 1", 10.7797, 106.6990,
        "culture", False, "08:00", "17:00", 0, 4.6,
        "Nhà thờ Công giáo La Mã biểu tượng Sài Gòn, xây dựng năm 1880 theo phong cách Romanesque.",
-       ["di sản", "check-in", "kiến trúc", "tôn giáo"]),
+       ["di sản", "check-in", "kiến trúc", "tôn giáo"],
+       photo="/images/notre-dame.jpg",
+       photo_is_generic=False),
     _p("Saigon Central Post Office", "Bưu điện Trung tâm Sài Gòn",
        "2 Công xã Paris, Bến Nghé, Quận 1", "Quận 1", 10.7798, 106.6993,
        "culture", True, "07:00", "19:00", 0, 4.4,
@@ -129,9 +182,11 @@ _Q1 = [
        ["di sản", "check-in", "kiến trúc"]),
     _p("Reunification Palace", "Dinh Độc Lập",
        "135 Nam Kỳ Khởi Nghĩa, Bến Thành, Quận 1", "Quận 1", 10.7769, 106.6956,
-       "culture", True, "08:00", "16:00", 40000, 4.5,
+       "culture", True, "08:00", "16:00", 65000, 4.5,
        "Biểu tượng lịch sử thống nhất đất nước 30/4/1975, kiến trúc độc đáo thập niên 1960.",
-       ["lịch sử", "di sản", "kiến trúc"]),
+       ["lịch sử", "di sản", "kiến trúc"],
+       photo="/images/independence-palace.jpg",
+       photo_is_generic=False),
     _p("Ho Chi Minh City Museum", "Bảo tàng Thành phố Hồ Chí Minh",
        "65 Lý Tự Trọng, Bến Nghé, Quận 1", "Quận 1", 10.7765, 106.7015,
        "culture", True, "08:00", "17:00", 30000, 4.3,
@@ -144,29 +199,36 @@ _Q1 = [
        ["nghệ thuật", "hội họa", "di sản"]),
     _p("Bitexco Financial Tower SkyDeck", "Tầng Quan Sát Bitexco",
        "2 Hải Triều, Bến Nghé, Quận 1", "Quận 1", 10.7717, 106.7038,
-       "attraction", True, "09:30", "21:30", 200000, 4.4,
+       "attraction", True, "09:30", "21:30", 240000, 4.4,
        "Tầng quan sát 49 — panorama 360° Sài Gòn ấn tượng từ độ cao 178m.",
        ["check-in", "view", "sang trọng", "hiện đại"]),
     _p("Nguyen Hue Walking Street", "Phố đi bộ Nguyễn Huệ",
        "Nguyễn Huệ, Bến Nghé, Quận 1", "Quận 1", 10.7744, 106.7028,
        "attraction", False, "00:00", "23:59", 0, 4.5,
        "Trái tim sôi động Sài Gòn — đài phun nước, ẩm thực đường phố, sự kiện văn hoá.",
-       ["dạo phố", "check-in", "đêm", "lễ hội"]),
+       ["dạo phố", "check-in", "đêm", "lễ hội"],
+       photo="/images/nguyen_hue_walking_street.jpeg",
+       photo_is_generic=False),
     _p("HCMC Opera House", "Nhà hát Thành phố Hồ Chí Minh",
        "7 Công trường Lam Sơn, Bến Nghé, Quận 1", "Quận 1", 10.7766, 106.7029,
        "culture", True, "09:00", "22:00", 0, 4.5,
-       "Nhà hát Pháp 1900 — kiến trúc cổ điển đẹp nhất Sài Gòn, biểu diễn nghệ thuật thường xuyên.",
+       "Nhà hát Pháp 1900 — kiến trúc cổ điển đẹp nhất Sài Gòn, biểu diễn nghệ thuật.",
        ["kiến trúc", "di sản", "văn hoá", "check-in"]),
-    _p("Thu Thiem 2 Bridge Viewpoint", "Điểm ngắm Cầu Thủ Thiêm 2",
-       "Tôn Đức Thắng, Bến Nghé, Quận 1", "Quận 1", 10.7870, 106.7082,
-       "attraction", False, "00:00", "23:59", 0, 4.5,
-       "View hoàng hôn & đêm Cầu Thủ Thiêm 2 — điểm check-in sống ảo hot nhất Sài Gòn 2024.",
-       ["check-in", "cầu", "hoàng hôn", "night view"]),
+    _p("Bach Dang Wharf Park", "Công viên Bến Bạch Đằng",
+       "2 Tôn Đức Thắng, Bến Nghé, Quận 1", "Quận 1", 10.7748, 106.7068,
+       "attraction", False, "00:00", "23:59", 0, 4.6,
+       "Công viên bờ sông Sài Gòn thoáng đãng, view ngắm trọn Cầu Ba Son và bán đảo "
+       "Thủ Thiêm — địa điểm lý tưởng để tản bộ ngắm hoàng hôn và sông nước.",
+       ["công viên", "bờ sông", "view đẹp", "check-in", "dạo mát"],
+       photo="/images/saigon-river.jpg",
+       photo_is_generic=False),
     _p("Saigon Waterbus Bach Dang", "Bến Buýt Sông Bạch Đằng",
        "Bến Bạch Đằng, Quận 1", "Quận 1", 10.7867, 106.7063,
        "attraction", False, "06:00", "19:30", 15000, 4.4,
        "Tuyến buýt đường sông độc đáo — ngắm Sài Gòn từ góc nhìn sông nước thơ mộng.",
-       ["sông nước", "tham quan", "khác biệt"]),
+       ["sông nước", "tham quan", "khác biệt"],
+       photo="/images/saigon-river.jpg",
+       photo_is_generic=False),
     _p("Book Street Nguyen Van Binh", "Đường sách Nguyễn Văn Bình",
        "Nguyễn Văn Bình, Bến Nghé, Quận 1", "Quận 1", 10.7772, 106.7002,
        "culture", False, "08:00", "21:30", 0, 4.5,
@@ -179,103 +241,111 @@ _Q1 = [
        ["nightlife", "phố Tây", "bar", "giải trí đêm"]),
 
     # ── Food / Restaurants (16) ─────────────────────────────────────────────
-    _p("Pho Hoa Pasteur", "Phở Hòa Pasteur",
-       "260C Pasteur, Phường 8, Quận 3", "Quận 1", 10.7771, 106.6925,
-       "food", True, "06:00", "00:00", 0, 4.4,
-       "Phở bò trứ danh Sài Gòn hoạt động hơn 50 năm — tô phở chuẩn vị miền Nam.",
-       ["phở", "bình dân", "nổi tiếng", "sáng sớm"]),
+    _p("Pho Quynh", "Phở Quỳnh",
+       "323 Phạm Ngũ Lão, Quận 1", "Quận 1", 10.7685, 106.6912,
+       "food", True, "00:00", "23:59", 85000, 4.4,
+       "Phở bò mở cửa 24/7 nức tiếng khu phố Tây — nước dùng ngọt thanh từ xương bò hầm.",
+       ["phở", "24/7", "phố Tây", "ẩm thực đêm"],
+       photo="/images/pho.png"),
     _p("Banh Mi Huynh Hoa", "Bánh Mì Huỳnh Hoa",
-       "26 Lê Thị Riêng, Phạm Ngũ Lão, Quận 1", "Quận 1", 10.7680, 106.6919,
-       "food", False, "14:30", "23:30", 0, 4.5,
-       "Bánh mì ngon nhất Sài Gòn theo CNN — luôn có hàng chờ dài, nhân phong phú.",
-       ["bánh mì", "nổi tiếng", "đường phố"]),
+       "26 Lê Thị Riêng, Phường Bến Thành, Quận 1", "Quận 1", 10.7680, 106.6919,
+       "food", True, "06:00", "22:00", 65000, 4.6,
+       "Bánh mì Huỳnh Hoa trứ danh Sài Gòn — ổ bánh mì giòn rụm ngập tràn pate béo ngậy, bơ tươi.",
+       ["bánh mì", "nổi tiếng", "đặc sản", "ẩm thực sài gòn"],
+       photo="/images/banh-mi.png"),
     _p("Quan An Ngon Restaurant", "Quán Ăn Ngon",
        "138 Nam Kỳ Khởi Nghĩa, Quận 1", "Quận 1", 10.7760, 106.6967,
-       "food", True, "07:30", "22:00", 0, 4.4,
+       "food", True, "07:30", "22:00", 180000, 4.4,
        "Thiên đường 60+ món ăn truyền thống Nam Bộ trong khuôn viên villa Pháp sang trọng.",
        ["ẩm thực", "truyền thống", "đặc sản Nam Bộ", "gia đình"]),
     _p("Kem Bach Dang", "Kem Bạch Đằng",
        "26-28 Lê Lợi, Bến Nghé, Quận 1", "Quận 1", 10.7745, 106.7015,
-       "food", True, "08:00", "22:00", 0, 4.3,
+       "food", True, "08:00", "22:00", 60000, 4.3,
        "Tiệm kem lâu đời nhất Sài Gòn — kem dừa, kem sầu riêng mát lạnh giải nhiệt.",
        ["kem", "tráng miệng", "cổ điển", "gia đình"]),
     _p("Sup Cua Toan Ky", "Súp Cua Toàn Ký",
        "86-88 Hàm Nghi, Bến Nghé, Quận 1", "Quận 1", 10.7719, 106.6975,
-       "food", True, "06:00", "14:00", 0, 4.4,
+       "food", True, "06:00", "14:00", 35000, 4.4,
        "Súp cua đặc sệt thơm ngon — địa chỉ ăn sáng quen thuộc hàng chục năm của người Sài Gòn.",
        ["súp cua", "sáng sớm", "đặc sản"]),
     _p("Bo Ne 37 Pasteur", "Bò Né 37 Pasteur",
        "37 Pasteur, Bến Nghé, Quận 1", "Quận 1", 10.7769, 106.6922,
-       "food", False, "06:00", "14:00", 0, 4.3,
+       "food", True, "06:00", "14:00", 75000, 4.3,
        "Bò né xèo xèo trứ danh Sài Gòn — bơ chảy, pate thơm ngon từ sáng sớm.",
        ["bò né", "sáng sớm", "đường phố"]),
     _p("Mi Quang 1A", "Mì Quảng 1A",
        "1A Hải Thượng Lãn Ông, Quận 1", "Quận 1", 10.7730, 106.6950,
-       "food", True, "07:00", "20:00", 0, 4.3,
+       "food", True, "07:00", "20:00", 55000, 4.3,
        "Mì Quảng chuẩn vị Đà Nẵng — tô mì béo bùi với tôm thịt và bánh tráng nướng.",
        ["mì Quảng", "miền Trung", "đặc sản"]),
     _p("Banh Cuon Tay Ho", "Bánh Cuốn Tây Hồ",
        "Phó Đức Chính, Quận 1", "Quận 1", 10.7750, 106.6960,
-       "food", True, "07:00", "14:00", 0, 4.2,
+       "food", True, "07:00", "14:00", 50000, 4.2,
        "Bánh cuốn Hà Nội chính gốc — vỏ bánh mỏng mịn, nhân thịt mộc nhĩ thơm ngon.",
        ["bánh cuốn", "miền Bắc", "sáng sớm"]),
     _p("Hu Tieu Da Nam", "Hủ Tiếu Đà Nam",
        "Trần Hưng Đạo, Quận 1", "Quận 1", 10.7710, 106.6990,
-       "food", True, "06:00", "13:00", 0, 4.2,
+       "food", True, "06:00", "13:00", 60000, 4.2,
        "Hủ tiếu Nam Vang nước trong thanh ngọt — địa chỉ sáng sớm không thể bỏ qua.",
        ["hủ tiếu", "Nam Vang", "sáng sớm"]),
     _p("Lau Bo 7 Mon Que Huong", "Lẩu Bò 7 Món Quê Hương",
        "Phạm Ngũ Lão, Quận 1", "Quận 1", 10.7700, 106.6950,
-       "food", True, "10:00", "22:00", 0, 4.3,
+       "food", True, "10:00", "22:00", 150000, 4.3,
        "Lẩu bò 7 món đặc sản miền Trung — nhúng, tái, nướng lá lốt ngay tại bàn.",
        ["lẩu bò", "7 món", "miền Trung"]),
     _p("Bun Rieu Ba Muoi", "Bún Riêu Bà Mười",
        "Lê Lai, Bến Thành, Quận 1", "Quận 1", 10.7695, 106.6975,
-       "food", False, "06:00", "13:00", 0, 4.3,
+       "food", False, "06:00", "13:00", 45000, 4.3,
        "Bún riêu cua đồng đậm đà — gánh bún vỉa hè nổi tiếng suốt mấy chục năm.",
        ["bún riêu", "cua đồng", "bình dân"]),
     _p("Chao Long Pho Viet Q1", "Cháo Lòng Phố Việt",
        "Nguyễn Thái Học, Quận 1", "Quận 1", 10.7695, 106.6965,
-       "food", True, "06:00", "14:00", 0, 4.1,
+       "food", True, "06:00", "14:00", 45000, 4.1,
        "Cháo lòng thơm ngon, dồi mềm — bữa sáng bình dân no đủ của người Sài Gòn.",
        ["cháo lòng", "bình dân", "sáng sớm"]),
     _p("Ben Thanh Night Market", "Chợ Đêm Bến Thành",
        "Phan Bội Châu, Bến Thành, Quận 1", "Quận 1", 10.7722, 106.6973,
-       "food", False, "18:00", "00:00", 0, 4.0,
+       "food", False, "18:00", "00:00", 85000, 4.0,
        "Chợ đêm sầm uất cạnh Chợ Bến Thành — ẩm thực đường phố, hải sản nướng, đồ lưu niệm.",
        ["chợ đêm", "ẩm thực", "hải sản", "đặc sản"]),
-    _p("Ben Thanh Market Food Area", "Khu Ẩm Thực Chợ Bến Thành",
-       "Lê Lợi, Bến Thành, Quận 1", "Quận 1", 10.7726, 106.6982,
-       "food", True, "06:00", "18:00", 0, 4.1,
-       "Chợ truyền thống biểu tượng Sài Gòn — đặc sản, bánh mì kẹp, nước ép trái cây tươi.",
-       ["chợ truyền thống", "ẩm thực", "đặc sản"]),
+    _p("Ben Thanh Market", "Chợ Bến Thành",
+       "Lê Lợi, Bến Thành, Quận 1", "Quận 1", 10.7725, 106.6980,
+       "attraction", True, "06:00", "18:00", 0, 4.5,
+       "Biểu tượng lịch sử văn hoá hơn 100 năm của Sài Gòn — khu chợ sầm uất với "
+       "tháp đồng hồ 4 mặt, bách hóa, ẩm thực và quà lưu niệm.",
+       ["biểu tượng", "chợ truyền thống", "check-in", "đặc sản", "mua sắm"],
+       photo="/images/ben_thanh.jpeg",
+       photo_is_generic=False),
     _p("Hai San Quan 1 Vo Van Kiet", "Hải Sản Võ Văn Kiệt",
        "Võ Văn Kiệt, Quận 1", "Quận 1", 10.7685, 106.7005,
-       "food", True, "10:00", "22:00", 0, 4.2,
+       "food", True, "10:00", "22:00", 160000, 4.2,
        "Nhà hàng hải sản bình dân ven sông — tôm hùm, ghẹ, bạch tuộc tươi ngon theo kg.",
        ["hải sản", "ven sông", "tươi sống"]),
     _p("Pho Dau Q1", "Phở Dậu Quận 1",
        "Trần Quang Khải, Quận 1", "Quận 1", 10.7800, 106.6980,
-       "food", True, "06:00", "14:00", 0, 4.2,
+       "food", True, "06:00", "14:00", 80000, 4.2,
        "Phở gà chuẩn Bắc — nước dùng trong thanh ngọt, thịt gà tơ mềm thái lát.",
-       ["phở gà", "miền Bắc", "sáng sớm"]),
+       ["phở gà", "miền Bắc", "sáng sớm"],
+       photo="/images/pho.png"),
 
     # ── Cafes / Drinks (14) ─────────────────────────────────────────────────
     _p("The Workshop Coffee", "The Workshop Coffee",
        "27 Ngô Đức Kế, Bến Nghé, Quận 1", "Quận 1", 10.7738, 106.7060,
-       "cafe", True, "08:00", "23:00", 0, 4.4,
+       "cafe", True, "08:00", "23:00", 75000, 4.4,
        "Specialty coffee nổi tiếng nhất Quận 1 — không gian công nghiệp vintage 2 tầng.",
-       ["cà phê", "specialty coffee", "làm việc", "yên tĩnh"]),
+       ["cà phê", "specialty coffee", "làm việc", "yên tĩnh"],
+       photo="/images/cafe.jpg"),
     _p("Cong Ca Phe Ngo Duc Ke", "Cộng Cà Phê Ngô Đức Kế",
        "26 Ngô Đức Kế, Bến Nghé, Quận 1", "Quận 1", 10.7737, 106.7053,
-       "cafe", True, "07:00", "23:30", 0, 4.3,
+       "cafe", True, "07:00", "23:30", 55000, 4.3,
        "Cà phê phong cách Hà Nội vintage — cà phê cốt dừa thơm ngon, không gian quân sự độc đáo.",
        ["cà phê", "check-in", "phong cách", "cà phê cốt dừa"]),
     _p("Cafe Apartments 42 Nguyen Hue", "Chung Cư Cà Phê 42 Nguyễn Huệ",
        "42 Nguyễn Huệ, Bến Nghé, Quận 1", "Quận 1", 10.7749, 106.7034,
-       "cafe", True, "08:00", "22:00", 0, 4.3,
+       "cafe", True, "08:00", "22:00", 60000, 4.3,
        "Toà chung cư cổ biến thành 'thiên đường cà phê' — hàng chục quán sáng tạo mỗi tầng.",
-       ["check-in", "cà phê", "độc đáo", "giới trẻ"]),
+       ["check-in", "cà phê", "độc đáo", "giới trẻ"],
+       photo="/images/coffee.jpg"),
     _p("Runam Bistro Dong Du", "Runam Bistro Đông Du",
        "23 Đông Du, Bến Nghé, Quận 1", "Quận 1", 10.7788, 106.7040,
        "cafe", True, "07:00", "23:00", 0, 4.4,
@@ -342,7 +412,9 @@ _Q3 = [
        "28 Võ Văn Tần, Phường 6, Quận 3", "Quận 3", 10.7794, 106.6927,
        "culture", True, "07:30", "17:30", 40000, 4.7,
        "Bảo tàng chiến tranh nổi tiếng thế giới — hiện vật, hình ảnh tác động mạnh về nhân đạo.",
-       ["lịch sử", "giáo dục", "chiến tranh"]),
+       ["lịch sử", "giáo dục", "chiến tranh"],
+       photo="/images/trip-war-remnants.jpg",
+       photo_is_generic=False),
     _p("Tao Dan Park", "Công viên Tao Đàn",
        "Trương Định, Bến Thành, Quận 3", "Quận 3", 10.7779, 106.6924,
        "park", False, "05:00", "21:00", 0, 4.3,
@@ -380,7 +452,7 @@ _Q3 = [
        ["y học", "cổ truyền", "giáo dục"]),
     _p("Le Van Sy Night Food Street", "Phố Ẩm Thực Lê Văn Sỹ",
        "Lê Văn Sỹ, Quận 3", "Quận 3", 10.7827, 106.6793,
-       "food", False, "17:00", "23:00", 0, 4.2,
+       "food", False, "17:00", "23:00", 80000, 4.2,
        "Con phố ẩm thực náo nhiệt buổi tối — ốc, hải sản, bò né, bia hơi trên vỉa hè.",
        ["ẩm thực đêm", "ốc", "hải sản", "vỉa hè"]),
     _p("Nhieu Loc Walking & Cycling", "Bờ kênh Nhiêu Lộc – Đi bộ & Đạp xe",
@@ -390,16 +462,17 @@ _Q3 = [
        ["đi bộ", "đạp xe", "bờ kênh", "thư giãn"]),
 
     # ── Food / Restaurants (17) ─────────────────────────────────────────────
-    _p("Pho Pasteur Q3", "Phở Pasteur Quận 3",
-       "Pasteur, Phường 6, Quận 3", "Quận 3", 10.7769, 106.6918,
-       "food", True, "06:00", "22:00", 0, 4.3,
-       "Phở bò chuẩn vị Sài Gòn — nước dùng đậm đà, thịt bò tươi chín tái theo yêu cầu.",
-       ["phở", "bình dân", "truyền thống"]),
-    _p("Banh Xeo 46A", "Bánh Xèo 46A",
-       "46A Đinh Công Tráng, Quận 1", "Quận 3", 10.7786, 106.6888,
-       "food", True, "10:00", "21:00", 0, 4.4,
-       "Bánh xèo giòn rụm nổi tiếng — tôm thịt đầy ắp, cuốn rau ăn cùng nước mắm chua ngọt.",
-       ["bánh xèo", "nổi tiếng", "miền Nam"]),
+    _p("Pho Hoa Pasteur", "Phở Hòa Pasteur",
+       "260C Pasteur, Phường Võ Thị Sáu, Quận 3", "Quận 3", 10.7871, 106.6892,
+       "food", True, "06:00", "23:00", 90000, 4.5,
+       "Phở bò trứ danh Sài Gòn hoạt động hơn 50 năm — tô phở chuẩn vị miền Nam.",
+       ["phở", "nổi tiếng", "lâu đời", "sáng sớm"],
+       photo="/images/pho.png"),
+    _p("Banh Xeo 46A", "Bánh Xèo 46A Đinh Công Tráng",
+       "46A Đinh Công Tráng, Tân Định, Quận 1", "Quận 3", 10.7886, 106.6888,
+       "food", True, "10:00", "21:00", 95000, 4.4,
+       "Bánh xèo chảo giòn rụm nức tiếng Sài Gòn — tôm thịt đầy ắp, đạt Michelin Bib Gourmand.",
+       ["bánh xèo", "michelin", "nổi tiếng", "miền Nam"]),
     _p("Bo Kho Mai Lan Q3", "Bò Kho Mai Lan",
        "Trần Quý Cáp, Quận 3", "Quận 3", 10.7820, 106.6900,
        "food", True, "06:00", "14:00", 0, 4.3,
@@ -457,9 +530,10 @@ _Q3 = [
        ["mì vịt tiềm", "Hong Kong", "bổ dưỡng"]),
     _p("Banh Mi Nhu Lan Q3", "Bánh Mì Như Lan",
        "Nam Kỳ Khởi Nghĩa, Quận 3", "Quận 3", 10.7795, 106.6900,
-       "food", False, "06:00", "22:00", 0, 4.3,
+       "food", True, "06:00", "22:00", 40000, 4.3,
        "Bánh mì pate thịt nguội lâu đời — vỏ giòn rụm, nhân đầy đủ, giá bình dân.",
-       ["bánh mì", "bình dân", "pate"]),
+       ["bánh mì", "bình dân", "pate"],
+       photo="/images/banh-mi.png"),
     _p("Hai San Que Q3", "Nhà hàng Hải Sản Quê",
        "Nguyễn Thị Minh Khai, Quận 3", "Quận 3", 10.7840, 106.6895,
        "food", True, "10:00", "22:00", 0, 4.2,
@@ -551,12 +625,12 @@ _Q4 = [
     # ── Attractions (10) ───────────────────────────────────────────────────
     _p("Vinh Khanh Seafood Street", "Phố Hải Sản Vĩnh Khánh",
        "Vĩnh Khánh, Quận 4", "Quận 4", 10.7571, 106.7010,
-       "attraction", False, "16:00", "23:00", 0, 4.4,
+       "food", False, "16:00", "01:00", 120000, 4.4,
        "Thiên đường hải sản tươi sống bình dân Sài Gòn về đêm — ốc, ghẹ, tôm theo giá chợ.",
        ["hải sản", "ẩm thực đêm", "dân dã", "bình dân"]),
     _p("Dragon House Wharf Ben Nha Rong", "Bến Nhà Rồng – Bảo tàng Hồ Chí Minh",
        "1 Nguyễn Tất Thành, Quận 4", "Quận 4", 10.7625, 106.7038,
-       "culture", True, "08:00", "17:00", 0, 4.3,
+       "culture", True, "08:00", "17:00", 30000, 4.3,
        "Nơi Bác Hồ xuất dương tìm đường cứu nước năm 1911 — bảo tàng lịch sử thiêng liêng.",
        ["lịch sử", "di sản", "Hồ Chí Minh"]),
     _p("Riverside Park Q4", "Công viên Bờ sông Quận 4",
@@ -973,7 +1047,7 @@ _BT = [
     # ── Attractions (12) ────────────────────────────────────────────────────
     _p("Landmark 81 Tower", "Toà nhà Landmark 81",
        "720A Điện Biên Phủ, Bình Thạnh", "Bình Thạnh", 10.7949, 106.7218,
-       "attraction", True, "09:30", "22:00", 400000, 4.6,
+       "attraction", True, "09:30", "22:00", 420000, 4.6,
        "Toà nhà cao nhất Việt Nam 461m — đài quan sát SkyView tầng 79-81 ngoạn mục.",
        ["check-in", "view", "sang trọng", "hiện đại"]),
     _p("Gia Dinh Park", "Công viên Gia Định",
@@ -1244,11 +1318,12 @@ _PN = [
        "food", True, "06:00", "14:00", 0, 4.3,
        "Phở gà đơn giản mà đậm vị — nước trong thanh ngọt, thịt gà tơ mềm thái lát.",
        ["phở gà", "bình dân", "sáng sớm"]),
-    _p("Com Tam Anh Hong PN", "Cơm Tấm Ánh Hồng",
-       "Phan Xích Long, Phú Nhuận", "Phú Nhuận", 10.7997, 106.6833,
-       "food", True, "06:00", "14:00", 0, 4.3,
-       "Cơm tấm sườn nướng Phú Nhuận uy tín — sườn nướng than, bì chả trọn bộ.",
-       ["cơm tấm", "sườn nướng", "bình dân"]),
+    _p("Com Tam Ba Ghien", "Cơm Tấm Ba Ghiền",
+       "84 Đặng Văn Ngữ, Phường 10, Phú Nhuận", "Phú Nhuận", 10.7925, 106.6738,
+       "food", True, "06:30", "21:30", 85000, 4.6,
+       "Quán cơm tấm nổi tiếng nhất Sài Gòn — miếng sườn khổng lồ nướng than hoa, "
+       "đạt Michelin Bib Gourmand.",
+       ["cơm tấm", "michelin", "nổi tiếng", "đặc sản"]),
     _p("Bun Bo Hue PN Phan Xich Long", "Bún Bò Huế Phan Xích Long",
        "Phan Xích Long, Phú Nhuận", "Phú Nhuận", 10.8000, 106.6836,
        "food", True, "06:00", "13:00", 0, 4.3,
@@ -1326,11 +1401,12 @@ _PN = [
        ["bún cá", "cá lóc", "bình dân"]),
 
     # ── Cafes / Drinks (13) ─────────────────────────────────────────────────
-    _p("Ca Phe Phan Xich Long PN", "Cà Phê Phan Xích Long",
-       "Phan Xích Long, Phú Nhuận", "Phú Nhuận", 10.7999, 106.6835,
-       "cafe", True, "07:00", "22:00", 0, 4.2,
-       "Phố cà phê sống ảo nhất Phú Nhuận — hàng chục quán phong cách đổ về đây.",
-       ["cà phê", "check-in", "sống ảo"]),
+    _p("Ca Phe Vot Phan Dinh Phung", "Cà Phê Vợt Phan Đình Phùng",
+       "330 Phan Đình Phùng, Phú Nhuận", "Phú Nhuận", 10.7960, 106.6850,
+       "cafe", True, "00:00", "23:59", 20000, 4.5,
+       "Quán cà phê vợt gia truyền mở cửa 24/24 suốt hơn 60 năm qua — bếp than củi thơm nồng nàn.",
+       ["cà phê", "cà phê vợt", "lâu đời", "24/7"],
+       photo="/images/coffee.jpg"),
     _p("Shin Coffee PN", "Shin Coffee Phú Nhuận",
        "Phan Xích Long, Phú Nhuận", "Phú Nhuận", 10.7998, 106.6834,
        "cafe", True, "07:00", "22:00", 0, 4.3,
@@ -1403,11 +1479,12 @@ _TD = [
        "attraction", False, "00:00", "23:59", 0, 4.4,
        "Khu đô thị mới Thủ Thiêm — view sông Sài Gòn & Landmark 81 cực đẹp, quảng trường hiện đại.",
        ["check-in", "hiện đại", "view sông", "dạo phố"]),
-    _p("RMIT University Ho Chi Minh City", "Đại học RMIT TP.HCM",
-       "702 Nguyễn Văn Linh, Thủ Đức", "Thủ Đức", 10.7310, 106.7000,
-       "attraction", False, "07:00", "22:00", 0, 4.3,
-       "Khuôn viên Đại học RMIT xanh đẹp — kiến trúc hiện đại, nhiều điểm check-in.",
-       ["check-in", "kiến trúc", "giáo dục"]),
+    _p("Buu Long Pagoda", "Chùa Bửu Long",
+       "81 Nguyễn Xiển, Long Bình, Thủ Đức", "Thủ Đức", 10.8712, 106.8378,
+       "culture", True, "08:00", "18:00", 0, 4.6,
+       "Ngôi chùa phong cách Thái Lan lộng lẫy bên sông Đồng Nai — bảo tháp "
+       "Gotama Cetiya nguy nga.",
+       ["chùa", "kiến trúc Thái", "tâm linh", "check-in"]),
     _p("Vietnam National University HCMC", "Đại học Quốc gia TP.HCM",
        "Linh Trung, Thủ Đức", "Thủ Đức", 10.8704, 106.8036,
        "attraction", False, "06:00", "22:00", 0, 4.4,
@@ -1420,7 +1497,7 @@ _TD = [
        ["công nghệ", "hiện đại"]),
     _p("Suoi Tien Theme Park", "Khu Du Lịch Suối Tiên",
        "120 Xa lộ Hà Nội, Thủ Đức", "Thủ Đức", 10.8734, 106.7801,
-       "entertainment", False, "08:00", "17:30", 160000, 4.0,
+       "entertainment", False, "08:00", "17:30", 150000, 4.0,
        "Công viên giải trí văn hoá dân gian lớn nhất TP.HCM — công viên nước, vui chơi.",
        ["gia đình", "công viên nước", "vui chơi", "văn hoá"]),
     _p("Vincom Mega Mall Thu Duc", "Vincom Mega Mall Thủ Đức",
@@ -1433,11 +1510,11 @@ _TD = [
        "attraction", False, "00:00", "23:59", 0, 4.3,
        "Khu dân cư quốc tế Thảo Điền — villa, café, nhà hàng Âu Á sầm uất và sang trọng.",
        ["expat", "quốc tế", "villa", "sang trọng"]),
-    _p("The Factory Arts Centre", "The Factory Nghệ thuật Đương đại",
-       "15 Nguyễn Ư Dĩ, Thảo Điền, Thủ Đức", "Thủ Đức", 10.8024, 106.7389,
-       "culture", True, "10:00", "18:00", 50000, 4.4,
-       "Trung tâm nghệ thuật đương đại hàng đầu TP.HCM — triển lãm thường xuyên.",
-       ["nghệ thuật", "đương đại", "triển lãm"]),
+    _p("Ao Dai Museum", "Bảo tàng Áo Dài",
+       "206/19/30 Long Thuận, Long Phước, Thủ Đức", "Thủ Đức", 10.8250, 106.8400,
+       "culture", True, "08:30", "17:30", 50000, 4.5,
+       "Không gian văn hóa truyền thống thanh bình tôn vinh tà áo dài Việt Nam qua các thời kỳ.",
+       ["áo dài", "di sản", "văn hoá", "check-in"]),
     _p("Long Phuoc Rung Dua", "Rừng Dừa Long Phước",
        "Long Phước, Thủ Đức", "Thủ Đức", 10.8310, 106.7637,
        "park", False, "07:00", "18:00", 0, 4.0,
@@ -1625,15 +1702,17 @@ _Q7 = [
        "Khu đô thị kiểu mẫu — đường phố xanh mát, kiến trúc Singapore hiện đại.",
        ["check-in", "hiện đại", "dạo phố", "kiến trúc"]),
     _p("Crescent Mall Phu My Hung", "Crescent Mall Phú Mỹ Hưng",
-       "101 Tôn Dật Tiên, Quận 7", "Quận 7", 10.7310, 106.7048,
-       "shopping", True, "10:00", "22:00", 0, 4.3,
-       "TTTM phong cách Mỹ bên bờ kênh Phú Mỹ Hưng — không gian thoáng đẹp.",
-       ["mua sắm", "ẩm thực", "gia đình", "sang trọng"]),
+       "101 Tôn Dật Tiên, Tân Phú, Quận 7", "Quận 7", 10.7297, 106.7196,
+       "shopping", True, "10:00", "22:00", 0, 4.5,
+       "TTTM tiêu chuẩn quốc tế bên Hồ Bán Nguyệt — thiên đường mua sắm, rạp CGV "
+       "và ẩm thực phong phú ven hồ.",
+       ["mua sắm", "ẩm thực", "gia đình", "sang trọng", "hồ bán nguyệt"]),
     _p("SC VivoCity Mall Q7", "SC VivoCity Quận 7",
-       "1058A Nguyễn Văn Linh, Quận 7", "Quận 7", 10.7355, 106.7020,
-       "shopping", True, "09:30", "22:00", 0, 4.2,
-       "TTTM quy mô lớn Quận 7 — Lotte Mart, CGV, hơn 200 cửa hàng thương hiệu.",
-       ["mua sắm", "gia đình", "ẩm thực"]),
+       "1058 Nguyễn Văn Linh, Tân Phong, Quận 7", "Quận 7", 10.7327, 106.7025,
+       "shopping", True, "09:30", "22:00", 0, 4.4,
+       "TTTM quy mô lớn phong cách Singapore — công viên nước sân thượng, Co.opXtra "
+       "và hơn 200 thương hiệu.",
+       ["mua sắm", "gia đình", "ẩm thực", "vui chơi"]),
     _p("Phu My Hung Lake Park", "Công viên Hồ Phú Mỹ Hưng",
        "Nguyễn Văn Linh, Quận 7", "Quận 7", 10.7330, 106.7005,
        "park", False, "05:00", "22:00", 0, 4.2,
@@ -1654,11 +1733,12 @@ _Q7 = [
        "shopping", True, "08:00", "22:00", 0, 4.1,
        "Siêu thị Hàn Quốc lớn Quận 7 — thực phẩm nhập khẩu Hàn, đồ ăn tươi sống.",
        ["mua sắm", "siêu thị", "Hàn Quốc"]),
-    _p("Phu My Hung Pedestrian Bridge", "Cầu Đi Bộ Phú Mỹ Hưng",
-       "Phú Mỹ Hưng, Quận 7", "Quận 7", 10.7335, 106.7000,
-       "attraction", False, "00:00", "23:59", 0, 4.0,
-       "Cầu đi bộ cong điểm sống ảo Phú Mỹ Hưng — view đẹp buổi chiều tối.",
-       ["cầu", "check-in", "sống ảo"]),
+    _p("Starlight Bridge & Crescent Lake", "Cầu Ánh Sao & Hồ Bán Nguyệt",
+       "Khu đô thị Phú Mỹ Hưng, Tân Phú, Quận 7", "Quận 7", 10.7303, 106.7189,
+       "attraction", False, "18:00", "23:00", 0, 4.6,
+       "Cầu đi bộ ánh sao rực rỡ uốn cong qua Hồ Bán Nguyệt — hệ thống phun nước "
+       "và đèn LED đổi màu lung linh về đêm.",
+       ["cầu ánh sao", "hồ bán nguyệt", "check-in", "hẹn hò", "night view"]),
     _p("Era Town Q7 Riverside", "Era Town Ven Sông",
        "Đào Trí, Quận 7", "Quận 7", 10.7275, 106.7055,
        "attraction", False, "00:00", "23:59", 0, 4.1,
@@ -1844,10 +1924,11 @@ PLACES: list[dict] = _Q1 + _Q3 + _Q4 + _Q5 + _BT + _PN + _TD + _Q7
 # ---------------------------------------------------------------------------
 # Seed function (ORM-based)
 # ---------------------------------------------------------------------------
-async def seed_places() -> None:
+async def seed_places(session: Any = None) -> None:
     """
-    Insert all places using SQLAlchemy ORM.
-    Skips duplicates by checking name uniqueness.
+    Insert or update (upsert) all places using SQLAlchemy ORM.
+    - Inserts new places if name not in DB.
+    - Updates attributes if place already exists by name.
     Compatible with both SQLite (aiosqlite) and PostgreSQL (asyncpg).
     """
     from sqlalchemy import select
@@ -1855,22 +1936,55 @@ async def seed_places() -> None:
     from app.db.models import Place
     from app.db.session import AsyncSessionLocal
 
-    async with AsyncSessionLocal() as session:
-        result = await session.execute(select(Place.name))
-        existing_names: set[str] = {row[0] for row in result.fetchall()}
+    async def _do_seed(s: Any) -> None:
+        result = await s.execute(select(Place))
+        existing_places: dict[str, Place] = {place.name: place for place in result.scalars()}
 
-        inserted = skipped = 0
+        inserted = updated = 0
+        updatable_fields = (
+            "name_vi",
+            "address",
+            "district",
+            "latitude",
+            "longitude",
+            "category",
+            "is_indoor",
+            "open_time",
+            "close_time",
+            "entry_fee_vnd",
+            "average_rating",
+            "photo_url",
+            "photo_is_generic",
+            "description",
+            "tags",
+            "is_active",
+        )
+
         for p in PLACES:
-            if p["name"] in existing_names:
-                skipped += 1
-                continue
-            session.add(Place(**p))
-            existing_names.add(p["name"])
-            inserted += 1
+            existing = existing_places.get(p["name"])
+            if existing:
+                changed = False
+                for field in updatable_fields:
+                    new_val = p.get(field)
+                    if getattr(existing, field) != new_val:
+                        setattr(existing, field, new_val)
+                        changed = True
+                if changed:
+                    updated += 1
+            else:
+                s.add(Place(**p))
+                inserted += 1
 
-        await session.commit()
-        print(f"✅ Seed hoàn thành — thêm: {inserted}, bỏ qua (trùng): {skipped}")
+        if inserted or updated:
+            await s.commit()
+        print(f"✅ Seed hoàn thành — thêm: {inserted}, cập nhật: {updated}")
         print(f"   Tổng địa điểm trong dataset: {len(PLACES)}")
+
+    if session is not None:
+        await _do_seed(session)
+    else:
+        async with AsyncSessionLocal() as sess:
+            await _do_seed(sess)
 
 
 if __name__ == "__main__":

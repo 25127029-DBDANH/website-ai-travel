@@ -22,7 +22,7 @@ from app.db.session import get_db
 from app.services.places_service import (
     get_nearby_places,
     get_place_by_id,
-    search_places,
+    search_places_with_count,
 )
 
 router = APIRouter(prefix="/places", tags=["Places"])
@@ -60,7 +60,7 @@ async def search_places_endpoint(
     - **category**: lọc theo loại địa điểm
     - **is_indoor**: `true` = trong nhà (bảo tàng, mall…), `false` = ngoài trời
     """
-    places = await search_places(
+    places, total = await search_places_with_count(
         db,
         q=q,
         district=district,
@@ -69,7 +69,7 @@ async def search_places_endpoint(
         limit=limit,
         offset=offset,
     )
-    return {"total": len(places), "results": places}
+    return {"total": total, "results": places}
 
 
 # ---------------------------------------------------------------------------
