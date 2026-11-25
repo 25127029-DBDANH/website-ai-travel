@@ -5,12 +5,14 @@ Verifies:
 1. create_tables() succeeds on a fresh PostgreSQL database.
 2. create_tables() is idempotent when invoked a second time.
 3. seed_places() populates more than 300 HCMC places.
+4. Inserting and updating User/Trip rows with naive UTC timestamps succeeds.
 """
 from __future__ import annotations
 
 import asyncio
 import sys
 from pathlib import Path
+from uuid import uuid4
 
 from sqlalchemy import func, select
 
@@ -19,8 +21,9 @@ if str(SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(SERVER_DIR))
 
 from app.db.hcmc_data import seed_places  # noqa: E402
-from app.db.models import Place  # noqa: E402
+from app.db.models import Place, Trip, User  # noqa: E402
 from app.db.session import AsyncSessionLocal, create_tables, engine  # noqa: E402
+from app.utils.time import utc_now  # noqa: E402
 
 
 async def main() -> None:
@@ -38,6 +41,27 @@ async def main() -> None:
             )
 
         print(f"Postgres smoke check passed: {place_count} places seeded.")
+
+        async with AsyncSessionLocal() as session:
+            user = User(
+                username=f"smoke_{uuid4().hex[:12]}",
+                hashed_password="!smoke_unusable_password",
+            )
+            session.add(user)
+            await session.flush()
+
+            trip = Trip(
+                user_id=user.id,
+                title="Postgres smoke trip",
+            )
+            session.add(trip)
+            await session.commit()
+
+            trip.updated_at = utc_now()
+            user.updated_at = utc_now()
+            await session.commit()
+
+        print("Postgres smoke: user/trip insert+update OK")
     finally:
         await engine.dispose()
 

@@ -8,7 +8,6 @@ from __future__ import annotations
 import logging
 import re
 import secrets
-from datetime import datetime, timezone
 
 import anyio
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -44,6 +43,7 @@ from app.schemas.user import (
     UserLogin,
     UserOut,
 )
+from app.utils.time import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -282,7 +282,7 @@ async def google_login(
             user.email = email
             updated = True
         if updated:
-            user.updated_at = datetime.now(timezone.utc)
+            user.updated_at = utc_now()
             await db.flush()
             await db.refresh(user)
 

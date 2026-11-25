@@ -22,11 +22,12 @@ from app.schemas.trip import (
     ShareResponse,
     TripCreate,
     TripDetailOut,
-    TripListOut,
     TripItemUpdate,
+    TripListOut,
     TripOut,
     TripUpdate,
 )
+from app.utils.time import utc_now
 
 router = APIRouter(prefix="/trips", tags=["trips"])
 
@@ -350,7 +351,7 @@ async def update_trip(
             trip.cover_photo = payload.itinerary_items[0].get("photo_url") or trip.cover_photo
             trip.cover_place_name = payload.itinerary_items[0].get("place_name") or trip.cover_place_name
         trip.total_estimated = _compute_budget(trip, payload.itinerary_items).total_estimated
-    trip.updated_at = datetime.now(timezone.utc)
+    trip.updated_at = utc_now()
     await db.flush()
     await db.refresh(trip)
     return _trip_out(trip)
@@ -396,7 +397,7 @@ async def update_trip_item(
         item["checkin_time"] = datetime.now(timezone.utc).isoformat()
 
     trip.itinerary_json = json.dumps(items)
-    trip.updated_at = datetime.now(timezone.utc)
+    trip.updated_at = utc_now()
     await db.flush()
     return {"items": items}
 
@@ -465,7 +466,7 @@ async def create_share_link(
     trip = await _get_user_trip(trip_id, user, db)
     if not trip.share_token:
         trip.share_token = secrets.token_urlsafe(16)
-        trip.updated_at = datetime.now(timezone.utc)
+        trip.updated_at = utc_now()
         await db.flush()
         await db.refresh(trip)
 
@@ -486,7 +487,7 @@ async def revoke_share_link(
 ):
     trip = await _get_user_trip(trip_id, user, db)
     trip.share_token = None
-    trip.updated_at = datetime.now(timezone.utc)
+    trip.updated_at = utc_now()
     return {"success": True}
 
 

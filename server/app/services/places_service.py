@@ -15,7 +15,7 @@ import json
 import logging
 import math
 import os
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
@@ -24,6 +24,7 @@ from sqlalchemy import case, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Place, PlaceCache
+from app.utils.time import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ async def _fetch_google_place_details(
                 # Step 3: Save or update cache in database
                 if db is not None:
                     try:
-                        now = datetime.utcnow()
+                        now = utc_now()
                         if cache_entry:
                             cache_entry.data_json = json.dumps(data, ensure_ascii=False)
                             cache_entry.cached_at = now

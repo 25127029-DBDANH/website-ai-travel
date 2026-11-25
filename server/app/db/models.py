@@ -11,11 +11,13 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+from app.utils.time import utc_now
 
 
 def _new_id() -> str:
@@ -44,8 +46,8 @@ class User(Base):
     full_name = Column(String(120), nullable=True)
     avatar_url = Column(Text, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    updated_at = Column(DateTime, nullable=False, default=utc_now)
 
     @property
     def has_password(self) -> bool:
@@ -81,8 +83,8 @@ class Trip(Base):
     cover_photo = Column(Text, nullable=True)
     cover_place_name = Column(String(200), nullable=True)
     itinerary_json = Column(Text, nullable=False, default="[]")
-    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+    updated_at = Column(DateTime, nullable=False, default=utc_now)
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +121,7 @@ class Place(Base):
     description: Mapped[str | None] = mapped_column(Text)
     tags: Mapped[str] = mapped_column(Text, default="[]")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     def tags_list(self) -> list[str]:
         """Deserialise the JSON tags field."""
@@ -160,12 +162,12 @@ class PlaceCache(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     place_id: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
     data_json: Mapped[str] = mapped_column(Text, nullable=False)
-    cached_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    cached_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     @classmethod
     def create_entry(cls, place_id: str, data: dict, ttl_days: int = 7) -> PlaceCache:
-        now = datetime.utcnow()
+        now = utc_now()
         return cls(
             place_id=place_id,
             data_json=json.dumps(data, ensure_ascii=False),
@@ -174,7 +176,12 @@ class PlaceCache(Base):
         )
 
     def is_expired(self) -> bool:
-        return datetime.utcnow() > self.expires_at
+        expires_at = (
+            self.expires_at.replace(tzinfo=None)
+            if self.expires_at.tzinfo is not None
+            else self.expires_at
+        )
+        return utc_now() > expires_at
 
     def to_data(self) -> dict:
         try:

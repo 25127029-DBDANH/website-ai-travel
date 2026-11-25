@@ -5,9 +5,10 @@ Author  : Ngô Tấn Đạt (Member 3 — Places & Interactive Map)
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from app.db.hcmc_data import _BT, _PN, _Q1, _Q3, _Q4, _Q5, _Q7, _TD, PLACES
+from app.utils.time import utc_now
 
 
 def test_places_count_and_distribution():
@@ -67,7 +68,7 @@ def test_place_cache_ttl():
     assert entry.to_data()["rating"] == 4.8
 
     # Simulate expired entry
-    entry.expires_at = datetime.utcnow() - timedelta(minutes=1)
+    entry.expires_at = utc_now() - timedelta(minutes=1)
     assert entry.is_expired()
 
 
