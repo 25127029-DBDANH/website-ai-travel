@@ -41,7 +41,9 @@ DEMO_TRIPS: dict[str, dict[str, Any]] = {
                 "end_time": "10:30",
                 "place_name": "Dinh Độc Lập (Hội trường Thống Nhất)",
                 "address": "135 Nam Kỳ Khởi Nghĩa, Phường Bến Thành, Quận 1, TP.HCM",
-                "description": "Di tích lịch sử cấp quốc gia đặc biệt, biểu tượng thống nhất đất nước.",
+                "description": (
+                    "Di tích lịch sử cấp quốc gia đặc biệt, biểu tượng thống nhất đất nước."
+                ),
                 "estimated_cost": 65000,
                 "is_indoor": True,
             },
@@ -173,7 +175,9 @@ async def _get_trip_data(
     responses={
         200: {
             "content": {"text/calendar": {}},
-            "description": "File iCalendar (.ics) sẵn sàng nhập vào Google Calendar hoặc Apple Calendar.",
+            "description": (
+                "File iCalendar (.ics) sẵn sàng nhập vào Google Calendar hoặc Apple Calendar."
+            ),
         },
         404: {"description": "Không tìm thấy chuyến đi tương ứng với trip_id."},
     },

@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import os
 from typing import Annotated, Optional
-from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status

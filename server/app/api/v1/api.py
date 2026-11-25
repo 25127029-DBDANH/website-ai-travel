@@ -1,6 +1,7 @@
 """
 api.py — API v1 router combining all endpoint modules.
-Authors : Đỗ Nguyễn An Khang (Auth & Trips), Ngô Tấn Đạt (Places), Lê Hữu Lam (Gemini AI), Đàng Minh Hạo (Calendar)
+Authors : Đỗ Nguyễn An Khang (Auth & Trips), Ngô Tấn Đạt (Places),
+          Lê Hữu Lam (Gemini AI), Đàng Minh Hạo (Calendar)
 """
 
 from __future__ import annotations

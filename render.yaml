@@ -14,7 +14,8 @@ services:
     # để rate limit đăng nhập tính theo từng người thay vì chung một IP proxy.
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
-    healthCheckPath: /health
+    # Kiểm tra kết nối DB thật (SELECT 1) và bảng places đã seed trước khi Render chuyển traffic sang bản deploy mới
+    healthCheckPath: /health/ready
 
     # Chỉ tự động deploy khi toàn bộ CI checks trên nhánh liên kết (main) pass
     autoDeployTrigger: checksPass

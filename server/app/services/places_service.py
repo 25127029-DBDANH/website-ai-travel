@@ -143,7 +143,7 @@ async def search_places(
     Returns:
         List of place dicts ready to be serialised by FastAPI endpoints.
     """
-    stmt = select(Place).where(Place.is_active == True)
+    stmt = select(Place).where(Place.is_active.is_(True))
 
     if q and q.strip():
         term = f"%{q.strip()}%"
@@ -200,7 +200,7 @@ async def get_place_by_id(
     Returns:
         Place dict or None if not found.
     """
-    stmt = select(Place).where(Place.id == str(place_id), Place.is_active == True)
+    stmt = select(Place).where(Place.id == str(place_id), Place.is_active.is_(True))
     result = await db.execute(stmt)
     place_obj = result.scalar_one_or_none()
     if not place_obj:
@@ -284,7 +284,7 @@ async def get_nearby_places(
     lon_delta = (radius_km * 1.1) / (111.320 * max(0.01, abs(cos_lat)))
 
     stmt = select(Place).where(
-        Place.is_active == True,
+        Place.is_active.is_(True),
         Place.latitude.between(latitude - lat_delta, latitude + lat_delta),
         Place.longitude.between(longitude - lon_delta, longitude + lon_delta),
     )
