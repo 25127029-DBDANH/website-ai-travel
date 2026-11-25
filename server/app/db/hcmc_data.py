@@ -164,7 +164,7 @@ def _p(
 
 
 # ---------------------------------------------------------------------------
-# QUẬN 1 — 42 places
+# QUẬN 1 — 45 places
 # ---------------------------------------------------------------------------
 _Q1 = [
     # ── Attractions / Culture (12) ──────────────────────────────────────────
@@ -401,6 +401,21 @@ _Q1 = [
        "cafe", True, "08:00", "22:00", 0, 4.3,
        "Cà phê sân vườn trong biệt thự Pháp cổ — không gian lãng mạn, ánh sáng tự nhiên.",
        ["cà phê", "sân vườn", "vintage", "lãng mạn"]),
+    _p("Emperor Jade Pagoda", "Chùa Ngọc Hoàng",
+       "73 Mai Thị Lựu, Đa Kao, Quận 1", "Quận 1", 10.7920, 106.6982,
+       "culture", True, "07:00", "18:00", 0, 4.5,
+       "Ngôi chùa Đạo giáo độc đáo nhất Sài Gòn — điêu khắc tinh xảo, lò hương nghi ngút.",
+       ["tôn giáo", "Đạo giáo", "điêu khắc", "linh thiêng"]),
+    _p("Banh Xeo 46A", "Bánh Xèo 46A Đinh Công Tráng",
+       "46A Đinh Công Tráng, Tân Định, Quận 1", "Quận 1", 10.7905, 106.6915,
+       "food", True, "10:00", "21:00", 95000, 4.4,
+       "Bánh xèo chảo giòn rụm nức tiếng Sài Gòn — tôm thịt đầy ắp, đạt Michelin Bib Gourmand.",
+       ["bánh xèo", "michelin", "nổi tiếng", "miền Nam"]),
+    _p("Com Tam 3A", "Cơm Tấm 3A",
+       "Đinh Tiên Hoàng, Đa Kao, Quận 1", "Quận 1", 10.7903, 106.6975,
+       "food", True, "06:00", "14:00", 55000, 4.2,
+       "Cơm tấm sườn nướng than hoa đặc sản — bì chả đủ món, giá bình dân.",
+       ["cơm tấm", "sườn nướng", "bình dân"]),
 ]
 
 # ---------------------------------------------------------------------------
@@ -430,11 +445,16 @@ _Q3 = [
        "culture", False, "05:30", "19:00", 0, 4.6,
        "Nhà thờ màu hồng pastel nổi tiếng nhất Sài Gòn — điểm check-in sống ảo hot nhất.",
        ["check-in", "kiến trúc", "màu hồng", "tôn giáo"]),
-    _p("Emperor Jade Pagoda", "Chùa Ngọc Hoàng",
-       "73 Mai Thị Lựu, Đa Kao, Quận 1", "Quận 3", 10.7873, 106.6930,
-       "culture", True, "07:00", "18:00", 0, 4.5,
-       "Ngôi chùa Đạo giáo độc đáo nhất Sài Gòn — điêu khắc tinh xảo, lò hương nghi ngút.",
-       ["tôn giáo", "Đạo giáo", "điêu khắc", "linh thiêng"]),
+    _p("Turtle Lake Cong Truong Quoc Te", "Hồ Con Rùa (Công trường Quốc Tế)",
+       "Công trường Quốc Tế, Phường Võ Thị Sáu, Quận 3", "Quận 3", 10.7827, 106.6957,
+       "attraction", False, "00:00", "23:59", 0, 4.4,
+       "Vòng xoay kiến trúc biểu tượng Quận 3 — điểm tụ họp giới trẻ, ăn vặt buổi tối.",
+       ["check-in", "ăn vặt", "biểu tượng", "buổi tối"]),
+    _p("Vinh Nghiem Pagoda", "Chùa Vĩnh Nghiêm",
+       "339 Nam Kỳ Khởi Nghĩa, Phường Võ Thị Sáu, Quận 3", "Quận 3", 10.7912, 106.6838,
+       "culture", True, "06:00", "20:00", 0, 4.7,
+       "Ngôi chùa Phật giáo nổi tiếng Quận 3 — bảo tháp Quan Âm 7 tầng uy nghi bên kênh Nhiêu Lộc.",
+       ["chùa", "tôn giáo", "kiến trúc", "tâm linh"]),
     _p("Nhieu Loc Thi Nghe Canal", "Kênh Nhiêu Lộc – Thị Nghè",
        "Hoàng Sa, Quận 3", "Quận 3", 10.7889, 106.6884,
        "attraction", False, "00:00", "23:59", 0, 4.3,
@@ -468,11 +488,11 @@ _Q3 = [
        "Phở bò trứ danh Sài Gòn hoạt động hơn 50 năm — tô phở chuẩn vị miền Nam.",
        ["phở", "nổi tiếng", "lâu đời", "sáng sớm"],
        photo="/images/pho.png"),
-    _p("Banh Xeo 46A", "Bánh Xèo 46A Đinh Công Tráng",
-       "46A Đinh Công Tráng, Tân Định, Quận 1", "Quận 3", 10.7886, 106.6888,
-       "food", True, "10:00", "21:00", 95000, 4.4,
-       "Bánh xèo chảo giòn rụm nức tiếng Sài Gòn — tôm thịt đầy ắp, đạt Michelin Bib Gourmand.",
-       ["bánh xèo", "michelin", "nổi tiếng", "miền Nam"]),
+    _p("Banh Mi Hoa Ma", "Bánh Mì Hòa Mã",
+       "53 Cao Thắng, Phường 3, Quận 3", "Quận 3", 10.7709, 106.6828,
+       "food", True, "06:00", "11:00", 60000, 4.6,
+       "Tiệm bánh mì chảo lâu đời nhất Sài Gòn từ 1958 — ốp la, pate, chả lụa nóng hổi.",
+       ["bánh mì", "lâu đời", "ăn sáng", "đặc sản"]),
     _p("Bo Kho Mai Lan Q3", "Bò Kho Mai Lan",
        "Trần Quý Cáp, Quận 3", "Quận 3", 10.7820, 106.6900,
        "food", True, "06:00", "14:00", 0, 4.3,
@@ -503,11 +523,6 @@ _Q3 = [
        "food", True, "10:00", "21:00", 0, 4.2,
        "Bún mắm miền Tây đậm đà — tôm, cá lóc, bì heo thả miệng.",
        ["bún mắm", "miền Tây", "đậm đà"]),
-    _p("Com Tam 3A Q3", "Cơm Tấm 3A",
-       "Đinh Tiên Hoàng, Đa Kao, Quận 1", "Quận 3", 10.7840, 106.6880,
-       "food", True, "06:00", "14:00", 0, 4.2,
-       "Cơm tấm sườn nướng than hoa đặc sản — bì chả đủ món, giá bình dân.",
-       ["cơm tấm", "sườn nướng", "bình dân"]),
     _p("Lau De Q3 Vo Van Tan", "Lẩu Dê Võ Văn Tần",
        "Võ Văn Tần, Quận 3", "Quận 3", 10.7840, 106.6855,
        "food", True, "10:00", "22:00", 0, 4.2,
@@ -1938,9 +1953,16 @@ async def seed_places(session: Any = None) -> None:
 
     async def _do_seed(s: Any) -> None:
         result = await s.execute(select(Place))
-        existing_places: dict[str, Place] = {place.name: place for place in result.scalars()}
+        existing_places: dict[str, Place] = {}
+        extra_duplicates: list[Place] = []
+        for place in result.scalars():
+            if place.name in existing_places:
+                extra_duplicates.append(place)
+            else:
+                existing_places[place.name] = place
 
-        inserted = updated = 0
+        dataset_names = {p["name"] for p in PLACES}
+        inserted = updated = deactivated = 0
         updatable_fields = (
             "name_vi",
             "address",
@@ -1975,9 +1997,21 @@ async def seed_places(session: Any = None) -> None:
                 s.add(Place(**p))
                 inserted += 1
 
-        if inserted or updated:
+        for existing_name, existing in existing_places.items():
+            if existing_name not in dataset_names and existing.is_active:
+                existing.is_active = False
+                deactivated += 1
+
+        for duplicate in extra_duplicates:
+            if duplicate.is_active:
+                duplicate.is_active = False
+                deactivated += 1
+
+        if inserted or updated or deactivated:
             await s.commit()
-        print(f"✅ Seed hoàn thành — thêm: {inserted}, cập nhật: {updated}")
+        print(
+            f"✅ Seed hoàn thành — thêm: {inserted}, cập nhật: {updated}, ẩn (cũ): {deactivated}"
+        )
         print(f"   Tổng địa điểm trong dataset: {len(PLACES)}")
 
     if session is not None:

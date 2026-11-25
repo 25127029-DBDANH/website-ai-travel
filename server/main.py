@@ -181,7 +181,9 @@ async def health_check():
 async def readiness_check(db: AsyncSession = Depends(get_db)):
     try:
         await db.execute(text("SELECT 1"))
-        places_count = await db.scalar(select(func.count()).select_from(Place))
+        places_count = await db.scalar(
+            select(func.count()).select_from(Place).where(Place.is_active.is_(True))
+        )
     except Exception as exc:
         logger.warning("Readiness check failed: %s", type(exc).__name__)
         try:

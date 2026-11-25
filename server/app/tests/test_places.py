@@ -5,6 +5,7 @@ Author  : Ngô Tấn Đạt (Member 3 — Places & Interactive Map)
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -54,6 +55,13 @@ def test_places_required_fields():
         )
         assert p["tags"] and p["tags"].startswith("["), f"Tags must be JSON string for {p['name']}"
 
+    names = [p["name"] for p in PLACES]
+    assert len(names) == len(set(names)), "Duplicate place names found in PLACES"
+    for p in _Q3:
+        assert not re.search(r"(?<!\d)Quận 1(?!\d)", p["address"]), (
+            f"Quận 3 entry {p['name']} has Quận 1 address: {p['address']}"
+        )
+
 
 def test_places_food_and_cafe_realistic_data():
     """Ensure all food & cafe spots have realistic non-zero costs and proper indoor flags."""
@@ -102,6 +110,11 @@ def test_banh_mi_huynh_hoa_realistic_details():
     assert pho_hoa["district"] == "Quận 3"
     assert pho_hoa["entry_fee_vnd"] == 90000
     assert pho_hoa["is_indoor"] is True
+
+    for q1_name in ("Banh Xeo 46A", "Emperor Jade Pagoda", "Com Tam 3A"):
+        q1_place = by_name.get(q1_name)
+        assert q1_place is not None, f"{q1_name} must exist in dataset"
+        assert q1_place["district"] == "Quận 1", f"{q1_name} must belong to Quận 1"
 
     verified_landmarks = (
         "Notre-Dame Cathedral Basilica of Saigon",
@@ -228,7 +241,7 @@ async def test_legacy_schema_migration_and_seed_upsert(tmp_path: Path) -> None:
 
     from app.db.hcmc_data import seed_places
     from app.db.migrations import ensure_schema
-    from app.services.places_service import search_places
+    from app.services.places_service import count_places, search_places
 
     db_file = tmp_path / "legacy_places.db"
     legacy_engine = create_async_engine(
@@ -273,11 +286,26 @@ async def test_legacy_schema_migration_and_seed_upsert(tmp_path: Path) -> None:
                         id, name, name_vi, address, district, latitude, longitude,
                         category, is_indoor, open_time, close_time, entry_fee_vnd,
                         average_rating, photo_url, description, tags, is_active
-                    ) VALUES (
+                    ) VALUES
+                    (
                         'legacy-hh-id', 'Banh Mi Huynh Hoa', 'Bánh Mì Huỳnh Hoa',
                         '26 Le Thi Rieng', 'Quận 1', 10.768, 106.6919,
                         'food', 0, '14:30', '23:30', 0,
                         4.5, '/images/old.jpg', 'Old desc', '[]', 1
+                    ),
+                    (
+                        'legacy-bt-old', 'Ben Thanh Market Food Area', 'Khu Ẩm Thực Chợ Bến Thành',
+                        'Lê Lợi, Quận 1', 'Quận 1', 10.7726, 106.6982,
+                        'food', 1, '06:00', '18:00', 0,
+                        4.1, 'https://images.unsplash.com/photo-1626132627393-83f4a9f0dfa8',
+                        'Old stall', '[]', 1
+                    ),
+                    (
+                        'legacy-pp-old', 'Pho Pasteur Q3', 'Phở Pasteur',
+                        '260C Pasteur, Quận 3', 'Quận 3', 10.7871, 106.6892,
+                        'food', 1, '06:00', '22:00', 0,
+                        4.4, 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5',
+                        'Old pho', '[]', 1
                     )
                     """
                 )
@@ -299,8 +327,25 @@ async def test_legacy_schema_migration_and_seed_upsert(tmp_path: Path) -> None:
 
         async with session_factory() as session:
             await seed_places(session=session)
+            # Run a second time to verify idempotency when no rows need updating
+            await seed_places(session=session)
+
+        async with legacy_engine.connect() as conn:
+            deactivated_rows = (
+                await conn.execute(
+                    text(
+                        "SELECT id, is_active FROM places "
+                        "WHERE id IN ('legacy-bt-old', 'legacy-pp-old')"
+                    )
+                )
+            ).fetchall()
+            assert len(deactivated_rows) == 2
+            for _row_id, active_flag in deactivated_rows:
+                assert bool(active_flag) is False
 
         async with session_factory() as session:
+            assert await count_places(session) == len(PLACES)
+
             results = await search_places(session, q="Huynh Hoa")
             assert len(results) >= 1
             hh = next(item for item in results if item["name"] == "Banh Mi Huynh Hoa")
@@ -311,6 +356,16 @@ async def test_legacy_schema_migration_and_seed_upsert(tmp_path: Path) -> None:
             assert hh["open_time"] == "06:00"
             assert hh["close_time"] == "22:00"
             assert hh["photo_url"] == "/images/banh-mi.png"
+
+            ben_thanh_results = await search_places(session, q="Ben Thanh")
+            ben_thanh_names = {item["name"] for item in ben_thanh_results}
+            assert "Ben Thanh Market Food Area" not in ben_thanh_names
+            assert "Ben Thanh Market" in ben_thanh_names
+
+            pasteur_results = await search_places(session, q="Pasteur")
+            pasteur_names = {item["name"] for item in pasteur_results}
+            assert "Pho Pasteur Q3" not in pasteur_names
+            assert "Pho Hoa Pasteur" in pasteur_names
     finally:
         await legacy_engine.dispose()
 
@@ -398,3 +453,7 @@ async def test_search_places_pagination_returns_exact_filtered_total(
     body_beyond = resp_beyond.json()
     assert body_beyond["results"] == []
     assert body_beyond["total"] == 15
+
+    resp_ready = await client.get("/health/ready")
+    assert resp_ready.status_code == 200, resp_ready.text
+    assert resp_ready.json()["places"] == 15
