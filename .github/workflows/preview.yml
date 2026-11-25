@@ -116,6 +116,9 @@ jobs:
           VERCEL_ORG_ID="$(printf '%s' "$VERCEL_ORG_ID" | tr -d '[:space:]')"; VERCEL_PROJECT_ID="$(printf '%s' "$VERCEL_PROJECT_ID" | tr -d '[:space:]')"; export VERCEL_ORG_ID VERCEL_PROJECT_ID
           echo "VERCEL_ORG_ID len=${#VERCEL_ORG_ID} (team_…=29), VERCEL_PROJECT_ID len=${#VERCEL_PROJECT_ID} (prj_…=32)"
           set -euo pipefail
+          # Gói Hobby chặn deploy nếu tác giả commit không phải chủ team (TEAM_ACCESS_REQUIRED).
+          # Tạm cất .git để CLI không gửi git metadata; deploy được tính cho chủ token.
+          mv .git "$RUNNER_TEMP/repo-git" && trap 'mv "$RUNNER_TEMP/repo-git" .git' EXIT
           RAW_OUTPUT="$(vercel deploy --prebuilt --token="$VERCEL_TOKEN")"
           PREVIEW_URL="$(printf '%s\n' "$RAW_OUTPUT" | grep -Eo 'https://[^[:space:]]+' | tail -n 1 || true)"
 

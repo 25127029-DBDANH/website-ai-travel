@@ -242,6 +242,9 @@ jobs:
       - name: Deploy prebuilt frontend to Vercel production
         run: |
           set -euo pipefail
+          # Gói Hobby chặn deploy nếu tác giả commit không phải chủ team (TEAM_ACCESS_REQUIRED).
+          # Tạm cất .git để CLI không gửi git metadata; deploy được tính cho chủ token.
+          mv .git "$RUNNER_TEMP/repo-git" && trap 'mv "$RUNNER_TEMP/repo-git" .git' EXIT
           DEPLOY_URL="$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")"
           echo "Production frontend deployed to: ${DEPLOY_URL}"
           {
