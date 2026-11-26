@@ -263,6 +263,7 @@ async def change_password(
 async def google_login(
     payload: GoogleAuthRequest,
     request: Request,
+    session_id: UUID | None = Header(default=None, alias="x-session-id"),
     db: AsyncSession = Depends(get_db),
 ):
     if not settings.GOOGLE_CLIENT_ID.strip():
@@ -340,11 +341,12 @@ async def google_login(
             await db.refresh(user)
 
     logger.info("Google login succeeded for sub=%s (created=%s)", _mask_sub(google_sub), created)
+    claimed_trips = await _claim_guest_trips(user, session_id, db)
     token = create_access_token({"sub": user.id})
     return AuthResponse(
         user=UserOut.model_validate(user),
         token=token,
-        claimed_trips=0,
+        claimed_trips=claimed_trips,
     )
 
 
