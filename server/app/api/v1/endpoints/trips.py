@@ -10,10 +10,10 @@ import secrets
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user
+from app.core.dependencies import TripOwner, get_current_user, get_owner
 from app.db.models import Trip, User
 from app.db.session import get_db
 from app.schemas.trip import (
@@ -214,9 +214,34 @@ def _demo_trip_response() -> TripDetailOut:
     )
 
 
-async def _get_user_trip(trip_id: str, user: User, db: AsyncSession) -> Trip:
+def _owner_filter(owner: TripOwner):
+    if owner.user is not None:
+        return Trip.user_id == owner.user.id
+    return and_(Trip.user_id.is_(None), Trip.session_id == owner.session_id)
+
+
+def _owner_fields(owner: TripOwner) -> dict:
+    if owner.user is not None:
+        return {"user_id": owner.user.id, "session_id": None}
+    return {"user_id": None, "session_id": owner.session_id}
+
+
+async def _enforce_guest_trip_limit(owner: TripOwner, db: AsyncSession) -> None:
+    if owner.session_id is None:
+        return
+    guest_trip_count = await db.scalar(
+        select(func.count()).select_from(Trip).where(_owner_filter(owner))
+    )
+    if guest_trip_count >= 10:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="TRIP_SESSION_LIMIT_REACHED",
+        )
+
+
+async def _get_owned_trip(trip_id: str, owner: TripOwner, db: AsyncSession) -> Trip:
     result = await db.execute(
-        select(Trip).where(Trip.id == trip_id, Trip.user_id == user.id)
+        select(Trip).where(Trip.id == trip_id, _owner_filter(owner))
     )
     trip = result.scalar_one_or_none()
     if trip is None:
@@ -224,14 +249,14 @@ async def _get_user_trip(trip_id: str, user: User, db: AsyncSession) -> Trip:
     return trip
 
 
-async def _next_clone_title(source_title: str, user_id: str, db: AsyncSession) -> str:
+async def _next_clone_title(source_title: str, owner: TripOwner, db: AsyncSession) -> str:
     """Return the first available numbered copy title, e.g. ``Trip (1)``."""
     base_title = source_title.strip()
     base_title = re.sub(r"(?:\s*\(bản sao\))+$", "", base_title, flags=re.IGNORECASE).rstrip()
     match = re.fullmatch(r"(.*?)\s*\((\d+)\)", base_title)
     if match:
         base_title = match.group(1).rstrip()
-    result = await db.execute(select(Trip.title).where(Trip.user_id == user_id))
+    result = await db.execute(select(Trip.title).where(_owner_filter(owner)))
     existing = set(result.scalars().all())
     number = 1
     while f"{base_title} ({number})" in existing:
@@ -245,15 +270,17 @@ async def _next_clone_title(source_title: str, user_id: str, db: AsyncSession) -
 @router.post("/", response_model=TripOut, status_code=status.HTTP_201_CREATED)
 async def create_trip(
     payload: TripCreate,
-    user: User = Depends(get_current_user),
+    owner: TripOwner = Depends(get_owner),
     db: AsyncSession = Depends(get_db),
 ):
+    await _enforce_guest_trip_limit(owner, db)
+
     items = payload.itinerary_items or []
     cover_photo = items[0].get("photo_url") if items else None
     cover_place_name = items[0].get("place_name") if items else None
 
     trip = Trip(
-        user_id=user.id,
+        **_owner_fields(owner),
         title=payload.title,
         days=payload.days,
         budget=payload.budget or 5000000,
@@ -291,12 +318,12 @@ async def create_trip(
 # ---------------------------------------------------------------------------
 @router.get("/me", response_model=TripListOut)
 async def list_my_trips(
-    user: User = Depends(get_current_user),
+    owner: TripOwner = Depends(get_owner),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
         select(Trip)
-        .where(Trip.user_id == user.id)
+        .where(_owner_filter(owner))
         .order_by(Trip.created_at.desc())
     )
     trips = result.scalars().all()
@@ -315,10 +342,10 @@ async def get_demo_trip():
 @router.get("/{trip_id}", response_model=TripDetailOut)
 async def get_trip(
     trip_id: str,
-    user: User = Depends(get_current_user),
+    owner: TripOwner = Depends(get_owner),
     db: AsyncSession = Depends(get_db),
 ):
-    trip = await _get_user_trip(trip_id, user, db)
+    trip = await _get_owned_trip(trip_id, owner, db)
     items = _parse_items(trip)
     budget = _compute_budget(trip, items)
 
@@ -340,10 +367,10 @@ async def get_trip(
 async def update_trip(
     trip_id: str,
     payload: TripUpdate,
-    user: User = Depends(get_current_user),
+    owner: TripOwner = Depends(get_owner),
     db: AsyncSession = Depends(get_db),
 ):
-    trip = await _get_user_trip(trip_id, user, db)
+    trip = await _get_owned_trip(trip_id, owner, db)
     if payload.title is not None:
         trip.title = payload.title
     if payload.status is not None:
@@ -369,11 +396,11 @@ async def update_trip_item(
     day_number: int,
     order_index: int,
     payload: TripItemUpdate,
-    user: User = Depends(get_current_user),
+    owner: TripOwner = Depends(get_owner),
     db: AsyncSession = Depends(get_db),
 ):
     """Persist a stop's visited state and check-in note/photo."""
-    trip = await _get_user_trip(trip_id, user, db)
+    trip = await _get_owned_trip(trip_id, owner, db)
     items = _parse_items(trip)
     item = next(
         (value for value in items
@@ -414,10 +441,10 @@ async def update_trip_item(
 @router.delete("/{trip_id}")
 async def delete_trip(
     trip_id: str,
-    user: User = Depends(get_current_user),
+    owner: TripOwner = Depends(get_owner),
     db: AsyncSession = Depends(get_db),
 ):
-    trip = await _get_user_trip(trip_id, user, db)
+    trip = await _get_owned_trip(trip_id, owner, db)
     await db.delete(trip)
     return {"success": True}
 
@@ -428,13 +455,14 @@ async def delete_trip(
 @router.post("/{trip_id}/clone", response_model=CloneResponse)
 async def clone_trip(
     trip_id: str,
-    user: User = Depends(get_current_user),
+    owner: TripOwner = Depends(get_owner),
     db: AsyncSession = Depends(get_db),
 ):
-    source = await _get_user_trip(trip_id, user, db)
+    source = await _get_owned_trip(trip_id, owner, db)
+    await _enforce_guest_trip_limit(owner, db)
     new_trip = Trip(
-        user_id=user.id,
-        title=await _next_clone_title(source.title, user.id, db),
+        **_owner_fields(owner),
+        title=await _next_clone_title(source.title, owner, db),
         days=source.days,
         budget=source.budget,
         total_estimated=source.total_estimated,
@@ -466,10 +494,10 @@ async def clone_trip(
 async def create_share_link(
     trip_id: str,
     request: Request,
-    user: User = Depends(get_current_user),
+    owner: TripOwner = Depends(get_owner),
     db: AsyncSession = Depends(get_db),
 ):
-    trip = await _get_user_trip(trip_id, user, db)
+    trip = await _get_owned_trip(trip_id, owner, db)
     if not trip.share_token:
         trip.share_token = secrets.token_urlsafe(16)
         trip.updated_at = utc_now()
@@ -487,10 +515,10 @@ async def create_share_link(
 @router.delete("/{trip_id}/share")
 async def revoke_share_link(
     trip_id: str,
-    user: User = Depends(get_current_user),
+    owner: TripOwner = Depends(get_owner),
     db: AsyncSession = Depends(get_db),
 ):
-    trip = await _get_user_trip(trip_id, user, db)
+    trip = await _get_owned_trip(trip_id, owner, db)
     trip.share_token = None
     trip.updated_at = utc_now()
     return {"success": True}
@@ -538,9 +566,10 @@ async def clone_shared_trip(
     if source is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="SHARE_TOKEN_INVALID")
 
+    owner = TripOwner(user=user)
     new_trip = Trip(
-        user_id=user.id,
-        title=await _next_clone_title(source.title, user.id, db),
+        **_owner_fields(owner),
+        title=await _next_clone_title(source.title, owner, db),
         days=source.days,
         budget=source.budget,
         total_estimated=source.total_estimated,

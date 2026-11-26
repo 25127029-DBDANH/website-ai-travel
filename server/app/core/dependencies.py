@@ -4,7 +4,10 @@ Author  : Đỗ Nguyễn An Khang (Backend Lead & Auth Service)
 """
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException, status
+from dataclasses import dataclass
+from uuid import UUID
+
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +17,14 @@ from app.db.models import User
 from app.db.session import get_db
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+
+
+@dataclass(frozen=True)
+class TripOwner:
+    """Authenticated account or unclaimed guest session that owns a trip."""
+
+    user: User | None = None
+    session_id: str | None = None
 
 
 async def get_current_user(
@@ -57,3 +68,20 @@ async def get_optional_user(
         return await get_current_user(token=token, db=db)
     except HTTPException:
         return None
+
+
+async def get_owner(
+    token: str | None = Depends(oauth2_scheme),
+    session_id: UUID | None = Header(default=None, alias="x-session-id"),
+    db: AsyncSession = Depends(get_db),
+) -> TripOwner:
+    """Use a valid bearer token when present, otherwise require a guest UUID."""
+    if token is not None:
+        return TripOwner(user=await get_current_user(token=token, db=db))
+    if session_id is not None:
+        return TripOwner(session_id=str(session_id))
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="AUTH_REQUIRED",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
