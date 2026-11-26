@@ -8,13 +8,14 @@ from __future__ import annotations
 import logging
 import re
 import secrets
+from uuid import UUID
 
 import anyio
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from google.auth.exceptions import GoogleAuthError
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -37,6 +38,7 @@ from app.db.models import Trip, User
 from app.db.session import get_db
 from app.schemas.user import (
     AuthResponse,
+    ChangePasswordRequest,
     DeleteAccountRequest,
     GoogleAuthRequest,
     UserCreate,
@@ -134,11 +136,28 @@ async def _generate_unique_username(db: AsyncSession, email: str) -> str:
     )
 
 
+async def _claim_guest_trips(user: User, session_id: UUID | None, db: AsyncSession) -> int:
+    """Claim only trips that are still owned by this guest session."""
+    if session_id is None:
+        return 0
+    result = await db.execute(
+        update(Trip)
+        .where(Trip.session_id == str(session_id), Trip.user_id.is_(None))
+        .values(user_id=user.id, updated_at=utc_now())
+        .returning(Trip.id)
+    )
+    return len(result.scalars().all())
+
+
 # ---------------------------------------------------------------------------
 # POST /register
 # ---------------------------------------------------------------------------
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)):
+async def register(
+    payload: UserCreate,
+    session_id: UUID | None = Header(default=None, alias="x-session-id"),
+    db: AsyncSession = Depends(get_db),
+):
     name = validate_username(payload.username)
     validate_password(payload.password, name)
 
@@ -158,11 +177,12 @@ async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)):
     await db.flush()
     await db.refresh(user)
 
+    claimed_trips = await _claim_guest_trips(user, session_id, db)
     token = create_access_token({"sub": user.id})
     return AuthResponse(
         user=UserOut.model_validate(user),
         token=token,
-        claimed_trips=0,
+        claimed_trips=claimed_trips,
     )
 
 
@@ -170,7 +190,12 @@ async def register(payload: UserCreate, db: AsyncSession = Depends(get_db)):
 # POST /login
 # ---------------------------------------------------------------------------
 @router.post("/login", response_model=AuthResponse)
-async def login(payload: UserLogin, request: Request, db: AsyncSession = Depends(get_db)):
+async def login(
+    payload: UserLogin,
+    request: Request,
+    session_id: UUID | None = Header(default=None, alias="x-session-id"),
+    db: AsyncSession = Depends(get_db),
+):
     client_ip = request.client.host if request.client else "unknown"
     check_login_rate_limit(payload.username, client_ip)
 
@@ -195,12 +220,40 @@ async def login(payload: UserLogin, request: Request, db: AsyncSession = Depends
         )
 
     clear_login_failures(payload.username, client_ip)
+    claimed_trips = await _claim_guest_trips(user, session_id, db)
     token = create_access_token({"sub": user.id})
     return AuthResponse(
         user=UserOut.model_validate(user),
         token=token,
-        claimed_trips=0,
+        claimed_trips=claimed_trips,
     )
+
+
+# ---------------------------------------------------------------------------
+# POST /change-password
+# ---------------------------------------------------------------------------
+@router.post("/change-password")
+async def change_password(
+    payload: ChangePasswordRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not is_usable_password(user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="AUTH_PASSWORD_NOT_SET",
+        )
+    if not verify_password(payload.current_password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="AUTH_PASSWORD_INVALID",
+        )
+
+    validate_password(payload.new_password, user.username)
+    user.hashed_password = hash_password(payload.new_password)
+    user.updated_at = utc_now()
+    await db.flush()
+    return {"success": True}
 
 
 # ---------------------------------------------------------------------------

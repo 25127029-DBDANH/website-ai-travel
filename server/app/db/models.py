@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime, timedelta
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.utils.time import utc_now
@@ -61,9 +61,16 @@ class User(Base):
 # ---------------------------------------------------------------------------
 class Trip(Base):
     __tablename__ = "trips"
+    __table_args__ = (
+        CheckConstraint(
+            "user_id IS NOT NULL OR session_id IS NOT NULL",
+            name="ck_trips_owner_required",
+        ),
+    )
 
     id = Column(String(32), primary_key=True, default=_new_id)
-    user_id = Column(String(32), nullable=False, index=True)
+    user_id = Column(String(32), nullable=True, index=True)
+    session_id = Column(String(36), nullable=True, index=True)
     title = Column(String(200), nullable=False)
     days = Column(Integer, nullable=False, default=1)
     budget = Column(Integer, nullable=False, default=5000000)

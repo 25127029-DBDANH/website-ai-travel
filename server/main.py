@@ -24,6 +24,7 @@ load_dotenv()
 
 from app.api.v1.api import api_router  # noqa: E402
 from app.core.config import settings  # noqa: E402
+from app.core.trip_migrations import upgrade_trip_ownership_schema  # noqa: E402
 from app.db.models import Place  # noqa: E402
 from app.db.session import AsyncSessionLocal, create_tables, engine, get_db  # noqa: E402
 from app.services.gemini_service import GeminiService  # noqa: E402
@@ -41,8 +42,9 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         api_key=os.getenv("GEMINI_API_KEY"),
         model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash"),
     )
+    await create_tables()
+    await upgrade_trip_ownership_schema(engine)
     try:
-        await create_tables()
         async with AsyncSessionLocal() as session:
             place_count = await session.scalar(select(func.count()).select_from(Place))
         if not place_count:
