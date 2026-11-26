@@ -30,7 +30,7 @@ import WizardProgress from './tripForm/WizardProgress.jsx';
 
 export default function TripForm() {
   const { lang, t } = useI18n();
-  const { user, loading, openAuth } = useAuth();
+  const { loading } = useAuth();
   const navigate = useNavigate();
   const reducedMotion = useReducedMotion();
 
@@ -191,6 +191,14 @@ export default function TripForm() {
     handleNext();
   };
 
+  const formatRequestError = (requestError) => {
+    const code = requestError?.code;
+    if (code && (code === 'NETWORK_ERROR' || t(`error.${code}`) !== `error.${code}`)) {
+      return translateApiError(t, requestError);
+    }
+    return requestError?.message || translateApiError(t, requestError);
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (submitting) return;
@@ -209,11 +217,6 @@ export default function TripForm() {
     setFieldErrors({});
 
     if (loading) return;
-    if (!user) {
-      setFormError(t('form.validation.auth'));
-      openAuth('login');
-      return;
-    }
 
     setSubmitting(true);
     if (DEMO) { clearSessionDraft(); navigate('/trip/demo'); return; }
@@ -229,7 +232,7 @@ export default function TripForm() {
         setPendingTrip(tripRequest);
         setConcept(makeFallbackConcept(tripRequest, requestError, formatVnd, lang));
       } else {
-        setFormError(requestError?.message || translateApiError(t, requestError));
+        setFormError(formatRequestError(requestError));
       }
     } finally {
       setSubmitting(false);
@@ -239,11 +242,6 @@ export default function TripForm() {
 
   const handleApproveConcept = async () => {
     if (!pendingTrip || !concept || submitting || loading) return;
-    if (!user) {
-      setFormError(t('form.validation.authExpired'));
-      openAuth('login');
-      return;
-    }
 
     setFormError('');
     setSubmitting(true);
@@ -268,7 +266,7 @@ export default function TripForm() {
         state: { aiConceptSource: concept.source || 'gemini', aiGenerationSource: generated.source || 'gemini' }
       });
     } catch (requestError) {
-      setFormError(requestError?.message || translateApiError(t, requestError));
+      setFormError(formatRequestError(requestError));
     } finally {
       setSubmitting(false);
       setSubmissionStage('');

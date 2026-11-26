@@ -598,6 +598,7 @@ export const translations = {
     'error.AUTH_EMAIL_TAKEN': 'This email is already linked to another account.',
     'error.AUTH_PASSWORD_NOT_SET': 'This account signs in with Google and has no password.',
     'error.AUTH_PASSWORD_INVALID': 'Password is incorrect.',
+    'error.TRIP_SESSION_LIMIT_REACHED': 'Guests can create up to 10 trips. Sign up to save more.',
     'error.AUTH_PASSWORD_REQUIRED': 'Confirm your password to continue.',
     'error.AUTH_PASSWORD_TOO_SHORT': 'Password must be at least 8 characters.',
     'error.AUTH_PASSWORD_TOO_WEAK':
@@ -1216,6 +1217,7 @@ export const translations = {
     'error.AUTH_EMAIL_TAKEN': 'Email này đã gắn với một tài khoản khác.',
     'error.AUTH_PASSWORD_NOT_SET': 'Tài khoản này đăng nhập bằng Google nên không có mật khẩu.',
     'error.AUTH_PASSWORD_INVALID': 'Mật khẩu không đúng.',
+    'error.TRIP_SESSION_LIMIT_REACHED': 'Khách chỉ tạo được tối đa 10 chuyến. Hãy đăng ký để lưu thêm.',
     'error.AUTH_PASSWORD_REQUIRED': 'Vui lòng xác nhận mật khẩu để tiếp tục.',
     'error.AUTH_PASSWORD_TOO_SHORT': 'Mật khẩu cần có ít nhất 8 ký tự.',
     'error.AUTH_PASSWORD_TOO_WEAK':
