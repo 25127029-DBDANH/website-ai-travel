@@ -83,10 +83,18 @@ async function request(method, path, body) {
   }
 
   if (res.status === 401) {
-    clearAuthToken();
-    window.dispatchEvent(new Event('hcmc-auth-expired'));
+    if (token) {
+      clearAuthToken();
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new Event('hcmc-auth-expired'));
+      }
+    }
     const data = await res.json().catch(() => ({}));
-    throw new ApiError(data.detail || 'Unauthorized', data.detail || 'AUTH_TOKEN_EXPIRED', 401);
+    throw new ApiError(
+      data.detail || 'Unauthorized',
+      data.detail || (token ? 'AUTH_TOKEN_EXPIRED' : 'AUTH_REQUIRED'),
+      401
+    );
   }
 
   if (!res.ok) {
@@ -1754,7 +1762,12 @@ export const api = {
     }
     return request('GET', '/api/v1/auth/me');
   },
-  changePassword: async () => ({ success: true }),
+  changePassword: async (payload) => {
+    if (!isBackendEnabled()) {
+      return { success: true };
+    }
+    return request('POST', '/api/v1/auth/change-password', payload);
+  },
   deleteAccount: async (payload) => {
     if (!isBackendEnabled()) {
       const state = readState();
