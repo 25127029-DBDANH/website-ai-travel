@@ -20,7 +20,7 @@ from typing import Any
 from uuid import UUID
 
 import httpx
-from sqlalchemy import case, or_, select
+from sqlalchemy import Select, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Place, PlaceCache
@@ -117,6 +117,61 @@ async def _fetch_google_place_details(
 # Core Service Functions (100% SQLAlchemy ORM)
 # ---------------------------------------------------------------------------
 
+def _apply_place_filters(
+    stmt: Select[Any],
+    *,
+    q: str | None = None,
+    district: str | None = None,
+    category: str | None = None,
+    is_indoor: bool | None = None,
+) -> Select[Any]:
+    """Apply shared active, search, district, category, and indoor filters to a query."""
+    stmt = stmt.where(Place.is_active.is_(True))
+
+    if q and q.strip():
+        term = f"%{q.strip()}%"
+        stmt = stmt.where(
+            or_(
+                Place.name.ilike(term),
+                Place.name_vi.ilike(term),
+                Place.address.ilike(term),
+                Place.tags.ilike(term),
+                Place.description.ilike(term),
+            )
+        )
+
+    if district and district.strip():
+        stmt = stmt.where(Place.district == district.strip())
+
+    if category and category.strip():
+        stmt = stmt.where(Place.category == category.strip().lower())
+
+    if is_indoor is not None:
+        stmt = stmt.where(Place.is_indoor == is_indoor)
+
+    return stmt
+
+
+async def count_places(
+    db: AsyncSession,
+    *,
+    q: str | None = None,
+    district: str | None = None,
+    category: str | None = None,
+    is_indoor: bool | None = None,
+) -> int:
+    """Return total active places matching filters using SQL COUNT(*)."""
+    count_stmt = _apply_place_filters(
+        select(func.count()).select_from(Place),
+        q=q,
+        district=district,
+        category=category,
+        is_indoor=is_indoor,
+    )
+    total = await db.scalar(count_stmt)
+    return int(total or 0)
+
+
 async def search_places(
     db: AsyncSession,
     *,
@@ -143,28 +198,13 @@ async def search_places(
     Returns:
         List of place dicts ready to be serialised by FastAPI endpoints.
     """
-    stmt = select(Place).where(Place.is_active.is_(True))
-
-    if q and q.strip():
-        term = f"%{q.strip()}%"
-        stmt = stmt.where(
-            or_(
-                Place.name.ilike(term),
-                Place.name_vi.ilike(term),
-                Place.address.ilike(term),
-                Place.tags.ilike(term),
-                Place.description.ilike(term),
-            )
-        )
-
-    if district and district.strip():
-        stmt = stmt.where(Place.district == district.strip())
-
-    if category and category.strip():
-        stmt = stmt.where(Place.category == category.strip().lower())
-
-    if is_indoor is not None:
-        stmt = stmt.where(Place.is_indoor == is_indoor)
+    stmt = _apply_place_filters(
+        select(Place),
+        q=q,
+        district=district,
+        category=category,
+        is_indoor=is_indoor,
+    )
 
     # Cross-database NULLS LAST ordering:
     # Places with rating appear first (sorted descending), nulls appear last.
@@ -181,6 +221,38 @@ async def search_places(
     result = await db.execute(stmt)
     places = result.scalars().all()
     return [p.to_dict() for p in places]
+
+
+async def search_places_with_count(
+    db: AsyncSession,
+    *,
+    q: str | None = None,
+    district: str | None = None,
+    category: str | None = None,
+    is_indoor: bool | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[dict[str, Any]], int]:
+    """Return paginated places and the full matching COUNT(*) total."""
+    total = await count_places(
+        db,
+        q=q,
+        district=district,
+        category=category,
+        is_indoor=is_indoor,
+    )
+    if total == 0:
+        return [], 0
+    places = await search_places(
+        db,
+        q=q,
+        district=district,
+        category=category,
+        is_indoor=is_indoor,
+        limit=limit,
+        offset=offset,
+    )
+    return places, total
 
 
 async def get_place_by_id(
@@ -218,10 +290,11 @@ async def get_place_by_id(
 
             # [Security] Store only the backend proxy URL — never embed the Google API key!
             photos = google_data.get("photos", [])
-            if photos and not place.get("photo_url"):
+            if photos and (not place.get("photo_url") or place.get("photo_is_generic")):
                 photo_name = photos[0].get("name", "")
                 if photo_name:
                     place["photo_url"] = f"/api/v1/places/photo?name={photo_name}"
+                    place["photo_is_generic"] = False
 
     return place
 

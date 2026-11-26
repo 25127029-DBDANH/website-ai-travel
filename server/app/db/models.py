@@ -125,6 +125,7 @@ class Place(Base):
     average_rating: Mapped[float | None] = mapped_column(Float)
     google_place_id: Mapped[str | None] = mapped_column(String(100))
     photo_url: Mapped[str | None] = mapped_column(Text)
+    photo_is_generic: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     tags: Mapped[str] = mapped_column(Text, default="[]")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -154,6 +155,7 @@ class Place(Base):
             "average_rating": self.average_rating,
             "google_place_id": self.google_place_id,
             "photo_url": self.photo_url,
+            "photo_is_generic": self.photo_is_generic,
             "description": self.description,
             "tags": self.tags_list(),
             "is_active": self.is_active,

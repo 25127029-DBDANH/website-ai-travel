@@ -26,7 +26,7 @@ from app.api.v1.api import api_router  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.core.trip_migrations import upgrade_trip_ownership_schema  # noqa: E402
 from app.db.models import Place  # noqa: E402
-from app.db.session import AsyncSessionLocal, create_tables, engine, get_db  # noqa: E402
+from app.db.session import create_tables, engine, get_db  # noqa: E402
 from app.services.gemini_service import GeminiService  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -45,15 +45,11 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     await create_tables()
     await upgrade_trip_ownership_schema(engine)
     try:
-        async with AsyncSessionLocal() as session:
-            place_count = await session.scalar(select(func.count()).select_from(Place))
-        if not place_count:
-            from app.db.hcmc_data import seed_places
+        await create_tables()
+        from app.db.hcmc_data import seed_places
 
-            await seed_places()
-            logger.info("Seeded the local HCMC place catalog.")
-        else:
-            logger.info("Using existing place catalog (%s places).", place_count)
+        await seed_places()
+        logger.info("Synchronized the local HCMC place catalog.")
     except Exception:
         logger.exception("Database initialization or place seeding failed.")
     try:
@@ -188,7 +184,9 @@ async def health_check():
 async def readiness_check(db: AsyncSession = Depends(get_db)):
     try:
         await db.execute(text("SELECT 1"))
-        places_count = await db.scalar(select(func.count()).select_from(Place))
+        places_count = await db.scalar(
+            select(func.count()).select_from(Place).where(Place.is_active.is_(True))
+        )
     except Exception as exc:
         logger.warning("Readiness check failed: %s", type(exc).__name__)
         try:
