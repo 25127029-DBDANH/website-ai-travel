@@ -310,6 +310,10 @@ async def create_trip(
     await db.flush()
     await db.refresh(trip)
 
+    # The client navigates to the detail page as soon as this response returns.
+    # Commit here so the follow-up GET can always see the newly created trip.
+    await db.commit()
+
     return _trip_out(trip, items)
 
 
