@@ -9,7 +9,7 @@
 
 ## 🌟 Tổng Quan Về Dự Án
 
-**Sài Gòn Guide** là nền tảng web thông minh ứng dụng Trí tuệ nhân tạo (Google Gemini qua SDK `google-genai`) chuyên sâu cho du lịch bản địa tại Thành phố Hồ Chí Minh. Hệ thống sử dụng **React 18 + Vite + Tailwind + Leaflet** (tile bản đồ OpenStreetMap France, font **Be Vietnam Pro**) ở Frontend và **Python FastAPI + SQLAlchemy Async ORM** (mặc định **SQLite**, hỗ trợ **PostgreSQL** qua `DATABASE_URL`, tự động seed **327 địa điểm TP.HCM**) ở Backend.
+**Sài Gòn Guide** là nền tảng web thông minh ứng dụng Trí tuệ nhân tạo (Google Gemini qua SDK `google-genai`) chuyên sâu cho du lịch bản địa tại Thành phố Hồ Chí Minh. Hệ thống sử dụng **React 18 + Vite + Tailwind + Leaflet** (tile bản đồ OpenStreetMap France, font **Be Vietnam Pro**) ở Frontend và **Python FastAPI + SQLAlchemy Async ORM** (mặc định **SQLite**, hỗ trợ **PostgreSQL** qua `DATABASE_URL`, tự động seed **330 địa điểm TP.HCM**) ở Backend.
 
 Hệ thống đồng hành trọn vẹn cùng du khách qua toàn bộ hành trình khép kín: từ lúc **lên kế hoạch cá nhân hóa**, **tinh chỉnh lịch trình trên bản đồ số**, **đồng hành thời gian thực ngoài thực địa (Live Companion)**, **quản lý chi tiêu & cước xe di chuyển**, cho đến **tổng kết chuyến đi và xuất thẻ ảnh kỷ niệm (Story Card)**. Khách vãng lai có thể trải nghiệm ngay trang demo công khai `/trip/demo` không cần đăng nhập; cơ chế tạo chuyến cho khách (`x-session-id`) rồi gộp (claim) sang tài khoản khi đăng ký/đăng nhập đang được triển khai (**🚧 Đang triển khai (#31)**).
 
@@ -42,9 +42,9 @@ cp server/.env.example server/.env
 Mở `server/.env` và cấu hình:
 - `GEMINI_API_KEY`: khóa API Google Gemini (tạo tại Google AI Studio).
 - `GEMINI_MODEL`: mặc định `gemini-3.5-flash` (có thể đổi sang model được kích hoạt trong project).
-- `DATABASE_URL`: mặc định `sqlite+aiosqlite:///./travel.db` (tự tạo 4 bảng ORM và auto-seed 327 địa điểm TP.HCM khi khởi động; hỗ trợ chuyển sang PostgreSQL qua `postgresql+asyncpg://...`).
+- `DATABASE_URL`: mặc định `sqlite+aiosqlite:///./travel.db` (tự tạo 4 bảng ORM và auto-seed 330 địa điểm TP.HCM khi khởi động; hỗ trợ chuyển sang PostgreSQL qua `postgresql+asyncpg://...`).
 - `JWT_SECRET`: đổi thành chuỗi ngẫu nhiên bảo mật khi triển khai.
-- `GOOGLE_PLACES_API_KEY`: tuỳ chọn (bỏ trống vẫn hoạt động đầy đủ với 327 địa điểm local).
+- `GOOGLE_PLACES_API_KEY`: tuỳ chọn (bỏ trống vẫn hoạt động đầy đủ với 330 địa điểm local).
 
 > [!CAUTION]
 > **KHÔNG commit** file `server/.env` lên Git (file đã được khai báo trong `.gitignore`).
@@ -87,15 +87,16 @@ Các file `CHAY-DEMO.bat`, `run_all.bat`, `run_backend.bat`, `run_frontend.bat` 
 *(Trên macOS/Linux có thể chạy trực tiếp bằng lệnh thủ công ở mục 2 & 3, hoặc dùng `start-preview.sh` / `start-preview.command` để mở preview tĩnh.)*
 
 ### 6. Khởi chạy Fullstack bằng Docker Compose (PostgreSQL 16 + FastAPI + Nginx)
-1. *(Tùy chọn)* Tạo file `.env` ở thư mục gốc dự án (tham khảo `.env.example`) để truyền `GEMINI_API_KEY`, `VITE_GOOGLE_CLIENT_ID` hoặc mật khẩu Postgres.
+1. *(Tùy chọn)* Tạo file `.env` ở thư mục gốc dự án từ `.env.example`. Điền `GEMINI_API_KEY` để gọi Gemini thật, `VITE_GOOGLE_CLIENT_ID` để bật Google Login, và mật khẩu Postgres/JWT riêng nếu cần. Khi thiếu Gemini key, backend dùng lịch trình dự phòng trên catalog địa điểm.
+   - Docker build Frontend nhận `VITE_API_BASE` (mặc định `/`), `VITE_USE_BACKEND` (mặc định `true`) và `VITE_GOOGLE_CLIENT_ID`; thay đổi các giá trị này thì chạy lại lệnh build ở bước 2.
 2. Chạy toàn bộ 3 container chỉ với 1 lệnh:
    ```bash
    docker compose up --build -d
    ```
-   - **Frontend (Nginx SPA + `/api/` reverse proxy):** **`http://localhost:5173`**
+   - **Frontend (Nginx SPA + `/api/` và `/health` reverse proxy):** **`http://localhost:5173`**
    - **Backend FastAPI & Swagger UI:** **`http://localhost:8000/docs`**
-   - **PostgreSQL 16 Database:** cổng **`5432`** (tự tạo 4 bảng ORM và auto-seed **327 địa điểm TP.HCM**)
-3. Dừng toàn bộ container khi xong: `docker compose down`. *(Lưu ý: tính năng truyền `VITE_GOOGLE_CLIENT_ID` cho Docker và fix `DateTime` Postgres đang được hoàn thiện ở **🚧 #39, #52**).*
+   - **PostgreSQL 16 Database:** cổng **`5432`** (tự tạo 4 bảng ORM và auto-seed **330 địa điểm TP.HCM**)
+3. Kiểm tra health qua Frontend proxy tại `http://localhost:5173/health`, sau đó dừng toàn bộ container khi xong: `docker compose down`.
 
 ---
 
@@ -129,14 +130,14 @@ Các file `CHAY-DEMO.bat`, `run_all.bat`, `run_backend.bat`, `run_frontend.bat` 
 | **Frontend: Tích hợp Cước xe 3 hãng & Khối di chuyển chặng** | `client/src/components/itinerary/TransitConnector.jsx`, `client/src/components/common/RidePickerModal.jsx` *(nối API Transit/ICS FE: 🚧 #35)* | **Đàng Minh Hạo & Diệp Bảo Danh** |
 | **Backend: Khung FastAPI, Core Security & JWT Dependency** | `server/main.py`, `server/app/api/v1/api.py`, `server/app/core/security.py`, `server/app/core/config.py`, `server/app/core/dependencies.py` | **Đỗ Nguyễn An Khang** |
 | **Backend: Pydantic Schemas & Endpoints Auth / Trips** | `server/app/schemas/user.py`, `server/app/schemas/trip.py`, `server/app/api/v1/endpoints/auth.py`, `server/app/api/v1/endpoints/trips.py` *(phiên khách `x-session-id` & đổi mật khẩu: 🚧 #31; Postgres DateTime: 🚧 #52)* | **Đỗ Nguyễn An Khang** |
-| **Backend: ORM SQLite/PostgreSQL, Session & Data 327 địa điểm TP.HCM** | `server/app/db/models.py`, `server/app/db/schema.sql`, `server/app/db/session.py`, `server/app/db/hcmc_data.py` *(ảnh thật, `total` phân trang & fix UTC Postgres: 🚧 #36, #52)* | **Ngô Tấn Đạt** |
+| **Backend: ORM SQLite/PostgreSQL, Session & Data 330 địa điểm TP.HCM** | `server/app/db/models.py`, `server/app/db/schema.sql`, `server/app/db/session.py`, `server/app/db/hcmc_data.py` *(ảnh thật, `total` phân trang & fix UTC Postgres: 🚧 #36, #52)* | **Ngô Tấn Đạt** |
 | **Backend: Places Cache TTL 7 ngày, Endpoints & Test Places** | `server/app/services/places_service.py`, `server/app/api/v1/endpoints/places.py`, `server/app/tests/test_places.py` | **Ngô Tấn Đạt** |
 | **Backend: SDK Gemini (`google-genai`, mặc định `gemini-3.5-flash`), Prompt & Tự động điền `transit_info`** | `server/app/services/gemini_service.py`, `server/app/schemas/ai.py`, `server/app/api/v1/endpoints/ai.py` | **Lê Hữu Lam** |
 | **Backend: Thuật toán Haversine, Cước xe Grab/XanhSM/Be** | `server/app/utils/transit_calculator.py` *(mở khóa `calculate_transit` & API `/transit`: 🚧 #35)* | **Đàng Minh Hạo** |
 | **Backend: Động cơ Kịch bản Thích ứng Trời mưa & Kẹt xe** | `server/app/services/contingency_service.py` *(nối API `/transit/adapt` & FE: 🚧 #35)* | **Đàng Minh Hạo** |
 | **Backend: Dịch vụ Calendar .ICS & Endpoints Calendar** | `server/app/services/calendar_service.py`, `server/app/schemas/calendar.py`, `server/app/api/v1/endpoints/calendar.py` *(nối nút FE: 🚧 #35)* | **Đàng Minh Hạo** |
-| **DevOps: Docker Compose & Dockerfiles Multi-stage** | `docker-compose.yml`, `client/Dockerfile`, `client/nginx.conf`, `server/Dockerfile`, `render.yaml`, `client/vercel.json` *(Google Client ID Docker & Cloud deploy: 🚧 #39)* | **Đoàn Hải Đăng & Phạm Gia Hưng** |
-| **DevOps: Pipeline CI/CD GitHub Actions Tự động hóa** | `.github/workflows/ci.yml`, `server/scripts/smoke_db.py` *(mở rộng smoke User/Trip: 🚧 #39; Branch Protection: 🚧 #50)* | **Đoàn Hải Đăng** |
+| **DevOps: Docker Compose & Dockerfiles Multi-stage** | `docker-compose.yml`, `client/Dockerfile`, `client/nginx.conf`, `server/Dockerfile`, `render.yaml`, `client/vercel.json` *(Google Client ID qua build args, `/health` reverse proxy)* | **Đoàn Hải Đăng & Phạm Gia Hưng** |
+| **DevOps: Pipeline CI/CD GitHub Actions Tự động hóa** | `.github/workflows/ci.yml`, `server/scripts/smoke_db.py`, `.github/workflows/post-deploy.yml` *(fullstack Docker smoke, User/Trip cleanup, production smoke; Branch Protection: 🚧 #50)* | **Đoàn Hải Đăng** |
 | **QA/Test: Bộ mã nguồn Kiểm thử tự động Pytest (107 passed / 3 skipped)** | `server/app/tests/conftest.py`, `test_auth.py`, `test_auth_google.py`, `test_password_policy.py`, `test_trips.py`, `test_places.py`, `test_ai.py`, `test_calendar.py`, `test_contingency.py`, `test_transit_calculator.py`, `test_transit.py`, `test_health.py` | **Đoàn Hải Đăng** |
 | **DevOps: Hệ thống Script Windows (chỉ dành cho Windows)** | `CHAY-DEMO.bat`, `run_all.bat`, `run_frontend.bat`, `run_backend.bat` | **Đoàn Hải Đăng & Diệp Bảo Danh** |
 
@@ -220,23 +221,23 @@ Các file `CHAY-DEMO.bat`, `run_all.bat`, `run_backend.bat`, `run_frontend.bat` 
   * `server/app/db/models.py` (4 Model ORM thống nhất: `User`, `Trip`, `Place`, `PlaceCache` — tương thích SQLite & PostgreSQL)
   * `server/app/db/schema.sql` (Lược đồ CSDL PostgreSQL tham chiếu)
   * `server/app/db/session.py` (Cấu hình SQLAlchemy Async Engine & `AsyncSessionLocal`)
-  * `server/app/db/hcmc_data.py` (Kho dữ liệu Auto-seed **327 địa điểm TP.HCM** — 40+ địa điểm/quận trên 8 quận trọng điểm)
+  * `server/app/db/hcmc_data.py` (Kho dữ liệu Auto-seed **330 địa điểm TP.HCM** — 40+ địa điểm/quận trên 8 quận trọng điểm)
   * `server/app/services/places_service.py` (Truy vấn ORM, bộ đệm Cache TTL 7 ngày & Fallback Google Places API)
   * `server/app/api/v1/endpoints/places.py` (API `/places/search`, `/places/nearby`, `/places/photo`, `/places/{id}`)
-  * `server/app/tests/test_places.py` (Kiểm thử tự động Pytest cho dữ liệu 327 địa điểm, Haversine, `PlaceCache` TTL và thứ tự route `/photo`)
+  * `server/app/tests/test_places.py` (Kiểm thử tự động Pytest cho dữ liệu 330 địa điểm, Haversine, `PlaceCache` TTL và thứ tự route `/photo`)
   * `client/src/components/place/PlaceDrawer.jsx`, `PlaceFacts.jsx`, `NearbyPlaces.jsx` *(Ngăn kéo chi tiết địa điểm TP.HCM — nối API chi tiết & sửa lỗi `total` phân trang: **🚧 #36**)*
 * **Nhiệm vụ cụ thể:**
-  1. *Kiến trúc CSDL chuẩn SQLAlchemy Async ORM (mặc định SQLite `sqlite+aiosqlite:///./travel.db`, hỗ trợ PostgreSQL qua `DATABASE_URL`):* `Base.metadata.create_all` tự động tạo đủ 4 bảng (`users`, `trips`, `places`, `places_cache`); tự động nạp 327 địa điểm từ `hcmc_data.py` trong `lifespan` khi khởi động lần đầu.
+  1. *Kiến trúc CSDL chuẩn SQLAlchemy Async ORM (mặc định SQLite `sqlite+aiosqlite:///./travel.db`, hỗ trợ PostgreSQL qua `DATABASE_URL`):* `Base.metadata.create_all` tự động tạo đủ 4 bảng (`users`, `trips`, `places`, `places_cache`); tự động nạp 330 địa điểm từ `hcmc_data.py` trong `lifespan` khi khởi động lần đầu.
   2. *Bộ đệm Địa điểm (Places Cache TTL 7 ngày):* Lưu cache trong bảng `places_cache`; ưu tiên trả dữ liệu từ CSDL cục bộ; chỉ gọi Google Places API New khi cấu hình `GOOGLE_PLACES_API_KEY` và cache miss hoặc quá hạn 7 ngày.
   3. *Tập dữ liệu Mồi TP.HCM (`hcmc_data.py`):*
-     * **Quy mô đã nạp:** **327 địa điểm thực tế** phủ đều 8 quận trọng điểm (Quận 1, Quận 3, Quận 4, Quận 5, Bình Thạnh, Phú Nhuận, TP. Thủ Đức, Quận 7 — tối thiểu 40+ điểm/quận).
+     * **Quy mô đã nạp:** **330 địa điểm thực tế** phủ đều 8 quận trọng điểm (Quận 1, Quận 3, Quận 4, Quận 5, Bình Thạnh, Phú Nhuận, TP. Thủ Đức, Quận 7 — tối thiểu 40+ điểm/quận).
      * **Cơ cấu danh mục đầy đủ:** Địa điểm tham quan/di tích/bảo tàng, quán ăn/ẩm thực địa phương và quán cà phê/đồ uống.
      * **Bộ trường dữ liệu chuẩn hóa:** Tên tiếng Việt & tiếng Anh, địa chỉ, quận, tọa độ GPS (`latitude`, `longitude`), danh mục (`category`), `is_indoor`, giờ mở/đóng cửa (`open_time`, `close_time`), mức giá vé dự kiến (`entry_fee_vnd`), điểm đánh giá, `tags` JSON và đường dẫn ảnh `photo_url`.
   4. *YÊU CẦU TỰ TÍCH HỢP & TEST E2E:*
      * Đảm bảo dữ liệu từ DB hiển thị đầy đủ trên Bản đồ Leaflet (`TripMap.jsx`).
      * Tự kết nối API chi tiết địa điểm vào `PlaceDrawer.jsx` (ảnh, mô tả, giờ mở cửa — **🚧 #36**).
      * Tự test truy vấn dữ liệu địa điểm hiển thị chính xác trên giao diện Frontend.
-* **Tiêu chí hoàn thành (DoD):** Đồng bộ 100% sang SQLAlchemy ORM chạy mượt trên cả SQLite (`travel.db`) lẫn PostgreSQL/Supabase; nạp đủ 327 địa điểm TP.HCM; `pytest server/app/tests/test_places.py` pass toàn bộ; API `GET /api/v1/places/search` phản hồi nhanh.
+* **Tiêu chí hoàn thành (DoD):** Đồng bộ 100% sang SQLAlchemy ORM chạy mượt trên cả SQLite (`travel.db`) lẫn PostgreSQL/Supabase; nạp đủ 330 địa điểm TP.HCM; `pytest server/app/tests/test_places.py` pass toàn bộ; API `GET /api/v1/places/search` phản hồi nhanh.
 
 ---
 
@@ -254,7 +255,7 @@ Các file `CHAY-DEMO.bat`, `run_all.bat`, `run_backend.bat`, `run_frontend.bat` 
   4. *Động cơ Đề xuất Concept, Sinh Lịch trình & Tự động điền `transit_info`:* `POST /api/v1/ai/concept` đề xuất định hướng; `POST /api/v1/ai/generate` lựa chọn địa điểm theo cụm quận, phân bổ ngân sách hợp lý và tự động điền khoảng cách + cước xe `transit_info` giữa các chặng.
   5. *Logic AI Đổi địa điểm thông minh (Smart Swap):* `POST /api/v1/ai/swap` phân tích lý do đổi điểm và đề xuất 2–3 địa điểm thay thế tương đương cùng khu vực và chi phí.
   6. *Tích hợp AI vào giao diện Frontend & Test E2E:* Đã kết nối trực tiếp `TripForm.jsx` với `/ai/concept` + `/ai/generate` và `TimelineItem.jsx` với `/ai/swap` (22 tests `test_ai.py` pass).
-* **Tiêu chí hoàn thành (DoD):** Gemini trả về 100% chuẩn JSON trên catalog 327 địa điểm; tự động điền `transit_info`; lịch trình gợi ý hợp lý về địa lý TP.HCM; form tạo lịch trình gọi AI thật và xử lý lỗi minh bạch.
+* **Tiêu chí hoàn thành (DoD):** Gemini trả về 100% chuẩn JSON trên catalog 330 địa điểm; tự động điền `transit_info`; lịch trình gợi ý hợp lý về địa lý TP.HCM; form tạo lịch trình gọi AI thật và xử lý lỗi minh bạch.
 
 ---
 
@@ -281,15 +282,15 @@ Các file `CHAY-DEMO.bat`, `run_all.bat`, `run_backend.bat`, `run_frontend.bat` 
 ### 7. ĐOÀN HẢI ĐĂNG — DEVOPS, QA LEAD & THUYẾT TRÌNH DỰ ÁN
 * **Họ và tên:** **Đoàn Hải Đăng**
 * **Vai trò chuyên môn:** DevOps Engineer, QA Lead & Diễn giả Thuyết trình Dự án
-* **Trạng thái trên `main`:** Đã hoàn thành hạ tầng Docker Compose, CI/CD GitHub Actions (3 jobs: Frontend, Backend, Postgres Smoke) và bộ test Pytest (`PR #17`, `#49`); còn hoàn thiện cấu hình Docker Google OAuth / Nginx `/health` & deploy live (**🚧 #39**).
+* **Trạng thái:** CI kiểm tra `npm test` + build Frontend, lint/Pytest Backend, Postgres smoke và fullstack Docker smoke. Workflow deploy trên `main` triển khai Render/Vercel rồi chạy smoke production; Docker truyền Google Client ID qua build args và Nginx proxy `/health` về Backend.
 * **Thư mục & File sở hữu chính:**
-  * `docker-compose.yml`, `client/Dockerfile`, `client/nginx.conf`, `server/Dockerfile`, `.env.example` *(bổ sung `VITE_GOOGLE_CLIENT_ID` & `/health` proxy: **🚧 #39**)*
-  * `.github/workflows/ci.yml`, `server/scripts/smoke_db.py`, `render.yaml`, `client/vercel.json`
+  * `docker-compose.yml`, `client/Dockerfile`, `client/nginx.conf`, `server/Dockerfile`, `.env.example`
+  * `.github/workflows/ci.yml`, `.github/workflows/post-deploy.yml`, `server/scripts/smoke_api.py`, `server/scripts/smoke_db.py`, `render.yaml`, `client/vercel.json`
   * `server/app/tests/` (`conftest.py`, `test_auth.py`, `test_auth_google.py`, `test_password_policy.py`, `test_trips.py`, `test_places.py`, `test_ai.py`, `test_calendar.py`, `test_contingency.py`, `test_transit_calculator.py`, `test_transit.py`, `test_health.py`)
   * `CHAY-DEMO.bat`, `run_all.bat`, `run_frontend.bat`, `run_backend.bat` *(chỉ dành cho Windows — hợp tác cùng Danh)*
 * **Nhiệm vụ cụ thể:**
-  1. *Hạ tầng Docker Hóa & Triển khai Cloud (DevOps):* Duy trì `client/Dockerfile`, `server/Dockerfile`, `docker-compose.yml`, triển khai Cloud (Vercel + Render + Neon PostgreSQL) và fix truyền `VITE_GOOGLE_CLIENT_ID` + proxy `/health` (**🚧 #39**).
-  2. *Đường ống CI/CD Tự động hóa (`.github/workflows/ci.yml`):* Chạy song song `Frontend build` (`npm test` + `npm run build`), `Backend lint and tests` (`ruff` + `pytest --cov=app`) và `Postgres startup smoke` (mở rộng test `User`/`Trip`: **🚧 #39**).
+  1. *Hạ tầng Docker Hóa & Triển khai Cloud (DevOps):* Duy trì `client/Dockerfile`, `server/Dockerfile`, `docker-compose.yml`, triển khai Cloud (Vercel + Render + Postgres), truyền `VITE_GOOGLE_CLIENT_ID` và proxy `/health` qua Nginx.
+  2. *Đường ống CI/CD Tự động hóa (`.github/workflows/ci.yml`):* Chạy song song `Frontend build` (`npm test` + `npm run build`), `Backend lint and tests` (`ruff` + `pytest --cov=app`), `Postgres startup smoke` (User/Trip insert/update/delete) và fullstack Docker smoke qua client proxy.
   3. *Bộ Mã nguồn Kiểm thử Tự động (Pytest Test Suite):* Hiện đạt **107 passed / 3 skipped** (kích hoạt 3 tests `test_transit.py` sau `#35`).
   4. *Hoàn thiện Báo cáo Kỹ thuật & Tài liệu Đồ án:* Soạn thảo và chuẩn hóa Báo cáo Kỹ thuật Đồ án theo quy chuẩn Khoa CNTT — ĐHKHTN.
   5. *Thiết kế Slide Thuyết trình & Video Demo:* Biên tập bộ Slide thuyết trình, soạn kịch bản demo 5 phút & bộ câu hỏi phản biện (Q&A), quay Video Demo backup Full HD.
@@ -374,7 +375,7 @@ website-ai-travel/
     │   └── smoke_db.py            # Smoke test khởi tạo & seed trên PostgreSQL cho CI
     └── app/
         ├── core/                  # config.py, security.py (bcrypt/JWT), dependencies.py, rate_limit.py
-        ├── db/                    # models.py (4 bảng ORM), session.py, schema.sql, hcmc_data.py (327 điểm)
+        ├── db/                    # models.py (4 bảng ORM), session.py, schema.sql, hcmc_data.py (330 điểm)
         ├── schemas/               # user.py, trip.py, ai.py, calendar.py
         ├── services/              # gemini_service.py, places_service.py, contingency_service.py, calendar_service.py
         ├── utils/                 # transit_calculator.py

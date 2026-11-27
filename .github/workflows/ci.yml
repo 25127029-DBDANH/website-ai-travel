@@ -137,38 +137,30 @@ jobs:
     name: Docker build
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      APP_ENV: development
+      GEMINI_API_KEY: ""
+      VITE_GOOGLE_CLIENT_ID: ci-smoke.apps.googleusercontent.com
     steps:
       - uses: actions/checkout@v7
-      - name: Build server image
-        run: docker build -t saigon-guide-server ./server
-      - name: Build client image
-        run: docker build --build-arg VITE_API_BASE=/ -t saigon-guide-client ./client
       - name: Validate docker compose config
         run: docker compose config -q
-      - name: Start db and server with docker compose
+      - name: Start full stack with docker compose
         run: |
-          if ! docker compose up -d --build --wait db server; then
-            docker compose logs --tail=50 server
+          if ! docker compose up -d --build --wait; then
+            docker compose logs --tail=100
             exit 1
           fi
-      - name: Verify places search endpoint
+      - name: Verify frontend build-time Google OAuth config
         run: |
-          BODY=$(curl -sS -w "\n%{http_code}" "http://localhost:8000/api/v1/places/search?limit=1")
-          STATUS=$(printf '%s' "$BODY" | tail -n1)
-          JSON=$(printf '%s' "$BODY" | sed '$d')
-          echo "HTTP $STATUS: $JSON"
-          if [ "$STATUS" != "200" ]; then
-            docker compose logs --tail=50 server
+          if ! docker compose exec -T client sh -c "grep -Rq 'ci-smoke.apps.googleusercontent.com' /usr/share/nginx/html/assets"; then
+            docker compose logs --tail=100 client
             exit 1
           fi
-          if ! printf '%s' "$JSON" | python3 -c '
-          import json, sys
-          data = json.load(sys.stdin)
-          assert data.get("total", 0) >= 1, f"Expected total >= 1, got {data}"
-          results = data.get("results", [])
-          assert len(results) >= 1 and results[0].get("name"), f"Expected non-empty results, got {data}"
-          '; then
-            docker compose logs --tail=50 server
+      - name: Exercise the full stack through the client proxy
+        run: |
+          if ! docker compose exec -T server python scripts/smoke_api.py --base-url http://client --include-ai-fallback; then
+            docker compose logs --tail=100
             exit 1
           fi
       - name: Tear down docker compose

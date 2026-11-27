@@ -99,7 +99,29 @@ def valid_places(body):
     )
 
 
-def smoke(client, prod=False):
+def check_trip_ics(client, trip_id, title):
+    try:
+        response = client.get(f"/api/v1/calendar/ics/{trip_id}")
+    except httpx.RequestError as exc:
+        raise SmokeFailure(f"FAIL trip calendar export: network {type(exc).__name__}") from exc
+
+    content_type = response.headers.get("content-type", "").lower()
+    unfolded = response.text.replace("\r\n ", "").replace("\r\n\t", "")
+    failures = []
+    if response.status_code != 200:
+        failures.append(f"HTTP {response.status_code}")
+    if "text/calendar" not in content_type:
+        failures.append("unexpected content type")
+    if "BEGIN:VCALENDAR" not in unfolded or "SUMMARY:" not in unfolded:
+        failures.append("missing calendar/events")
+    if title not in unfolded:
+        failures.append("trip title missing")
+    if failures:
+        raise SmokeFailure(f"FAIL trip calendar export: {', '.join(failures)}")
+    print("PASS trip calendar export", flush=True)
+
+
+def smoke(client, prod=False, include_ai_fallback=False):
     if prod:
         print("MODE prod", flush=True)
     wait_for_health(client, prod)
@@ -109,6 +131,52 @@ def smoke(client, prod=False):
     places = check(
         client, "places search", "GET", f"{api}/places/search", valid_places, params={"limit": 5}
     )["results"]
+
+    itinerary_items = [
+        {
+            "day_number": 1,
+            "order_index": index,
+            "place_id": place["id"],
+            "place_name": place["name"],
+            "latitude": place["latitude"],
+            "longitude": place["longitude"],
+        }
+        for index, place in enumerate(places[:2])
+    ]
+    if include_ai_fallback:
+        generated = check(
+            client,
+            "AI itinerary fallback",
+            "POST",
+            f"{api}/ai/generate",
+            lambda body: (
+                body["source"] == "fallback"
+                and isinstance(body["itinerary_items"], list)
+                and len(body["itinerary_items"]) >= 3
+            ),
+            json={
+                "start_location": "Quận 1, TP. Hồ Chí Minh",
+                "budget": 2_000_000,
+                "days": 1,
+                "districts": ["Quận 1"],
+                "places_per_day": 3,
+                "companion": "solo",
+                "member_count": 1,
+                "transport_mode": "walk",
+                "preferences": ["culture"],
+                "pace": "moderate",
+                "special_notes": "",
+                "approved_concept": {
+                    "source": "fallback",
+                    "summary": "A one-day city itinerary for the smoke test.",
+                    "highlights": ["Culture and local history"],
+                    "recommended_districts": ["Quận 1"],
+                    "route_overview": "Visit three places in District 1.",
+                    "confirmation_question": "Ready to explore?",
+                },
+            },
+        )
+        itinerary_items = generated["itinerary_items"]
 
     prefix = "smoke_prod_" if prod else "smoke_"
     username = prefix + secrets.token_hex(8)
@@ -170,17 +238,7 @@ def smoke(client, prod=False):
         )
 
         title = f"Smoke trip {username}"
-        items = [
-            {
-                "day_number": 1,
-                "order_index": index,
-                "place_id": place["id"],
-                "place_name": place["name"],
-                "latitude": place["latitude"],
-                "longitude": place["longitude"],
-            }
-            for index, place in enumerate(places[:2])
-        ]
+        items = itinerary_items
 
         def created_trip(body):
             nonlocal trip_id
@@ -199,6 +257,7 @@ def smoke(client, prod=False):
             headers=headers,
             json={"title": title, "itinerary_items": items},
         )
+        check_trip_ics(client, trip_id, title)
         path = f"{trips}/{trip_id}"
         check(
             client,
@@ -235,7 +294,7 @@ def smoke(client, prod=False):
             client,
             "visit first stop",
             "PATCH",
-            f"{path}/items/1/0",
+            f"{path}/items/{items[0]['day_number']}/{items[0]['order_index']}",
             lambda b: any(
                 item["place_id"] == items[0]["place_id"] and item["visited"] is True
                 for item in b["items"]
@@ -296,9 +355,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--prod", action="store_true", help="use post-deploy smoke settings")
+    parser.add_argument(
+        "--include-ai-fallback",
+        action="store_true",
+        help="exercise local AI fallback (do not use with production URLs)",
+    )
     args = parser.parse_args()
+    if args.prod and args.include_ai_fallback:
+        parser.error("--include-ai-fallback cannot be used with --prod")
     try:
         with httpx.Client(base_url=args.base_url, timeout=30 if args.prod else 10) as client:
-            smoke(client, prod=args.prod)
+            smoke(
+                client,
+                prod=args.prod,
+                include_ai_fallback=args.include_ai_fallback,
+            )
     except SmokeFailure as exc:
         sys.exit(str(exc))

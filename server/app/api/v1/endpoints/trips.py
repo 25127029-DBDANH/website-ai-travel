@@ -310,6 +310,10 @@ async def create_trip(
     await db.flush()
     await db.refresh(trip)
 
+    # The client navigates to the detail page as soon as this response returns.
+    # Commit here so the follow-up GET can always see the newly created trip.
+    await db.commit()
+
     return _trip_out(trip, items)
 
 
@@ -387,6 +391,7 @@ async def update_trip(
     trip.updated_at = utc_now()
     await db.flush()
     await db.refresh(trip)
+    await db.commit()
     return _trip_out(trip)
 
 
@@ -432,6 +437,7 @@ async def update_trip_item(
     trip.itinerary_json = json.dumps(items)
     trip.updated_at = utc_now()
     await db.flush()
+    await db.commit()
     return {"items": items}
 
 
@@ -446,6 +452,7 @@ async def delete_trip(
 ):
     trip = await _get_owned_trip(trip_id, owner, db)
     await db.delete(trip)
+    await db.commit()
     return {"success": True}
 
 
@@ -484,6 +491,7 @@ async def clone_trip(
     db.add(new_trip)
     await db.flush()
     await db.refresh(new_trip)
+    await db.commit()
     return CloneResponse(id=new_trip.id, trip=_trip_out(new_trip))
 
 
@@ -504,6 +512,7 @@ async def create_share_link(
         await db.flush()
         await db.refresh(trip)
 
+    await db.commit()
     # Share URL points to frontend
     share_url = f"{request.headers.get('origin', 'http://localhost:5173')}/s/{trip.share_token}"
     return ShareResponse(token=trip.share_token, share_url=share_url)
@@ -521,6 +530,7 @@ async def revoke_share_link(
     trip = await _get_owned_trip(trip_id, owner, db)
     trip.share_token = None
     trip.updated_at = utc_now()
+    await db.commit()
     return {"success": True}
 
 
@@ -591,4 +601,5 @@ async def clone_shared_trip(
     db.add(new_trip)
     await db.flush()
     await db.refresh(new_trip)
+    await db.commit()
     return CloneResponse(id=new_trip.id, trip=_trip_out(new_trip))

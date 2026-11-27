@@ -51,7 +51,9 @@ services:
       context: ./client
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE: "/"
+        VITE_API_BASE: ${VITE_API_BASE:-/}
+        VITE_USE_BACKEND: ${VITE_USE_BACKEND:-true}
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
     ports:
       - "${FRONTEND_PORT:-5173}:80"
     depends_on:
