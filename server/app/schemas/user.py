@@ -22,8 +22,30 @@ class UserLogin(BaseModel):
     password: str
 
 
-class ChangePasswordRequest(BaseModel):
+class CurrentPasswordRequest(BaseModel):
     current_password: str
+
+
+class ChangePasswordRequest(CurrentPasswordRequest):
+    new_password: str
+
+
+class RecoveryResetRequest(BaseModel):
+    username: str
+    recovery_code: str
+    new_password: str
+
+
+class EmailRequest(BaseModel):
+    email: str
+
+
+class VerifyEmailRequest(BaseModel):
+    code: str
+
+
+class TokenResetRequest(BaseModel):
+    token: str
     new_password: str
 
 
@@ -46,6 +68,8 @@ class UserOut(BaseModel):
     full_name: str | None = None
     avatar_url: str | None = None
     has_password: bool
+    has_recovery_code: bool
+    email_verified: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -55,3 +79,4 @@ class AuthResponse(BaseModel):
     user: UserOut
     token: str
     claimed_trips: int = 0
+    recovery_code: str | None = None

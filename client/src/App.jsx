@@ -6,9 +6,11 @@ import AuthModal from './components/AuthModal.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { PlaceDrawerProvider } from './context/PlaceDrawerContext.jsx';
 import { I18nProvider } from './i18n/I18nContext.jsx';
+import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import LandingPage from './pages/LandingPage.jsx';
 import MyTripsPage from './pages/MyTripsPage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
+import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import SharedTripPage from './pages/SharedTripPage.jsx';
 import TripPage from './pages/TripPage.jsx';
@@ -62,6 +64,8 @@ export default function App() {
                 <Route path="/trip/:id" element={<TripPage />} />
                 <Route path="/s/:token" element={<SharedTripPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
                 <Route path="*" element={<NotFoundPage />} />
               </Routes>
               <AuthModal />

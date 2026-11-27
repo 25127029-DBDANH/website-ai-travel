@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 COLUMN_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ("users", "email", "VARCHAR(254)"),
     ("users", "google_sub", "VARCHAR(64)"),
+    ("users", "email_verified", "BOOLEAN NOT NULL DEFAULT FALSE"),
+    ("users", "password_changed_at", "TIMESTAMP"),
+    ("users", "recovery_code_hash", "TEXT"),
     ("places", "photo_is_generic", "BOOLEAN NOT NULL DEFAULT TRUE"),
 )
 
