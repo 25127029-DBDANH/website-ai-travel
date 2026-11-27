@@ -1,6 +1,8 @@
 """Exercise the travel API over HTTP against a running server."""
 
 import argparse
+import json
+import re
 import secrets
 import sys
 import time
@@ -10,6 +12,34 @@ import httpx
 
 class SmokeFailure(Exception):
     pass
+
+
+def response_excerpt(response):
+    """Return up to 500 characters for a failed check, redacting before truncation.
+
+    >>> body = {"items": [{"token": "hidden", "access_token": "hidden", "password": "hidden"}]}
+    >>> excerpt = response_excerpt(httpx.Response(200, json={**body, "title": "x" * 600}))
+    >>> "hidden" not in excerpt and excerpt.count("[redacted]") == 3 and len(excerpt) == 500
+    True
+    """
+
+    def redact(fields):
+        for key in fields:
+            name = key.casefold()
+            if name.endswith(("password", "token")) or name in {"authorization", "share_url"}:
+                fields[key] = "[redacted]"
+        # FastAPI validation errors may echo a password as "input" next to its location.
+        if "input" in fields and "loc" in fields:
+            fields["input"] = "[redacted]"
+        return fields
+
+    try:
+        text = json.dumps(response.json(object_hook=redact), ensure_ascii=False)
+    except ValueError:
+        text = response.text
+        if re.search(r"(?i)password|token|authorization|bearer|eyJ|[\[{]", text):
+            return "[redacted non-JSON response]"
+    return text[:500]
 
 
 def check(client, step, method, path, validate, *, expected=200, **kwargs):
@@ -26,9 +56,7 @@ def check(client, step, method, path, validate, *, expected=200, **kwargs):
             return body
     except (ValueError, KeyError, TypeError, IndexError, AttributeError):
         pass
-    # Auth and sharing responses can contain credentials, even on errors.
-    detail = f" {response.text}" if step in ("health", "places search") else ""
-    raise SmokeFailure(f"FAIL {step}: {response.status_code}{detail}")
+    raise SmokeFailure(f"FAIL {step}: {response.status_code} {response_excerpt(response)}")
 
 
 def wait_for_health(client, prod=False):

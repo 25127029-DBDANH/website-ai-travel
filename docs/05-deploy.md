@@ -4,6 +4,19 @@
 
 ---
 
+## Chạy preflight trước khi push
+
+Chạy từ gốc repo hoặc worktree sau khi cài dependency cho `server` (gồm `requirements-dev.txt`), `client` và `e2e`. Chế độ E2E cần Chromium của Playwright.
+
+```bash
+tools/preflight.sh --fast   # Ruff, pytest, test frontend, build tạm và Gitleaks
+tools/preflight.sh --e2e    # Thêm Playwright với backend SQLite tạm và Vite preview
+```
+
+Khi máy có Gitleaks, preflight quét cả thay đổi đã stage lẫn commit local chưa có trên các nhánh `origin` đã fetch. CI quét các commit của PR. Nếu Playwright lỗi, mở `e2e/playwright-report/index.html` hoặc xem trace trong `e2e/test-results/`. CI còn kiểm tra PostgreSQL và Docker.
+
+---
+
 ## 1. Tạo Database trên Neon Postgres
 
 - [ ] Đăng nhập [Neon Console](https://console.neon.tech) → **New Project**.

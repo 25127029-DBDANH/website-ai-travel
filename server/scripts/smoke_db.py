@@ -7,6 +7,7 @@ Verifies:
 3. seed_places() populates more than 300 HCMC places.
 4. Inserting and updating User/Trip rows with naive UTC timestamps succeeds.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -36,9 +37,7 @@ async def main() -> None:
             place_count = await session.scalar(select(func.count()).select_from(Place))
 
         if not place_count or place_count <= 300:
-            raise SystemExit(
-                f"Expected more than 300 seeded places, got {place_count!r}"
-            )
+            raise SystemExit(f"Expected more than 300 seeded places, got {place_count!r}")
 
         print(f"Postgres smoke check passed: {place_count} places seeded.")
 
