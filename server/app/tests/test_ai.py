@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -11,6 +12,8 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 from pydantic import ValidationError
+
+from app.schemas.ai import PlaceResponse
 
 _VN_TZ = timezone(timedelta(hours=7))
 
@@ -122,6 +125,7 @@ def test_trip_concept_schema_defaults_optional_dietary_and_avoid_districts() -> 
     legacy = TripConceptRequest.model_validate(_concept_payload())
     assert legacy.dietary == []
     assert legacy.avoid_districts == []
+    assert (legacy.interests, legacy.vibe_energy, legacy.vibe_spend) == ([], None, None)
 
     enriched = TripConceptRequest.model_validate(
         _concept_payload(dietary=["vegetarian", "no_seafood"], avoid_districts=["Quận 7"])
@@ -230,6 +234,78 @@ async def test_ai_concept_endpoint_accepts_legacy_payload_returns_200(
     body = response.json()
     assert body["source"] == "fallback"
     assert body["recommended_districts"] == ["Quận 1"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("endpoint", ["concept", "generate"])
+@pytest.mark.parametrize(
+    ("fields", "status"),
+    [
+        ({"interests": ["coffee_retro", "history"], "vibe_energy": 0, "vibe_spend": 100}, 200),
+        ({"interests": ["unknown"]}, 422),
+        (
+            {"interests": ["history", "markets", "parks", "riverside", "chinatown", "family_fun"]},
+            422,
+        ),
+        ({"vibe_energy": -1}, 422),
+        ({"vibe_spend": 101}, 422),
+    ],
+)
+async def test_ai_validates_detailed_interests_and_vibe(ai_client, endpoint, fields, status):
+    payload = _generation_payload() if endpoint == "generate" else _concept_payload()
+    response = await ai_client.post(f"/api/v1/ai/{endpoint}", json={**payload, **fields})
+    assert response.status_code == status, response.text
+
+
+def test_detailed_interests_still_require_legacy_preferences():
+    from app.schemas.ai import TripConceptRequest
+
+    payload = _concept_payload(interests=["history"])
+    del payload["preferences"]
+    with pytest.raises(ValidationError) as exc:
+        TripConceptRequest.model_validate(payload)
+    assert exc.value.errors()[0]["loc"] == ("preferences",)
+
+
+@pytest.mark.parametrize(
+    ("energy", "spend", "energy_text", "spend_text"),
+    [
+        (0, 33, "nhịp thong thả", "ưu tiên bình dân"),
+        (33, 34, "nhịp thong thả", "tầm trung"),
+        (34, 67, "cân bằng", "chịu chi, nơi đẹp/sang"),
+        (66, 66, "cân bằng", "tầm trung"),
+        (67, 100, "khám phá nhiều", "chịu chi, nơi đẹp/sang"),
+    ],
+)
+def test_prompt_interest_line_and_vibe_boundaries(energy, spend, energy_text, spend_text):
+    from app.schemas.ai import TripConceptRequest
+    from app.services.gemini_service import GeminiService
+
+    places = [PlaceResponse.model_validate(_sample_place("cafe", "Quận 1", "cafe"))]
+    legacy = TripConceptRequest.model_validate(_concept_payload())
+    req = TripConceptRequest.model_validate(
+        _concept_payload(
+            interests=["coffee_retro", "history", "rooftop_night", "markets", "local_life"],
+            vibe_energy=energy,
+            vibe_spend=spend,
+        )
+    )
+    before = GeminiService._prompt("Concept", legacy, places, "")
+    after = GeminiService._prompt("Concept", req, places, "")
+    line = next(line for line in after.splitlines() if "Sở thích" in line)
+    assert all(
+        label in line
+        for label in (
+            "Cà phê chill, retro",
+            "Lịch sử & chiến tranh",
+            "Rooftop & ngắm thành phố",
+            "Chợ & mua sắm địa phương",
+            "Đời sống địa phương",
+            energy_text,
+            spend_text,
+        )
+    )
+    assert 0 < len(after) - len(before) <= 600
 
 
 @pytest.mark.asyncio
@@ -693,3 +769,560 @@ async def test_suggest_swaps_fallback_returns_valid_alternatives() -> None:
     for alt in result.alternatives:
         assert alt.place_id != "cur"
         assert alt.replacement_reason
+
+
+# ---------------------------------------------------------------------------
+# Tests for T-043: prompt size, _shortlist_places, lean generate schema, timeout
+# ---------------------------------------------------------------------------
+
+
+def _load_real_hcmc_catalog() -> list[PlaceResponse]:
+    from app.api.v1.endpoints.ai import _to_place_response
+    from app.db.hcmc_data import PLACES
+
+    return [
+        place
+        for place in (_to_place_response(row) for row in PLACES if row.get("is_active", True))
+        if place.editorial_score >= 4.0
+    ]
+
+
+def _collect_schema_property_names(node: Any) -> set[str]:
+    names: set[str] = set()
+    if isinstance(node, dict):
+        props = node.get("properties")
+        if isinstance(props, dict):
+            names.update(props.keys())
+        for value in node.values():
+            names.update(_collect_schema_property_names(value))
+    elif isinstance(node, list):
+        for item in node:
+            names.update(_collect_schema_property_names(item))
+    return names
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("days", "per_day"), [(2, 4), (14, 6)])
+async def test_concept_and_generate_prompts_under_30k_chars_with_real_catalog(
+    caplog: pytest.LogCaptureFixture,
+    days: int,
+    per_day: int,
+) -> None:
+    from app.schemas.ai import TripConceptRequest, TripGenerationRequest
+    from app.services.gemini_service import GeminiService
+
+    catalog = _load_real_hcmc_catalog()
+    assert len(catalog) >= 300
+    q1_places = [p for p in catalog if p.district == "Quận 1"]
+
+    calls: list[dict[str, Any]] = []
+
+    class _FakeModels:
+        def generate_content(self, *, model: str, contents: str, config: dict[str, Any]) -> Any:
+            calls.append({"model": model, "contents": contents, "config": config})
+            if len(calls) == 1:
+                payload = {
+                    "summary": "Khám phá Quận 1 hai ngày.",
+                    "highlights": [q1_places[0].place_name, q1_places[1].place_name],
+                    "recommended_districts": ["Quận 1"],
+                    "route_overview": "Quận 1",
+                    "confirmation_question": "Bạn đồng ý chứ?",
+                }
+            else:
+                table = contents.split("VERIFIED PLACE CATALOG (pipe-separated):\n")[1]
+                rows = table.split("\n\n", 1)[0].splitlines()[1:]
+                items = [
+                    {
+                        "place_id": rows[idx].split("|", 1)[0],
+                        "day_number": idx // per_day + 1,
+                        "order_index": idx % per_day + 1,
+                        "start_time": "08:30",
+                        "end_time": "10:00",
+                        "is_lunch": (idx % per_day + 1) == 3,
+                    }
+                    for idx in range(days * per_day)
+                ]
+                payload = {"itinerary_items": items}
+
+            class _Resp:
+                text = json.dumps(payload, ensure_ascii=False)
+
+            return _Resp()
+
+    class _FakeClient:
+        models = _FakeModels()
+
+    # Tách chuỗi để hook pre-commit không coi là key thật.
+    fake_key = "AI" + "za" + "FakeSecretKey12345678901234567890"
+    service = GeminiService(api_key=fake_key, client=_FakeClient())
+    concept_req = TripConceptRequest.model_validate(
+        _concept_payload(
+            days=days,
+            places_per_day=per_day,
+            preferences=["food", "culture"],
+            interests=["street_food", "history", "chinatown", "riverside", "markets"],
+            vibe_energy=75,
+            vibe_spend=33,
+        )
+    )
+
+    with caplog.at_level(logging.INFO, logger="app.services.gemini_service"):
+        concept = await service.suggest_concept(concept_req, catalog)
+        gen_req = TripGenerationRequest(
+            **concept_req.model_dump(),
+            approved_concept=concept,
+        )
+        itinerary = await service.generate_itinerary(gen_req, catalog)
+
+    assert concept.source == "gemini"
+    assert itinerary.source == "gemini"
+    assert len(itinerary.itinerary_items) == days * per_day
+    assert len(calls) == 2
+
+    concept_prompt = calls[0]["contents"]
+    generate_prompt = calls[1]["contents"]
+    assert len(concept_prompt) <= 30_000
+    assert len(generate_prompt) <= 30_000
+    assert "images.unsplash.com" not in concept_prompt
+    assert "images.unsplash.com" not in generate_prompt
+    assert "photo_url" not in concept_prompt
+    assert "photo_url" not in generate_prompt
+
+    info_messages = [r.message for r in caplog.records if r.levelno == logging.INFO]
+    for step, prompt in (("concept", concept_prompt), ("generate", generate_prompt)):
+        assert "Sở thích: Ăn vặt đường phố" in prompt
+        assert "khám phá nhiều" in prompt and "ưu tiên bình dân" in prompt
+        table = prompt.split("VERIFIED PLACE CATALOG (pipe-separated):\n")[1].split("\n\n", 1)[0]
+        header, *rows = table.splitlines()
+        assert header.split("|") == [
+            "place_id",
+            "place_name",
+            "category",
+            "district",
+            "estimated_cost",
+            "is_indoor",
+            "opening_hours",
+            "editorial_score",
+            "lat",
+            "lng",
+        ]
+        by_id = {p.place_id: p for p in catalog}
+        for row in rows:
+            fields = row.split("|")
+            assert len(fields) == 10
+            place = by_id[fields[0]]
+            assert fields[-2:] == [f"{place.latitude:.3f}", f"{place.longitude:.3f}"]
+        if step == "concept":
+            assert len(rows) == 80
+        assert any(
+            f"step={step} places={len(rows)} prompt_chars={len(prompt)} elapsed_ms=" in m
+            and "source=gemini" in m
+            for m in info_messages
+        )
+    assert all(fake_key not in m and "TRAVELER REQUEST" not in m for m in info_messages)
+
+
+def test_shortlist_places_keeps_must_visit_categories_and_approved_districts() -> None:
+    from app.schemas.ai import ConceptResponse, PlaceResponse, TripGenerationRequest
+    from app.services.gemini_service import _shortlist_places
+
+    catalog = _load_real_hcmc_catalog()
+    q7_must = next(p for p in catalog if p.district == "Quận 7")
+    concept = ConceptResponse(
+        summary="Chỉ đi Quận 1",
+        highlights=[q7_must.place_name],
+        recommended_districts=["Quận 1"],
+        route_overview="Quận 1",
+        confirmation_question="OK?",
+    )
+    gen_req = TripGenerationRequest.model_validate(
+        {
+            **_concept_payload(
+                days=2,
+                places_per_day=4,
+                districts=["Quận 1", "Quận 3"],
+                preferences=["food"],
+                must_visit_ids=[q7_must.place_id],
+            ),
+            "approved_concept": concept.model_dump(),
+        }
+    )
+
+    shortlisted = _shortlist_places(gen_req, catalog, limit=40)
+    shortlisted_ids = {p.place_id for p in shortlisted}
+    categories = {p.category for p in shortlisted}
+
+    assert q7_must.place_id in shortlisted_ids
+    assert len(shortlisted) >= gen_req.days * gen_req.places_per_day
+    assert len(shortlisted) <= 40
+    assert "food" in categories
+    assert "sightseeing" in categories
+    assert all(p.district == "Quận 1" or p.place_id == q7_must.place_id for p in shortlisted)
+
+    # When approved district has fewer stops than days * places_per_day, relax to full catalog.
+    sparse_places = [
+        PlaceResponse.model_validate(_sample_place("q1-only-1", "Quận 1", "food")),
+        PlaceResponse.model_validate(_sample_place("q1-only-2", "Quận 1", "sightseeing")),
+        *[
+            PlaceResponse.model_validate(
+                _sample_place(
+                    f"q3-{idx}",
+                    "Quận 3",
+                    "food" if idx % 2 == 0 else "sightseeing",
+                )
+            )
+            for idx in range(8)
+        ],
+    ]
+    relaxed_req = TripGenerationRequest.model_validate(
+        {
+            **_concept_payload(days=2, places_per_day=4, districts=["Quận 1"]),
+            "approved_concept": concept.model_dump(),
+        }
+    )
+    relaxed = _shortlist_places(relaxed_req, sparse_places, limit=40)
+    assert len(relaxed) >= 8
+    assert {"q1-only-1", "q1-only-2"}.issubset({p.place_id for p in relaxed})
+    assert any(p.district == "Quận 3" for p in relaxed)
+
+
+@pytest.mark.asyncio
+async def test_shortlist_uses_db_tags_and_original_categories_before_rating(test_database):
+    from app.api.v1.endpoints.ai import _load_catalog
+    from app.db.models import Place
+    from app.schemas.ai import TripConceptRequest
+    from app.services.gemini_service import _shortlist_places
+    from app.services.interests import interest_score
+    from app.services.places_service import search_places
+
+    fixtures = [
+        ("mandatory", "shopping", [], 4.0),
+        ("tag-and-category", "culture", ["tôn giáo"], 4.0),
+        ("category-only", "culture", [], 4.6),
+        ("tag-only", "attraction", ["Di tích TÔN GIÁO"], 4.5),
+        ("high-rating", "attraction", [], 5.0),
+        ("meal", "food", [], 4.1),
+        ("coffee", "cafe", [], 4.1),
+    ]
+    _, factory = test_database
+    async with factory() as db:
+        for pid, category, tags, rating in fixtures:
+            db.add(
+                Place(
+                    id=pid,
+                    name=pid,
+                    address="TP.HCM",
+                    district="Quận 1",
+                    latitude=10.7,
+                    longitude=106.7,
+                    category=category,
+                    tags=json.dumps(tags),
+                    average_rating=rating,
+                )
+            )
+        await db.commit()
+        catalog = await _load_catalog(db)
+        # The catalog retains its own metadata even after a different search in the same task.
+        await search_places(db, district="Quận 3")
+
+    request = TripConceptRequest.model_validate(
+        _concept_payload(interests=["temples_churches"], must_visit_ids=["mandatory"])
+    )
+    shortlisted = _shortlist_places(request, catalog, limit=6)
+    assert [p.place_id for p in shortlisted] == [
+        "mandatory",
+        "tag-and-category",
+        "category-only",
+        "tag-only",
+        "coffee",
+        "meal",
+    ]
+    assert shortlisted[1].category == "sightseeing"
+    assert interest_score(shortlisted[1], request.interests) == 1.5
+    assert {"tags", "catalog_category"}.isdisjoint(shortlisted[1].model_dump())
+
+
+@pytest.mark.asyncio
+async def test_generate_schema_excludes_place_fields_and_grounds_response() -> None:
+    from app.schemas.ai import PlaceResponse, TripGenerationRequest
+    from app.services.gemini_service import GeminiService
+
+    places = [
+        PlaceResponse.model_validate(_make_place("q1-1", "Quận 1", "sightseeing", lat=10.776)),
+        PlaceResponse.model_validate(_make_place("q1-2", "Quận 1", "cafe", lat=10.779)),
+        PlaceResponse.model_validate(_make_place("q1-3", "Quận 1", "food", lat=10.781)),
+    ]
+    captured_schemas: list[dict[str, Any]] = []
+
+    class _FakeModels:
+        def generate_content(self, *, model: str, contents: str, config: dict[str, Any]) -> Any:
+            captured_schemas.append(config["response_json_schema"])
+            payload = {
+                "itinerary_items": [
+                    {
+                        "place_id": places[idx].place_id,
+                        "day_number": 1,
+                        "order_index": idx + 1,
+                        "start_time": f"{8 + idx * 2:02}:30",
+                        "end_time": f"{10 + idx * 2}:00",
+                        "is_lunch": idx == 2,
+                    }
+                    for idx in range(3)
+                ]
+            }
+
+            class _Resp:
+                text = json.dumps(payload)
+
+            return _Resp()
+
+    class _FakeClient:
+        models = _FakeModels()
+
+    service = GeminiService(client=_FakeClient())
+    req = TripGenerationRequest.model_validate(_generation_payload(days=1, places_per_day=3))
+    result = await service.generate_itinerary(req, places)
+
+    assert len(captured_schemas) == 1
+    prop_names = _collect_schema_property_names(captured_schemas[0])
+    assert {"place_id", "day_number", "order_index", "start_time", "end_time"}.issubset(prop_names)
+    forbidden_fields = {
+        "description",
+        "address",
+        "photo_url",
+        "place_name",
+        "category",
+        "district",
+        "latitude",
+        "longitude",
+        "estimated_cost",
+        "editorial_score",
+        "is_indoor",
+        "opening_hours",
+        "suggested_duration",
+        "transit_info",
+    }
+    assert prop_names.isdisjoint(forbidden_fields)
+
+    assert result.source == "gemini"
+    assert [it.place_name for it in result.itinerary_items] == [p.place_name for p in places]
+    assert all(it.description and it.address for it in result.itinerary_items)
+    assert result.itinerary_items[1].transit_info is not None
+
+
+@pytest.mark.asyncio
+async def test_gemini_timeout_falls_back_within_timeout_times_attempts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import time
+
+    from app.schemas.ai import PlaceResponse, TripConceptRequest
+    from app.services.gemini_service import GeminiService
+
+    monkeypatch.setenv("GEMINI_TIMEOUT_SECONDS", "17.5")
+    assert GeminiService(api_key=None).timeout_seconds == 17.5
+    monkeypatch.delenv("GEMINI_TIMEOUT_SECONDS", raising=False)
+    assert GeminiService(api_key=None).timeout_seconds == 25.0
+
+    places = [
+        PlaceResponse.model_validate(_make_place("p1", "Quận 1", "food")),
+        PlaceResponse.model_validate(_make_place("p2", "Quận 1", "cafe")),
+        PlaceResponse.model_validate(_make_place("p3", "Quận 1", "sightseeing")),
+    ]
+    call_count = 0
+
+    class _SlowModels:
+        def generate_content(self, **kwargs: Any) -> Any:
+            nonlocal call_count
+            call_count += 1
+            time.sleep(0.25)
+            raise AssertionError("Should have timed out before returning")
+
+    class _SlowClient:
+        models = _SlowModels()
+
+    timeout_s = 0.08
+    attempts = 3
+    service = GeminiService(
+        client=_SlowClient(),
+        timeout_seconds=timeout_s,
+        max_attempts=attempts,
+    )
+    req = TripConceptRequest.model_validate(_concept_payload())
+
+    t0 = time.perf_counter()
+    result = await service.suggest_concept(req, places)
+    elapsed = time.perf_counter() - t0
+
+    assert result.source == "fallback"
+    assert call_count == attempts
+    assert elapsed <= timeout_s * attempts + 0.25
+
+
+@pytest.mark.asyncio
+async def test_generate_rejects_catalog_id_outside_approved_shortlist() -> None:
+    from unittest.mock import AsyncMock, patch
+
+    from app.schemas.ai import ItineraryPlanItem, ItineraryPlanResponse, TripGenerationRequest
+    from app.services.gemini_service import GeminiService
+
+    req = TripGenerationRequest.model_validate(_generation_payload())
+    places = [
+        PlaceResponse.model_validate(_sample_place(f"q1-{i}", "Quận 1")) for i in range(3)
+    ] + [PlaceResponse.model_validate(_sample_place("q3", "Quận 3"))]
+    plan = ItineraryPlanResponse(
+        itinerary_items=[
+            ItineraryPlanItem(
+                place_id=pid, day_number=1, order_index=i, start_time="09:00", end_time="10:00"
+            )
+            for i, pid in enumerate(["q1-0", "q1-1", "q3"], start=1)
+        ]
+    )
+    service = GeminiService()
+    with patch.object(service, "_generate", new=AsyncMock(return_value=plan)):
+        result = await service.generate_itinerary(req, places)
+    assert result.source == "fallback"
+    assert {item.place_id for item in result.itinerary_items} == {"q1-0", "q1-1", "q1-2"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("queue", ["concurrency", "rate"])
+async def test_total_deadline_includes_queue_time(queue: str) -> None:
+    import asyncio
+    from unittest.mock import Mock
+
+    from app.schemas.ai import TripConceptRequest
+    from app.services.gemini_service import GeminiService
+
+    client = Mock()
+    service = GeminiService(
+        client=client, max_total_seconds=0.05, max_concurrent_requests=1, requests_per_minute=1
+    )
+    req = TripConceptRequest.model_validate(_concept_payload())
+    places = [PlaceResponse.model_validate(_sample_place("q1", "Quận 1"))]
+
+    async def queued_call():
+        return await asyncio.wait_for(service.suggest_concept(req, places), timeout=0.3)
+
+    if queue == "rate":
+        await service._wait_for_rate_slot()
+        result = await queued_call()
+    else:
+        async with service._semaphore:
+            result = await queued_call()
+
+    assert result.source == "fallback"
+    client.models.generate_content.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sdk_sends_lean_schema_and_transport_timeout_without_internal_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import httpx
+    from google import genai
+
+    from app.schemas.ai import TripGenerationRequest
+    from app.services.gemini_service import GeminiService
+
+    calls: list[httpx.Request] = []
+
+    def unavailable(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(503, json={"error": {"code": 503, "message": "unavailable"}})
+
+    sdk_client = genai.Client
+    async with httpx.AsyncClient(transport=httpx.MockTransport(unavailable)) as transport:
+
+        def make_client(api_key, http_options):
+            return sdk_client(
+                api_key=api_key, http_options={**http_options, "httpx_async_client": transport}
+            )
+
+        monkeypatch.setattr(genai, "Client", make_client)
+        service = GeminiService(api_key="test-only", timeout_seconds=0.5, max_attempts=1)
+        places = [
+            PlaceResponse.model_validate(_sample_place(f"q1-{i}", "Quận 1")) for i in range(3)
+        ]
+        req = TripGenerationRequest.model_validate(_generation_payload())
+        try:
+            result = await service.generate_itinerary(req, places)
+        finally:
+            await service._client.aio.aclose()
+            service._client.close()
+
+    assert result.source == "fallback"
+    assert len(calls) == 1
+    assert calls[0].extensions["timeout"]["read"] == 0.5
+    config = json.loads(calls[0].content)["generationConfig"]
+    assert "place_id" in _collect_schema_property_names(config["responseJsonSchema"])
+    assert "photo_url" not in _collect_schema_property_names(config["responseJsonSchema"])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reason", ["Exceeded your current quota", "GenerateRequestsPerDay"])
+async def test_quota_fallback_and_circuit_expiry(monkeypatch, caplog, reason):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from app.schemas.ai import TripConceptRequest
+    from app.services import gemini_service
+
+    now = 100.0
+
+    async def advance(seconds):
+        nonlocal now
+        now += seconds
+
+    monkeypatch.setattr(
+        gemini_service, "time", SimpleNamespace(monotonic=lambda: now, perf_counter=lambda: now)
+    )
+    monkeypatch.setattr(gemini_service.asyncio, "sleep", advance)
+    caplog.set_level(logging.INFO, logger=gemini_service.__name__)
+    error = RuntimeError(f"RESOURCE_EXHAUSTED: {reason}\nkey=test-secret")
+    error.code = 429
+    client = Mock()
+    client.models.generate_content.side_effect = error
+    service = gemini_service.GeminiService(client=client)
+    request = TripConceptRequest.model_validate(_concept_payload())
+    places = [PlaceResponse.model_validate(_sample_place("q1", "Quận 1"))]
+
+    started = now
+    assert (await service.suggest_concept(request, places)).source == "fallback"
+    assert now - started < 1
+    assert client.models.generate_content.call_count == 1
+    warnings = [record.message for record in caplog.records if record.levelno == logging.WARNING]
+    assert len(warnings) == 1 and "\n" not in warnings[0]
+    assert "test-secret" not in caplog.text
+
+    now = started + 59.9
+    assert (await service.suggest_concept(request, places)).source == "fallback"
+    assert client.models.generate_content.call_count == 1
+    assert "quota circuit open" in caplog.text
+
+    now = started + 60
+    assert (await service.suggest_concept(request, places)).source == "fallback"
+    assert client.models.generate_content.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_transient_rate_limit_retries_once_with_capped_backoff(monkeypatch):
+    from unittest.mock import AsyncMock, Mock
+
+    from app.schemas.ai import TripConceptRequest
+    from app.services import gemini_service
+
+    class TooManyRequests(Exception):
+        pass
+
+    client = Mock()
+    client.models.generate_content.side_effect = TooManyRequests("Try again shortly")
+    service = gemini_service.GeminiService(client=client, retry_base_seconds=10)
+    sleep = AsyncMock()
+    monkeypatch.setattr(gemini_service.asyncio, "sleep", sleep)
+    request = TripConceptRequest.model_validate(_concept_payload())
+    places = [PlaceResponse.model_validate(_sample_place("q1", "Quận 1"))]
+
+    assert (await service.suggest_concept(request, places)).source == "fallback"
+    assert client.models.generate_content.call_count == 2
+    sleep.assert_awaited_once_with(2.0)

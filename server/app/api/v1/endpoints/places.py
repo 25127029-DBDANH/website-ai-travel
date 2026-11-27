@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.services.places_service import (
+    count_interest_matches,
     get_nearby_places,
     get_place_by_id,
     search_places_with_count,
@@ -99,6 +100,19 @@ async def get_nearby_places_endpoint(
         limit=limit,
     )
     return {"total": len(places), "results": places}
+
+
+@router.get("/match-count", summary="Đếm địa điểm theo sở thích và quận")
+async def match_count(
+    db: DBSession,
+    interests: str = Query("", description="Các mã sở thích, phân cách bằng dấu phẩy"),
+    districts: str = Query("", description="Các quận, phân cách bằng dấu phẩy"),
+):
+    return await count_interest_matches(
+        db,
+        interests=[key.strip() for key in interests.split(",") if key.strip()],
+        districts=[name.strip() for name in districts.split(",") if name.strip()],
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -24,6 +24,7 @@ from sqlalchemy import Select, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Place, PlaceCache
+from app.services.interests import INTEREST_DEFINITIONS, matches_any, remember_catalog_fields
 from app.utils.time import utc_now
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,6 @@ logger = logging.getLogger(__name__)
 GOOGLE_PLACES_API_KEY: str = os.getenv("GOOGLE_PLACES_API_KEY", "")
 GOOGLE_PLACES_BASE_URL: str = "https://places.googleapis.com/v1"
 CACHE_TTL_DAYS: int = 7
-
 
 # ---------------------------------------------------------------------------
 # Helper: Google Places API (New) with 7-day TTL DB cache
@@ -172,6 +172,36 @@ async def count_places(
     return int(total or 0)
 
 
+async def count_interest_matches(
+    db: AsyncSession, *, interests: list[str], districts: list[str]
+) -> dict[str, Any]:
+    """Count matching catalog rows and return up to six photos in display order."""
+    keys = [key for key in dict.fromkeys(interests) if key in INTEREST_DEFINITIONS]
+    stmt = _apply_place_filters(select(
+        Place.id, func.coalesce(Place.name_vi, Place.name).label("name_vi"),
+        Place.photo_url, Place.category, Place.tags,
+    ))
+    if districts:
+        stmt = stmt.where(Place.district.in_(districts))
+    photo_rank = case(
+        (func.coalesce(func.trim(Place.photo_url), "") == "", 2),
+        (Place.photo_url.ilike("%unsplash%"), 1),
+        else_=0,
+    )
+    rows = await db.execute(stmt.order_by(
+        photo_rank, Place.average_rating.desc().nulls_last(), Place.id,
+    ))
+    count = 0
+    samples = []
+    for row in rows.mappings():
+        if keys and not matches_any(row, keys):
+            continue
+        count += 1
+        if len(samples) < 6:
+            samples.append({field: row[field] for field in ("id", "name_vi", "photo_url")})
+    return {"count": count, "samples": samples}
+
+
 async def search_places(
     db: AsyncSession,
     *,
@@ -219,8 +249,9 @@ async def search_places(
     )
 
     result = await db.execute(stmt)
-    places = result.scalars().all()
-    return [p.to_dict() for p in places]
+    rows = [place.to_dict() for place in result.scalars()]
+    remember_catalog_fields(rows)
+    return rows
 
 
 async def search_places_with_count(
