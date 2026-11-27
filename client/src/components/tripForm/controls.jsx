@@ -318,11 +318,21 @@ export function WizardFooter({
           )}
 
           {canSubmit ? (
-            <button type="submit" disabled={submitting} className="btn-primary min-h-12 px-5 text-sm font-bold">
+            <button
+              key="wizard-submit"
+              type="submit"
+              disabled={submitting}
+              className="btn-primary min-h-12 px-5 text-sm font-bold"
+            >
               <SubmitLabel submitting={submitting} submissionStage={submissionStage} t={t} />
             </button>
           ) : (
-            <button type="button" onClick={onNext} className="btn-primary min-h-11 px-5 text-sm font-bold">
+            <button
+              key="wizard-next"
+              type="button"
+              onClick={onNext}
+              className="btn-primary min-h-11 px-5 text-sm font-bold"
+            >
               <span>{t('form.wizard.next')}</span>
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </button>

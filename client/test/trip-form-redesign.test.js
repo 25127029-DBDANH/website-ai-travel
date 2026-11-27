@@ -393,3 +393,22 @@ test('every interest, template and stay area has vi/en copy and a local image', 
     assert.ok(existsSync(new URL(`../public/images/form/template-${key}.webp`, import.meta.url)), key);
   }
 });
+
+test('WizardFooter gives distinct keys to submit and next buttons so React never mutates type="button" into type="submit" mid-click', () => {
+  const src = readFileSync(new URL('../src/components/tripForm/controls.jsx', import.meta.url), 'utf8');
+  const footerStart = src.indexOf('export function WizardFooter(');
+  assert.ok(footerStart >= 0, 'WizardFooter must exist in controls.jsx');
+  const footerSrc = src.slice(footerStart);
+
+  const submitMatch = footerSrc.match(/<button\b[^>]*\btype="submit"[^>]*>/);
+  const nextMatch = footerSrc.match(/<button\b[^>]*\bonClick=\{onNext\}[^>]*>/);
+  assert.ok(submitMatch, 'WizardFooter must render a type="submit" button');
+  assert.ok(nextMatch, 'WizardFooter must render an onNext button');
+
+  const submitKey = submitMatch[0].match(/\bkey="([^"]+)"/)?.[1];
+  const nextKey = nextMatch[0].match(/\bkey="([^"]+)"/)?.[1];
+  assert.ok(submitKey, 'submit button in WizardFooter must have a key prop');
+  assert.ok(nextKey, 'next button in WizardFooter must have a key prop');
+  assert.notEqual(submitKey, nextKey, 'submit and next buttons must have distinct keys');
+  assert.match(nextMatch[0], /\btype="button"/, 'next button must explicitly set type="button"');
+});
