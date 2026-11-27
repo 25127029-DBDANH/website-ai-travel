@@ -156,10 +156,56 @@ jobs:
         working-directory: e2e
         env:
           E2E_BASE_URL: http://127.0.0.1:4173
-        run: npx playwright test
+          PLAYWRIGHT_HTML_OPEN: never
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/results.json
+        run: npx playwright test --reporter=list,html,json
+
+      - name: Summarize failed Playwright tests
+        if: failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          mkdir -p e2e/test-results
+          python - <<'PY' > e2e/test-results/e2e-failure.md
+          import html
+          import json
+          import re
+          from pathlib import Path
+
+          def first_line(message):
+              plain = re.sub(r"\x1b\[[0-9;]*m", "", message)
+              return next((line.strip() for line in plain.splitlines() if line.strip()), "Thiếu thông báo lỗi")
+
+          def failed_tests(suite, parents=()):
+              titles = (*parents, suite.get("title", ""))
+              for spec in suite.get("specs", []):
+                  for test in spec["tests"]:
+                      if test["status"] == "unexpected":
+                          title = " › ".join(filter(None, (*titles, spec["title"])))
+                          errors = [e for r in test["results"] for e in r.get("errors", [])]
+                          yield title, errors[0].get("message", "") if errors else test["results"][-1]["status"]
+              for child in suite.get("suites", []):
+                  yield from failed_tests(child, titles)
+
+          path = Path("e2e/test-results/results.json")
+          try:
+              report = json.loads(path.read_text())
+          except (FileNotFoundError, UnicodeDecodeError, json.JSONDecodeError):
+              report = {}
+          failures = list(failed_tests(report))
+          failures.extend(("Playwright", e.get("message", "")) for e in report.get("errors", []))
+          print("<!-- e2e-failure -->")
+          print("### E2E (Playwright) thất bại\n")
+          for title, message in failures[:25]:
+              print(f"- <code>{html.escape(first_line(title)[:300])}</code> — "
+                    f"<code>{html.escape(first_line(message)[:500])}</code>")
+          if len(failures) > 25:
+              print(f"\nCòn {len(failures) - 25} lỗi trong báo cáo.")
+          if not failures:
+              print("Chưa có kết quả từng test. Xem bước lỗi trong nhật ký workflow.")
+          PY
 
       - name: Upload Playwright report and traces on failure
         if: failure()
+        id: artifacts
         uses: actions/upload-artifact@v7
         with:
           name: playwright-e2e-artifacts
@@ -167,6 +213,16 @@ jobs:
           path: |
             e2e/playwright-report
             e2e/test-results
+
+      - name: Link failure summary to the artifact
+        if: failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          ARTIFACT_URL: ${{ steps.artifacts.outputs.artifact-url }}
+        run: |
+          cat e2e/test-results/e2e-failure.md >> "$GITHUB_STEP_SUMMARY"
+          if [[ -n "$ARTIFACT_URL" ]]; then
+            printf '\n[Report và trace](%s)\n' "$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Print server logs on failure
         if: failure()

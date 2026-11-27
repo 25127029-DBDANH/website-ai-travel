@@ -1,0 +1,43 @@
+title = "Travel AI HCMC"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "travel-google-api-key"
+description = "Google or Gemini API key"
+regex = '''AIza[0-9A-Za-z_-]{35}'''
+keywords = ["AIza"]
+
+[[rules]]
+id = "travel-jwt-secret"
+description = "JWT signing secret assigned a literal value"
+regex = '''(?i)\bJWT_SECRET["']?[ \t]*[:=][ \t]*("[^"\r\n]+"|'[^'\r\n]+'|[^\s"'#,;]{4,})'''
+secretGroup = 1
+keywords = ["jwt_secret"]
+
+  # Public values used exclusively by CI and the isolated preflight server.
+  [[rules.allowlists]]
+  condition = "AND"
+  paths = ['''(?:^|/)\.github/workflows/(?:ci|api-smoke|e2e)\.yml$''', '''(?:^|/)tools/preflight\.sh$''']
+  regexes = ['''^["']?(?:ci-only-not-a-secret|local-preflight-only)["']?$''']
+
+[[rules]]
+id = "travel-smtp-password"
+description = "SMTP password assigned a literal value"
+regex = '''(?i)\bSMTP_PASS(?:WORD)?["']?[ \t]*[:=][ \t]*("[^"\r\n]+"|'[^'\r\n]+'|[^\s"'#,;]{4,})'''
+secretGroup = 1
+keywords = ["smtp_pass"]
+
+[[allowlists]]
+description = "Example files"
+paths = ['''\.example$''']
+
+# Trong test, ghép key giả từ các mảnh, ví dụ "AI" + "za" + "Fake…".
+[[allowlists]]
+description = "Marked fixture values in backend tests"
+targetRules = ["travel-google-api-key", "gcp-api-key", "generic-api-key", "travel-jwt-secret", "travel-smtp-password"]
+condition = "AND"
+paths = ['''(?:^|/)server/app/tests/''']
+regexTarget = "secret"
+regexes = ['''(?i)fake|test|ci-only''']
