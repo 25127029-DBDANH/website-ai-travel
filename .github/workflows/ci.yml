@@ -131,7 +131,7 @@ jobs:
           fi
       - name: Exercise the full stack through the client proxy
         run: |
-          if ! python server/scripts/smoke_api.py --base-url http://127.0.0.1:5173 --include-ai-fallback; then
+          if ! docker compose exec -T server python scripts/smoke_api.py --base-url http://client --include-ai-fallback; then
             docker compose logs --tail=100
             exit 1
           fi
