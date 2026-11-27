@@ -5,11 +5,12 @@ Author  : Đỗ Nguyễn An Khang (Backend Lead & Auth Service)
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timezone
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import select
+from sqlalchemy import false, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_access_token
@@ -32,6 +33,27 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """Return the authenticated User row or raise 401."""
+    return await _authenticate(token, db, for_update=False)
+
+
+async def get_current_user_for_update(
+    token: str | None = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    return await _authenticate(token, db, for_update=True)
+
+
+async def lock_user(db: AsyncSession, *criteria) -> User | None:
+    """Serialize credential changes before reading any mutable proof or token."""
+    if db.get_bind().dialect.name == "sqlite":
+        # SQLite ignores FOR UPDATE. Start a write transaction without changing a row.
+        await db.execute(update(User).where(false()).values(updated_at=User.updated_at))
+    return await db.scalar(
+        select(User).where(*criteria).with_for_update().execution_options(populate_existing=True)
+    )
+
+
+async def _authenticate(token: str | None, db: AsyncSession, *, for_update: bool) -> User:
     if token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -47,14 +69,21 @@ async def get_current_user(
             detail="AUTH_TOKEN_EXPIRED",
         )
 
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="AUTH_TOKEN_EXPIRED",
-        )
-    return user
+    user = await lock_user(db, User.id == user_id) if for_update else await db.get(User, user_id)
+    if user is not None:
+        changed = user.password_changed_at
+        if changed is None or "iat" not in payload:
+            return user
+        changed_second = int(changed.replace(tzinfo=timezone.utc).timestamp())
+        # The credential stamp distinguishes sessions issued in the same UTC second.
+        if int(payload["iat"]) >= changed_second and (
+            "pwd_at" not in payload or payload["pwd_at"] == changed.isoformat()
+        ):
+            return user
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="AUTH_TOKEN_EXPIRED",
+    )
 
 
 async def get_optional_user(

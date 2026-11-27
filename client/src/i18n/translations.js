@@ -549,7 +549,10 @@ export const translations = {
     'auth.rule.noUsername': 'Does not contain your username',
     'auth.showPassword': 'Show password',
     'auth.hidePassword': 'Hide password',
+    'auth.forgotPassword': 'Forgot password?',
     'auth.noRecovery': 'Password cannot be recovered yet — save it somewhere safe.',
+    'auth.recoveryHint':
+      'After signing up, you will receive a one-time recovery code in case you forget your password.',
     'auth.or': 'or',
     'auth.google': 'Continue with Google',
     'auth.googleUnavailable': 'Google Sign-In could not load. Check your connection and try again.',
@@ -561,6 +564,58 @@ export const translations = {
     'auth.switch.register': 'Create one',
     'auth.switch.login': 'Sign in instead',
     'auth.claimed': '{count} trip(s) moved into your account.',
+
+    'recovery.panel.title': 'Save your recovery code',
+    'recovery.panel.description':
+      'Use this code to reset your password if you forget it. It is shown only once.',
+    'recovery.panel.codeLabel': 'Recovery code',
+    'recovery.panel.copy': 'Copy',
+    'recovery.panel.copied': 'Copied',
+    'recovery.panel.copyFallback':
+      'Could not copy automatically. The code is selected — copy it manually.',
+    'recovery.panel.download': 'Download .txt',
+    'recovery.panel.downloaded': 'Downloaded .txt file.',
+    'recovery.panel.confirmCheckbox': 'I have saved this code in a safe place',
+    'recovery.panel.continue': 'Continue',
+
+    'forgot.title': 'Reset your password',
+    'forgot.subtitle':
+      'Regain access to your account using your recovery code or verified email.',
+    'forgot.subtitleCodeOnly':
+      'Enter your username and saved recovery code to set a new password.',
+    'forgot.tab.recovery': 'Use recovery code',
+    'forgot.tab.email': 'Send link via email',
+    'forgot.recoveryCodeLabel': 'Recovery code',
+    'forgot.recoveryCodeHint': '12 characters in XXXX-XXXX-XXXX format.',
+    'forgot.newPassword': 'New password',
+    'forgot.confirmPassword': 'Confirm new password',
+    'forgot.submitRecovery': 'Reset password',
+    'forgot.submitting': 'Processing...',
+    'forgot.recoverySuccessTitle': 'Password reset complete',
+    'forgot.recoverySuccessBody':
+      'Your password has been updated and your old recovery code is no longer valid. Save your new recovery code below before signing in.',
+    'forgot.signInNow': 'Sign in',
+    'forgot.emailLabel': 'Verified email address',
+    'forgot.emailPlaceholder': 'you@example.com',
+    'forgot.submitEmail': 'Send reset link',
+    'forgot.emailSent':
+      'If this email is verified, you will receive a reset link in a few minutes (please check your spam folder too).',
+    'forgot.googleHint': 'Signed up with Google? Sign in with Google instead.',
+    'forgot.googleAction': 'Sign in with Google',
+    'forgot.backToLogin': 'Back to sign in',
+
+    'reset.title': 'Set a new password',
+    'reset.subtitle': 'Choose a strong new password for your account.',
+    'reset.newPassword': 'New password',
+    'reset.confirmPassword': 'Confirm new password',
+    'reset.submit': 'Update password',
+    'reset.submitting': 'Updating...',
+    'reset.successTitle': 'Password updated',
+    'reset.successBody':
+      'Your password has been reset. You can now sign in with your new password.',
+    'reset.signInCta': 'Sign in',
+    'reset.expiredTitle': 'Reset link expired',
+    'reset.requestNewLink': 'Request a new reset link',
 
     'savePrompt.title': 'Keep this trip',
     'savePrompt.body':
@@ -603,6 +658,41 @@ export const translations = {
     'settings.password.saved': 'Password updated.',
     'settings.password.mismatch': 'New passwords do not match.',
     'settings.password.google': 'This account signs in with Google, so there is no password to change.',
+    'settings.security.title': 'Security',
+    'settings.security.subtitle':
+      'Manage your recovery code and recovery email in case you forget your password.',
+    'settings.security.recovery.title': 'Recovery code',
+    'settings.security.recovery.active': 'Recovery code is active',
+    'settings.security.recovery.none': 'No recovery code yet',
+    'settings.security.recovery.unknown': 'Generate a one-time recovery code to keep as backup.',
+    'settings.security.recovery.hint':
+      'Generating a new code immediately invalidates your previous recovery code.',
+    'settings.security.recovery.regenerate': 'Generate new code',
+    'settings.security.recovery.passwordPrompt':
+      'Confirm your current password to generate a new recovery code.',
+    'settings.security.recovery.confirm': 'Generate code',
+    'settings.security.recovery.generating': 'Generating...',
+    'settings.security.recovery.google':
+      'Accounts signed in with Google do not use a password recovery code.',
+    'settings.security.recovery.modalTitle': 'Your new recovery code',
+    'settings.security.recovery.savedToast': 'New recovery code created.',
+    'settings.security.email.title': 'Recovery email',
+    'settings.security.email.verified': 'Verified',
+    'settings.security.email.unverified': 'Not verified',
+    'settings.security.email.none': 'No recovery email added yet.',
+    'settings.security.email.googleNote': 'Linked via Google (cannot be changed here).',
+    'settings.security.email.label': 'Email address',
+    'settings.security.email.placeholder': 'you@example.com',
+    'settings.security.email.sendCode': 'Send verification code',
+    'settings.security.email.resendCode': 'Resend code',
+    'settings.security.email.sending': 'Sending...',
+    'settings.security.email.codeSent':
+      'We sent a 6-digit verification code to {email}. It expires in 15 minutes.',
+    'settings.security.email.codeLabel': '6-digit verification code',
+    'settings.security.email.codePlaceholder': '000000',
+    'settings.security.email.verify': 'Verify email',
+    'settings.security.email.verifying': 'Verifying...',
+    'settings.security.email.verifiedToast': 'Recovery email verified.',
     'settings.danger.title': 'Delete account',
     'settings.danger.body':
       'This permanently deletes your account, trips and travel profile. This cannot be undone.',
@@ -715,7 +805,7 @@ export const translations = {
     'ride.googleMapsDirections': 'Google Maps directions',
 
     'error.RATE_LIMITED': "You're moving fast! Please wait a minute and try again.",
-    'error.AUTH_RATE_LIMITED': 'Too many sign-in attempts. Please wait 15 minutes and try again.',
+    'error.AUTH_RATE_LIMITED': 'Too many attempts. Please wait 15 minutes and try again.',
     'error.AI_RATE_LIMITED': 'The AI is taking a short break. Please wait a minute and try again.',
     'error.GEMINI_BUDGET_EXHAUSTED':
       'The AI is handling a lot of requests. Please try again in a few seconds.',
@@ -748,6 +838,14 @@ export const translations = {
       'This password is too common. Please choose a stronger one.',
     'error.AUTH_PASSWORD_CONTAINS_USERNAME': 'Password must not contain your username.',
     'error.AUTH_GOOGLE_REAUTH_REQUIRED': 'Confirm with Google to continue.',
+    'error.AUTH_RECOVERY_INVALID': 'Username or recovery code is incorrect.',
+    'error.AUTH_RESET_TOKEN_INVALID': 'This password reset link is invalid or has expired.',
+    'error.AUTH_EMAIL_CODE_INVALID': 'The verification code is incorrect or has expired.',
+    'error.AUTH_EMAIL_INVALID': 'Please enter a valid email address.',
+    'error.EMAIL_DISABLED': 'Email recovery is currently turned off on the server.',
+    'error.RECOVERY_UNAVAILABLE':
+      'Password recovery is not available on the server yet. Please try again later.',
+    'error.PASSWORD_MISMATCH': 'New passwords do not match.',
     'error.MISSING_ITINERARY_TOOL':
       'The guide could not finish the plan. Please send your message again.',
     'error.network': "Can't reach the server. Check your connection and try again.",
@@ -1304,7 +1402,10 @@ export const translations = {
     'auth.rule.noUsername': 'Không chứa tên đăng nhập',
     'auth.showPassword': 'Hiện mật khẩu',
     'auth.hidePassword': 'Ẩn mật khẩu',
+    'auth.forgotPassword': 'Quên mật khẩu?',
     'auth.noRecovery': 'Chưa hỗ trợ khôi phục mật khẩu — hãy lưu mật khẩu ở nơi an toàn.',
+    'auth.recoveryHint':
+      'Sau khi đăng ký, bạn sẽ nhận một mã khôi phục dùng một lần phòng khi quên mật khẩu.',
     'auth.or': 'hoặc',
     'auth.google': 'Tiếp tục với Google',
     'auth.googleUnavailable': 'Không tải được Google Sign-In. Kiểm tra mạng và thử lại.',
@@ -1317,6 +1418,58 @@ export const translations = {
     'auth.switch.register': 'Đăng ký',
     'auth.switch.login': 'Đăng nhập',
     'auth.claimed': 'Đã chuyển {count} chuyến vào tài khoản của bạn.',
+
+    'recovery.panel.title': 'Lưu mã khôi phục',
+    'recovery.panel.description':
+      'Mã này dùng để đặt lại mật khẩu nếu bạn quên. Mã chỉ hiện một lần.',
+    'recovery.panel.codeLabel': 'Mã khôi phục',
+    'recovery.panel.copy': 'Sao chép',
+    'recovery.panel.copied': 'Đã sao chép',
+    'recovery.panel.copyFallback':
+      'Không sao chép tự động được. Mã đã được chọn sẵn — bạn hãy sao chép thủ công.',
+    'recovery.panel.download': 'Tải .txt',
+    'recovery.panel.downloaded': 'Đã tải tệp .txt.',
+    'recovery.panel.confirmCheckbox': 'Tôi đã lưu mã ở nơi an toàn',
+    'recovery.panel.continue': 'Tiếp tục',
+
+    'forgot.title': 'Khôi phục mật khẩu',
+    'forgot.subtitle':
+      'Lấy lại quyền truy cập tài khoản bằng mã khôi phục hoặc email đã xác minh.',
+    'forgot.subtitleCodeOnly':
+      'Nhập tên đăng nhập và mã khôi phục đã lưu để đặt mật khẩu mới.',
+    'forgot.tab.recovery': 'Dùng mã khôi phục',
+    'forgot.tab.email': 'Gửi link qua email',
+    'forgot.recoveryCodeLabel': 'Mã khôi phục',
+    'forgot.recoveryCodeHint': '12 ký tự theo định dạng XXXX-XXXX-XXXX.',
+    'forgot.newPassword': 'Mật khẩu mới',
+    'forgot.confirmPassword': 'Nhập lại mật khẩu mới',
+    'forgot.submitRecovery': 'Đặt lại mật khẩu',
+    'forgot.submitting': 'Đang xử lý...',
+    'forgot.recoverySuccessTitle': 'Đã đặt lại mật khẩu',
+    'forgot.recoverySuccessBody':
+      'Mật khẩu đã được cập nhật và mã khôi phục cũ không còn hiệu lực. Hãy lưu mã khôi phục mới bên dưới trước khi đăng nhập.',
+    'forgot.signInNow': 'Đăng nhập',
+    'forgot.emailLabel': 'Email đã xác minh',
+    'forgot.emailPlaceholder': 'ban@example.com',
+    'forgot.submitEmail': 'Gửi link đặt lại',
+    'forgot.emailSent':
+      'Nếu email đã được xác minh, bạn sẽ nhận link trong vài phút (hãy kiểm tra cả thư rác).',
+    'forgot.googleHint': 'Tài khoản tạo bằng Google? Hãy đăng nhập bằng Google.',
+    'forgot.googleAction': 'Đăng nhập bằng Google',
+    'forgot.backToLogin': 'Quay lại đăng nhập',
+
+    'reset.title': 'Đặt mật khẩu mới',
+    'reset.subtitle': 'Chọn mật khẩu mới mạnh và an toàn cho tài khoản của bạn.',
+    'reset.newPassword': 'Mật khẩu mới',
+    'reset.confirmPassword': 'Nhập lại mật khẩu mới',
+    'reset.submit': 'Cập nhật mật khẩu',
+    'reset.submitting': 'Đang cập nhật...',
+    'reset.successTitle': 'Đã đổi mật khẩu',
+    'reset.successBody':
+      'Mật khẩu của bạn đã được đặt lại. Bạn có thể đăng nhập bằng mật khẩu mới ngay bây giờ.',
+    'reset.signInCta': 'Đăng nhập',
+    'reset.expiredTitle': 'Link đặt lại đã hết hạn',
+    'reset.requestNewLink': 'Yêu cầu đặt lại mật khẩu mới',
 
     'savePrompt.title': 'Giữ chuyến đi này',
     'savePrompt.body':
@@ -1360,6 +1513,42 @@ export const translations = {
     'settings.password.mismatch': 'Mật khẩu mới nhập lại không khớp.',
     'settings.password.google':
       'Tài khoản này đăng nhập bằng Google nên không có mật khẩu để đổi.',
+    'settings.security.title': 'Bảo mật',
+    'settings.security.subtitle':
+      'Quản lý mã khôi phục và email phòng khi bạn quên mật khẩu.',
+    'settings.security.recovery.title': 'Mã khôi phục',
+    'settings.security.recovery.active': 'Đã thiết lập mã khôi phục',
+    'settings.security.recovery.none': 'Chưa có mã khôi phục',
+    'settings.security.recovery.unknown': 'Tạo mã khôi phục để dự phòng khi quên mật khẩu.',
+    'settings.security.recovery.hint':
+      'Tạo mã mới sẽ lập tức vô hiệu hóa mã khôi phục cũ.',
+    'settings.security.recovery.regenerate': 'Tạo mã mới',
+    'settings.security.recovery.passwordPrompt':
+      'Nhập mật khẩu hiện tại để tạo mã khôi phục mới.',
+    'settings.security.recovery.confirm': 'Xác nhận tạo mã',
+    'settings.security.recovery.generating': 'Đang tạo...',
+    'settings.security.recovery.google':
+      'Tài khoản đăng nhập bằng Google không dùng mã khôi phục mật khẩu.',
+    'settings.security.recovery.modalTitle': 'Mã khôi phục mới của bạn',
+    'settings.security.recovery.savedToast': 'Đã tạo mã khôi phục mới.',
+    'settings.security.email.title': 'Email khôi phục',
+    'settings.security.email.verified': 'Đã xác minh',
+    'settings.security.email.unverified': 'Chưa xác minh',
+    'settings.security.email.none': 'Chưa thêm email khôi phục.',
+    'settings.security.email.googleNote':
+      'Email liên kết với tài khoản Google (không thể chỉnh sửa tại đây).',
+    'settings.security.email.label': 'Địa chỉ email',
+    'settings.security.email.placeholder': 'ban@example.com',
+    'settings.security.email.sendCode': 'Gửi mã xác minh',
+    'settings.security.email.resendCode': 'Gửi lại mã',
+    'settings.security.email.sending': 'Đang gửi...',
+    'settings.security.email.codeSent':
+      'Đã gửi mã 6 số tới {email}. Mã có hiệu lực trong 15 phút.',
+    'settings.security.email.codeLabel': 'Mã xác minh 6 số',
+    'settings.security.email.codePlaceholder': '000000',
+    'settings.security.email.verify': 'Xác minh',
+    'settings.security.email.verifying': 'Đang xác minh...',
+    'settings.security.email.verifiedToast': 'Đã xác minh email khôi phục.',
     'settings.danger.title': 'Xóa tài khoản',
     'settings.danger.body':
       'Thao tác này xóa vĩnh viễn tài khoản, các chuyến đi và hồ sơ du lịch. Không thể hoàn tác.',
@@ -1472,7 +1661,7 @@ export const translations = {
     'ride.googleMapsDirections': 'Chỉ đường Google Maps',
 
     'error.RATE_LIMITED': 'Bạn thao tác hơi nhanh! Vui lòng chờ một phút rồi thử lại.',
-    'error.AUTH_RATE_LIMITED': 'Bạn đã thử đăng nhập quá nhiều lần. Vui lòng chờ 15 phút rồi thử lại.',
+    'error.AUTH_RATE_LIMITED': 'Bạn đã thử quá nhiều lần. Vui lòng chờ 15 phút rồi thử lại.',
     'error.AI_RATE_LIMITED': 'AI đang nghỉ một chút. Vui lòng chờ một phút rồi thử lại.',
     'error.GEMINI_BUDGET_EXHAUSTED':
       'AI đang xử lý nhiều yêu cầu. Vui lòng thử lại sau vài giây.',
@@ -1505,6 +1694,14 @@ export const translations = {
       'Mật khẩu này quá phổ biến. Bạn hãy chọn mật khẩu khác khó đoán hơn.',
     'error.AUTH_PASSWORD_CONTAINS_USERNAME': 'Mật khẩu không được chứa tên đăng nhập.',
     'error.AUTH_GOOGLE_REAUTH_REQUIRED': 'Vui lòng xác nhận bằng Google để tiếp tục.',
+    'error.AUTH_RECOVERY_INVALID': 'Tên đăng nhập hoặc mã khôi phục không đúng.',
+    'error.AUTH_RESET_TOKEN_INVALID': 'Link đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.',
+    'error.AUTH_EMAIL_CODE_INVALID': 'Mã xác minh không đúng hoặc đã hết hạn.',
+    'error.AUTH_EMAIL_INVALID': 'Vui lòng nhập địa chỉ email hợp lệ.',
+    'error.EMAIL_DISABLED': 'Tính năng khôi phục qua email hiện chưa được bật trên máy chủ.',
+    'error.RECOVERY_UNAVAILABLE':
+      'Tính năng khôi phục mật khẩu hiện chưa khả dụng trên máy chủ. Vui lòng thử lại sau.',
+    'error.PASSWORD_MISMATCH': 'Mật khẩu mới nhập lại không khớp.',
     'error.MISSING_ITINERARY_TOOL':
       'Trợ lý chưa hoàn thành được lịch trình. Vui lòng gửi lại tin nhắn.',
     'error.network': 'Không kết nối được máy chủ. Kiểm tra mạng và thử lại.',

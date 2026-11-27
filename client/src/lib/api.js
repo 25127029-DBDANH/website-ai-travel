@@ -1,8 +1,9 @@
 // Data layer & API Gateway with rich HCMC catalog, detailed time slots, contingency scenarios,
 // Google Calendar sync, and VITE_USE_BACKEND toggle between FastAPI Backend (Khang/Lam/Đạt) and Mock Data.
 // Authors: Diệp Bảo Danh (API Gateway Lead), Đỗ Nguyễn An Khang (Auth & Trip CRUD), Lê Hữu Lam (Gemini AI), Ngô Tấn Đạt (Places)
-import { getAuthToken, clearAuthToken, getSessionId } from './auth.js';
+import { getAuthToken, setAuthToken, clearAuthToken, getSessionId } from './auth.js';
 import { pickRandomUniquePhotos, selectMarqueePhotos, shuffle } from './marqueePhotos.js';
+import { generateMockRecoveryCode } from './recoveryCode.js';
 
 const RAW_API_BASE = (import.meta.env?.VITE_API_BASE || 'http://localhost:8000').replace(/\/$/, '');
 const API_ORIGIN = RAW_API_BASE.replace(/\/api\/v1$/, '');
@@ -103,6 +104,20 @@ async function request(method, path, body) {
   }
 
   return res.json();
+}
+
+async function requestRecovery(method, path, body) {
+  try {
+    return await request(method, path, body);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      throw new ApiError('Recovery endpoint is not available yet', 'RECOVERY_UNAVAILABLE', 404);
+    }
+    if (err instanceof ApiError && err.status === 429 && (!err.code || err.code === 'default')) {
+      throw new ApiError(err.message, 'AUTH_RATE_LIMITED', 429);
+    }
+    throw err;
+  }
 }
 
 const STORAGE_KEY = 'saigon-guide-local-data-v2';
@@ -1746,10 +1761,21 @@ export const api = {
         throw new ApiError('Tên đăng nhập cần tối thiểu 3 ký tự.', 'INVALID_USERNAME', 400);
       }
       const state = readState();
-      const user = { id: `mock-user-${cleanName}`, username: cleanName, display_name: cleanName };
+      const user = {
+        id: `mock-user-${cleanName}`,
+        username: cleanName,
+        display_name: cleanName,
+        has_password: true,
+        has_recovery_code: true,
+        email_verified: false
+      };
       state.user = user;
       save(state);
-      return { token: `mock-jwt-${cleanName}`, user };
+      return {
+        token: `mock-jwt-${cleanName}`,
+        user,
+        recovery_code: generateMockRecoveryCode()
+      };
     }
     return request('POST', '/api/v1/auth/register', { username, password });
   },
@@ -1757,7 +1783,14 @@ export const api = {
     if (!isBackendEnabled()) {
       const cleanName = String(username || '').trim() || 'demo';
       const state = readState();
-      const user = { id: `mock-user-${cleanName}`, username: cleanName, display_name: cleanName };
+      const user = {
+        id: `mock-user-${cleanName}`,
+        username: cleanName,
+        display_name: cleanName,
+        has_password: true,
+        has_recovery_code: true,
+        email_verified: false
+      };
       state.user = user;
       save(state);
       return { token: `mock-jwt-${cleanName}`, user };
@@ -1777,7 +1810,14 @@ export const api = {
   getMe: async () => {
     if (!isBackendEnabled()) {
       const state = readState();
-      const user = state.user || { id: 'mock-user-demo', username: 'demo', display_name: 'Demo Traveler' };
+      const user = state.user || {
+        id: 'mock-user-demo',
+        username: 'demo',
+        display_name: 'Demo Traveler',
+        has_password: true,
+        has_recovery_code: true,
+        email_verified: false
+      };
       return { user };
     }
     return request('GET', '/api/v1/auth/me');
@@ -1786,7 +1826,81 @@ export const api = {
     if (!isBackendEnabled()) {
       return { success: true };
     }
-    return request('POST', '/api/v1/auth/change-password', payload);
+    const data = await request('POST', '/api/v1/auth/change-password', payload);
+    if (data?.token) {
+      setAuthToken(data.token);
+    }
+    return data;
+  },
+  getAuthConfig: async () => {
+    if (!isBackendEnabled()) {
+      return { email_recovery_enabled: false };
+    }
+    try {
+      const data = await request('GET', '/api/v1/auth/config');
+      return { email_recovery_enabled: Boolean(data?.email_recovery_enabled) };
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        return { email_recovery_enabled: false };
+      }
+      throw err;
+    }
+  },
+  resetWithRecoveryCode: async ({ username, recovery_code, new_password } = {}) => {
+    if (!isBackendEnabled()) {
+      return { success: true, recovery_code: generateMockRecoveryCode() };
+    }
+    return requestRecovery('POST', '/api/v1/auth/reset-password/recovery-code', {
+      username,
+      recovery_code,
+      new_password
+    });
+  },
+  regenerateRecoveryCode: async ({ current_password } = {}) => {
+    if (!isBackendEnabled()) {
+      const state = readState();
+      if (state.user) {
+        state.user = { ...state.user, has_recovery_code: true };
+        save(state);
+      }
+      return { recovery_code: generateMockRecoveryCode() };
+    }
+    return requestRecovery('POST', '/api/v1/auth/recovery-code', { current_password });
+  },
+  addEmail: async ({ email } = {}) => {
+    if (!isBackendEnabled()) {
+      const cleanEmail = String(email || '').trim();
+      const state = readState();
+      if (state.user) {
+        state.user = { ...state.user, email: cleanEmail, email_verified: false };
+        save(state);
+      }
+      return { email: cleanEmail, email_verified: false };
+    }
+    return requestRecovery('POST', '/api/v1/auth/email', { email });
+  },
+  verifyEmail: async ({ code } = {}) => {
+    if (!isBackendEnabled()) {
+      const state = readState();
+      if (state.user) {
+        state.user = { ...state.user, email_verified: true };
+        save(state);
+      }
+      return { email_verified: true };
+    }
+    return requestRecovery('POST', '/api/v1/auth/email/verify', { code });
+  },
+  forgotPassword: async ({ email } = {}) => {
+    if (!isBackendEnabled()) {
+      return { success: true };
+    }
+    return requestRecovery('POST', '/api/v1/auth/forgot-password', { email });
+  },
+  resetPassword: async ({ token, new_password } = {}) => {
+    if (!isBackendEnabled()) {
+      return { success: true };
+    }
+    return requestRecovery('POST', '/api/v1/auth/reset-password', { token, new_password });
   },
   deleteAccount: async (payload) => {
     if (!isBackendEnabled()) {

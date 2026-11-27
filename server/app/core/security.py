@@ -5,6 +5,7 @@ Author  : Đỗ Nguyễn An Khang (Backend Lead & Auth Service)
 
 from __future__ import annotations
 
+import re
 import secrets
 import unicodedata
 from datetime import datetime, timedelta, timezone
@@ -58,13 +59,24 @@ def verify_password(plain: str, hashed: str) -> bool:
 DUMMY_HASH: str = hash_password(secrets.token_urlsafe(32))
 
 
+def normalize_recovery_code(code: str) -> str:
+    return re.sub(r"[-\s]", "", code).upper()
+
+
+def generate_recovery_code() -> tuple[str, str]:
+    alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+    code = "".join(secrets.choice(alphabet) for _ in range(12))
+    return f"{code[:4]}-{code[4:8]}-{code[8:]}", hash_password(code)
+
+
 # ---------------------------------------------------------------------------
 # JWT access tokens
 # ---------------------------------------------------------------------------
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire, "iat": int(now.timestamp())})
     return jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 
