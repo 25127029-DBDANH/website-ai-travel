@@ -26,6 +26,7 @@ const {
   isImeComposing,
   blockImeEnter,
   buildRecoveryCodeFileContent,
+  buildRecoveryCodeFilename,
 } = await import('../src/lib/recoveryCode.js');
 const { api, ApiError, setUseBackend } = await import('../src/lib/api.js');
 const { translateApiError } = await import('../src/lib/errors.js');
@@ -86,6 +87,14 @@ test('recoveryCode: normalize, format while typing, and Crockford Base32 validat
   const txt = buildRecoveryCodeFileContent(mockCode, 'traveler_1');
   assert.ok(txt.includes(mockCode));
   assert.ok(txt.includes('traveler_1'));
+
+  assert.equal(buildRecoveryCodeFilename('traveler_1'), 'saigon-guide-recovery-code-traveler_1.txt');
+  assert.equal(buildRecoveryCodeFilename(''), 'saigon-guide-recovery-code.txt');
+  assert.equal(buildRecoveryCodeFilename('Nguyễn @#!'), 'saigon-guide-recovery-code-Nguyn.txt');
+  assert.equal(buildRecoveryCodeFilename('🎉✨'), 'saigon-guide-recovery-code.txt');
+
+  // Pasted codes with extra whitespace/newlines still normalize & format cleanly
+  assert.equal(formatRecoveryCode('  abcd - 2345 - efgh \n'), 'ABCD-2345-EFGH');
 });
 
 test('recoveryCode: IME Enter guard ignores composing events and keyCode 229', () => {
@@ -321,4 +330,25 @@ test('App.jsx declares /forgot-password and /reset-password routes', () => {
   assert.match(appSource, /path=["']\/reset-password["']/);
   assert.match(appSource, /ForgotPasswordPage/);
   assert.match(appSource, /ResetPasswordPage/);
+});
+
+test('FE review gate regressions: paste-safe maxLength, ARIA tabpanel, copy timer cleanup', () => {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const forgotSrc = fs.readFileSync(path.resolve(__dirname, '../src/pages/ForgotPasswordPage.jsx'), 'utf8');
+  const settingsSrc = fs.readFileSync(path.resolve(__dirname, '../src/pages/SettingsPage.jsx'), 'utf8');
+  const panelSrc = fs.readFileSync(path.resolve(__dirname, '../src/components/RecoveryCodePanel.jsx'), 'utf8');
+
+  // Recovery code and 6-digit OTP inputs must not truncate pasted whitespace before onChange cleans it
+  assert.doesNotMatch(forgotSrc, /maxLength=\{14\}/);
+  assert.doesNotMatch(settingsSrc, /maxLength=\{6\}/);
+
+  // ForgotPasswordPage tablist exposes ARIA tabpanel + aria-controls + arrow navigation
+  assert.match(forgotSrc, /role=\{emailRecoveryEnabled \? 'tabpanel' : undefined\}/);
+  assert.match(forgotSrc, /aria-controls="forgot-panel-recovery"/);
+  assert.match(forgotSrc, /ArrowLeft/);
+
+  // RecoveryCodePanel cleans up copy timeout and rAF on repeat clicks / unmount
+  assert.match(panelSrc, /clearTimeout\(copyTimerRef\.current\)/);
+  assert.match(panelSrc, /cancelAnimationFrame\(rafId\)/);
+  assert.match(panelSrc, /role="status"/);
 });

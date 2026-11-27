@@ -30,7 +30,7 @@ export default function AuthModal() {
   const passwordRef = useRef(null);
 
   useEffect(() => {
-    if (!isAuthOpen) return;
+    if (!isAuthOpen) return undefined;
     setMode(authMode);
     setUsername('');
     setPassword('');
@@ -41,7 +41,8 @@ export default function AuthModal() {
     setRegisteredUsername('');
     submittingRef.current = false;
     setSubmitting(false);
-    requestAnimationFrame(() => usernameRef.current?.focus());
+    const rafId = requestAnimationFrame(() => usernameRef.current?.focus());
+    return () => cancelAnimationFrame(rafId);
   }, [isAuthOpen, authMode]);
 
   const clearError = () => {
@@ -177,7 +178,7 @@ export default function AuthModal() {
               disabled={submitting}
               className="btn-primary !px-4 !py-2 text-xs"
             >
-              {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : null}
               {submitting
                 ? t('auth.submitting')
                 : isLogin
@@ -197,7 +198,7 @@ export default function AuthModal() {
       ) : (
         <div>
           <span className="mx-auto mb-4 grid h-11 w-11 place-items-center rounded-xl bg-brand-50 text-brand-700">
-            <UserRound className="h-5 w-5" />
+            <UserRound className="h-5 w-5" aria-hidden="true" />
           </span>
           <div className="grid grid-cols-2 gap-1 rounded-full bg-slate-100 p-1">
             <button type="button" onClick={() => switchMode('login')} aria-pressed={isLogin} className={tabClass(isLogin)}>
@@ -229,9 +230,11 @@ export default function AuthModal() {
             onKeyDown={blockImeEnter}
             className="mt-4 grid gap-3"
           >
-            <label className="grid gap-1.5">
-              <span className="label !mb-0">{t('auth.username')}</span>
+            <div className="grid gap-1.5">
+              <label htmlFor="auth-username" className="label !mb-0">{t('auth.username')}</label>
               <input
+                id="auth-username"
+                name="username"
                 ref={usernameRef}
                 className="input"
                 value={username}
@@ -242,13 +245,17 @@ export default function AuthModal() {
                 aria-invalid={errorField === 'username' || undefined}
                 aria-describedby={describedBy('username', isLogin ? null : 'auth-username-hint')}
                 autoComplete="username"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                enterKeyHint="next"
                 minLength={3}
                 maxLength={30}
                 pattern="[A-Za-z0-9_]+"
                 required
               />
-              {!isLogin && <span id="auth-username-hint" className="text-[11px] text-slate-500">{t('auth.usernameHint')}</span>}
-            </label>
+              {!isLogin && <span id="auth-username-hint" className="text-[11px] text-slate-600">{t('auth.usernameHint')}</span>}
+            </div>
 
             {!isLogin && (
               <p className="rounded-xl bg-brand-50/70 px-3 py-2 text-[11px] font-medium leading-relaxed text-brand-900">
@@ -263,7 +270,7 @@ export default function AuthModal() {
                   <Link
                     to="/forgot-password"
                     onClick={closeAuth}
-                    className="text-xs font-semibold text-brand-700 transition-colors hover:underline"
+                    className="inline-flex min-h-[24px] items-center py-0.5 text-xs font-semibold text-brand-700 transition-colors hover:underline"
                   >
                     {t('auth.forgotPassword')}
                   </Link>
@@ -272,6 +279,7 @@ export default function AuthModal() {
               <div className="relative">
                 <input
                   id="auth-password"
+                  name="password"
                   ref={passwordRef}
                   type={showPassword ? 'text' : 'password'}
                   className="input pr-11"
@@ -283,6 +291,7 @@ export default function AuthModal() {
                   aria-invalid={errorField === 'password' || undefined}
                   aria-describedby={describedBy('password', isLogin ? null : 'auth-password-hint')}
                   autoComplete={isLogin ? 'current-password' : 'new-password'}
+                  enterKeyHint="done"
                   minLength={isLogin ? 1 : 8}
                   maxLength={64}
                   required
@@ -304,7 +313,6 @@ export default function AuthModal() {
               {!isLogin && passwordCheck && (
                 <ul
                   id="auth-password-hint"
-                  aria-live="polite"
                   className="grid gap-1 text-[11px]"
                 >
                   {passwordCheck.rules.map((rule) => (
@@ -312,7 +320,7 @@ export default function AuthModal() {
                       key={rule.id}
                       className={cn(
                         'flex items-start gap-1.5 leading-snug transition-colors',
-                        rule.ok ? 'font-medium text-brand-700' : 'text-slate-500'
+                        rule.ok ? 'font-medium text-brand-700' : 'text-slate-600'
                       )}
                     >
                       <span aria-hidden="true" className="w-3.5 shrink-0 text-center font-bold">
@@ -326,7 +334,7 @@ export default function AuthModal() {
             </div>
 
             {error ? (
-              <p id="auth-form-error" role="alert" aria-live="assertive" className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+              <p id="auth-form-error" role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
                 {error}
               </p>
             ) : null}

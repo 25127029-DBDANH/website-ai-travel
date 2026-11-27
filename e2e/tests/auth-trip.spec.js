@@ -38,6 +38,24 @@ test('register, logout/login, create a trip via form, and verify it in My Trips'
       .and(authDialog.locator('[type="submit"]'))
       .click();
 
+    await expect(
+      authDialog.getByRole('heading', { name: 'Save your recovery code' })
+    ).toBeVisible();
+
+    const recoveryCodePattern = /^[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}$/;
+    const recoveryCode = authDialog.getByText(recoveryCodePattern);
+    await expect(recoveryCode).toBeVisible();
+    expect((await recoveryCode.textContent()).trim()).toMatch(recoveryCodePattern);
+
+    const continueButton = authDialog.getByRole('button', { name: 'Continue', exact: true });
+    await expect(continueButton).toBeDisabled();
+
+    await authDialog
+      .getByRole('checkbox', { name: 'I have saved this code in a safe place' })
+      .check();
+    await expect(continueButton).toBeEnabled();
+    await continueButton.click();
+
     await expect(authDialog).toBeHidden();
     await expect(page.getByRole('link', { name: username })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();

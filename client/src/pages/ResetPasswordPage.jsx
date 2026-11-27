@@ -24,14 +24,15 @@ export default function ResetPasswordPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [tokenInvalid, setTokenInvalid] = useState(!token);
+  const [errorField, setErrorField] = useState('');
+  const [rejectedToken, setRejectedToken] = useState('');
   const [success, setSuccess] = useState(false);
 
   const newPasswordRef = useRef(null);
+  const confirmPasswordRef = useRef(null);
+  const submittingRef = useRef(false);
 
-  useEffect(() => {
-    setTokenInvalid(!token);
-  }, [token]);
+  const tokenInvalid = !token || rejectedToken === token;
 
   // Prevent reset token leakage via Referer header when navigating to external links.
   useEffect(() => {
@@ -61,31 +62,51 @@ export default function ResetPasswordPage() {
   }, []);
 
   useEffect(() => {
-    if (!tokenInvalid && !success) {
-      requestAnimationFrame(() => newPasswordRef.current?.focus());
-    }
+    if (tokenInvalid || success) return undefined;
+    const rafId = requestAnimationFrame(() => newPasswordRef.current?.focus());
+    return () => cancelAnimationFrame(rafId);
   }, [tokenInvalid, success]);
+
+  const clearError = () => {
+    setError('');
+    setErrorField('');
+  };
+
+  const showError = (field, message) => {
+    setError(message);
+    setErrorField(field);
+    const targetRef = field === 'confirmPassword' ? confirmPasswordRef : newPasswordRef;
+    if (field) {
+      requestAnimationFrame(() => targetRef.current?.focus());
+    }
+  };
+
+  const describedBy = (field, hintId) =>
+    [hintId, error && errorField === field ? 'reset-form-error' : null]
+      .filter(Boolean)
+      .join(' ') || undefined;
 
   const passwordCheck = checkPassword(newPassword);
   const visiblePasswordRules = passwordCheck.rules.filter((rule) => rule.id !== 'noUsername');
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (submitting) return;
+    if (submitting || submittingRef.current) return;
 
     if (!token) {
-      setTokenInvalid(true);
+      setRejectedToken('');
       return;
     }
 
     const validation = validatePasswordResetForm({ newPassword, confirmPassword });
     if (!validation.valid) {
-      setError(t(`error.${validation.code}`));
+      showError(validation.field || 'newPassword', t(`error.${validation.code}`));
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
-    setError('');
+    clearError();
     try {
       await api.resetPassword({ token, new_password: newPassword });
       setNewPassword('');
@@ -93,12 +114,11 @@ export default function ResetPasswordPage() {
       setSuccess(true);
     } catch (err) {
       if (err?.code === 'AUTH_RESET_TOKEN_INVALID') {
-        setTokenInvalid(true);
-        setError(translateApiError(t, err));
-      } else {
-        setError(translateApiError(t, err));
+        setRejectedToken(token);
       }
+      showError('', translateApiError(t, err));
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -112,7 +132,7 @@ export default function ResetPasswordPage() {
     <div className="flex min-h-screen flex-col bg-slate-100/70">
       <SiteHeader />
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-4 py-10 sm:px-6">
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft sm:p-8">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
           {success ? (
             <div className="grid gap-4 text-center" role="status" aria-live="polite">
               <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-brand-50 text-brand-700">
@@ -131,7 +151,7 @@ export default function ResetPasswordPage() {
               </button>
             </div>
           ) : tokenInvalid ? (
-            <div className="grid gap-4 text-center" role="alert" aria-live="assertive">
+            <div className="grid gap-4 text-center" role="alert">
               <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-rose-50 text-rose-600">
                 <AlertCircle className="h-6 w-6" aria-hidden="true" />
               </span>
@@ -174,16 +194,19 @@ export default function ResetPasswordPage() {
                   <div className="relative">
                     <input
                       id="reset-new-password"
+                      name="new_password"
                       ref={newPasswordRef}
                       type={showNewPassword ? 'text' : 'password'}
                       className="input pr-11"
                       value={newPassword}
                       onChange={(event) => {
                         setNewPassword(event.target.value);
-                        if (error) setError('');
+                        if (error) clearError();
                       }}
-                      aria-describedby="reset-password-rules"
+                      aria-invalid={errorField === 'newPassword' || undefined}
+                      aria-describedby={describedBy('newPassword', 'reset-password-rules')}
                       autoComplete="new-password"
+                      enterKeyHint="next"
                       minLength={8}
                       maxLength={64}
                       required
@@ -211,14 +234,19 @@ export default function ResetPasswordPage() {
                   <div className="relative">
                     <input
                       id="reset-confirm-password"
+                      name="confirm_password"
+                      ref={confirmPasswordRef}
                       type={showConfirmPassword ? 'text' : 'password'}
                       className="input pr-11"
                       value={confirmPassword}
                       onChange={(event) => {
                         setConfirmPassword(event.target.value);
-                        if (error) setError('');
+                        if (error) clearError();
                       }}
+                      aria-invalid={errorField === 'confirmPassword' || undefined}
+                      aria-describedby={describedBy('confirmPassword', null)}
                       autoComplete="new-password"
+                      enterKeyHint="done"
                       minLength={8}
                       maxLength={64}
                       required
@@ -241,17 +269,13 @@ export default function ResetPasswordPage() {
                   </div>
                 </div>
 
-                <ul
-                  id="reset-password-rules"
-                  aria-live="polite"
-                  className="grid gap-1 text-[11px]"
-                >
+                <ul id="reset-password-rules" className="grid gap-1 text-[11px]">
                   {visiblePasswordRules.map((rule) => (
                     <li
                       key={rule.id}
                       className={cn(
                         'flex items-start gap-1.5 leading-snug transition-colors',
-                        rule.ok ? 'font-medium text-brand-700' : 'text-slate-500'
+                        rule.ok ? 'font-medium text-brand-700' : 'text-slate-600'
                       )}
                     >
                       <span aria-hidden="true" className="w-3.5 shrink-0 text-center font-bold">
@@ -264,8 +288,8 @@ export default function ResetPasswordPage() {
 
                 {error ? (
                   <p
+                    id="reset-form-error"
                     role="alert"
-                    aria-live="assertive"
                     className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"
                   >
                     {error}

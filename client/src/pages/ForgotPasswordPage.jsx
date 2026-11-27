@@ -34,6 +34,7 @@ export default function ForgotPasswordPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [recoverySubmitting, setRecoverySubmitting] = useState(false);
   const [recoveryError, setRecoveryError] = useState('');
+  const [recoveryErrorField, setRecoveryErrorField] = useState('');
   const [newRecoveryCode, setNewRecoveryCode] = useState('');
   const [recoveryDoneWithoutCode, setRecoveryDoneWithoutCode] = useState(false);
 
@@ -43,8 +44,15 @@ export default function ForgotPasswordPage() {
   const [emailError, setEmailError] = useState('');
   const [emailSent, setEmailSent] = useState(false);
 
+  const recoveryTabRef = useRef(null);
+  const emailTabRef = useRef(null);
   const usernameRef = useRef(null);
+  const recoveryCodeRef = useRef(null);
+  const newPasswordRef = useRef(null);
+  const confirmPasswordRef = useRef(null);
   const emailRef = useRef(null);
+  const recoverySubmittingRef = useRef(false);
+  const emailSubmittingRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -62,31 +70,80 @@ export default function ForgotPasswordPage() {
   }, []);
 
   useEffect(() => {
-    if (newRecoveryCode || recoveryDoneWithoutCode) return;
-    if (tab === 'recovery') {
-      requestAnimationFrame(() => usernameRef.current?.focus());
-    } else if (tab === 'email') {
-      requestAnimationFrame(() => emailRef.current?.focus());
-    }
+    if (newRecoveryCode || recoveryDoneWithoutCode) return undefined;
+    const rafId = requestAnimationFrame(() => {
+      if (tab === 'recovery') {
+        usernameRef.current?.focus();
+      } else if (tab === 'email') {
+        emailRef.current?.focus();
+      }
+    });
+    return () => cancelAnimationFrame(rafId);
   }, [tab, newRecoveryCode, recoveryDoneWithoutCode]);
+
+  const clearRecoveryError = () => {
+    setRecoveryError('');
+    setRecoveryErrorField('');
+  };
+
+  const showRecoveryError = (field, message) => {
+    setRecoveryError(message);
+    setRecoveryErrorField(field);
+    const fieldRefs = {
+      username: usernameRef,
+      recoveryCode: recoveryCodeRef,
+      newPassword: newPasswordRef,
+      confirmPassword: confirmPasswordRef
+    };
+    const targetRef = fieldRefs[field];
+    if (targetRef) {
+      requestAnimationFrame(() => targetRef.current?.focus());
+    }
+  };
+
+  const recoveryDescribedBy = (field, hintId) =>
+    [hintId, recoveryError && recoveryErrorField === field ? 'forgot-recovery-error' : null]
+      .filter(Boolean)
+      .join(' ') || undefined;
 
   const passwordCheck = checkPassword(newPassword, username.trim());
   const visiblePasswordRules = username.trim()
     ? passwordCheck.rules
     : passwordCheck.rules.filter((rule) => rule.id !== 'noUsername');
 
+  const handleTabKeyDown = (event) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const nextTab =
+      event.key === 'Home'
+        ? 'recovery'
+        : event.key === 'End'
+          ? 'email'
+          : tab === 'recovery'
+            ? 'email'
+            : 'recovery';
+    setTab(nextTab);
+    if (nextTab === 'recovery') {
+      setEmailError('');
+      recoveryTabRef.current?.focus();
+    } else {
+      clearRecoveryError();
+      emailTabRef.current?.focus();
+    }
+  };
+
   const handleRecoverySubmit = async (event) => {
     event.preventDefault();
-    if (recoverySubmitting) return;
+    if (recoverySubmitting || recoverySubmittingRef.current) return;
 
     const cleanUsername = username.trim();
     if (!cleanUsername) {
-      setRecoveryError(t('error.VALIDATION_ERROR'));
+      showRecoveryError('username', t('error.VALIDATION_ERROR'));
       return;
     }
 
     if (!isValidRecoveryCode(recoveryCode)) {
-      setRecoveryError(t('error.AUTH_RECOVERY_INVALID'));
+      showRecoveryError('recoveryCode', t('error.AUTH_RECOVERY_INVALID'));
       return;
     }
 
@@ -96,12 +153,13 @@ export default function ForgotPasswordPage() {
       username: cleanUsername
     });
     if (!validation.valid) {
-      setRecoveryError(t(`error.${validation.code}`));
+      showRecoveryError(validation.field || 'newPassword', t(`error.${validation.code}`));
       return;
     }
 
+    recoverySubmittingRef.current = true;
     setRecoverySubmitting(true);
-    setRecoveryError('');
+    clearRecoveryError();
     try {
       const data = await api.resetWithRecoveryCode({
         username: cleanUsername,
@@ -117,22 +175,26 @@ export default function ForgotPasswordPage() {
         setRecoveryDoneWithoutCode(true);
       }
     } catch (err) {
-      setRecoveryError(translateApiError(t, err));
+      const field = err?.code === 'AUTH_RECOVERY_INVALID' ? 'recoveryCode' : '';
+      showRecoveryError(field, translateApiError(t, err));
     } finally {
+      recoverySubmittingRef.current = false;
       setRecoverySubmitting(false);
     }
   };
 
   const handleEmailSubmit = async (event) => {
     event.preventDefault();
-    if (emailSubmitting) return;
+    if (emailSubmitting || emailSubmittingRef.current) return;
 
     const cleanEmail = email.trim();
     if (!cleanEmail) {
       setEmailError(t('error.AUTH_EMAIL_INVALID'));
+      requestAnimationFrame(() => emailRef.current?.focus());
       return;
     }
 
+    emailSubmittingRef.current = true;
     setEmailSubmitting(true);
     setEmailError('');
     setEmailSent(false);
@@ -141,7 +203,9 @@ export default function ForgotPasswordPage() {
       setEmailSent(true);
     } catch (err) {
       setEmailError(translateApiError(t, err));
+      requestAnimationFrame(() => emailRef.current?.focus());
     } finally {
+      emailSubmittingRef.current = false;
       setEmailSubmitting(false);
     }
   };
@@ -153,7 +217,7 @@ export default function ForgotPasswordPage() {
 
   const tabClass = (active) =>
     cn(
-      'touch-target rounded-full px-3 py-2 text-xs font-bold transition-[transform,color,background-color,box-shadow] duration-200 ease-out-strong active:scale-[0.98]',
+      'touch-target rounded-full px-3 py-2 text-xs font-bold leading-snug transition-[transform,color,background-color,box-shadow] duration-200 ease-out-strong active:scale-[0.98]',
       active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
     );
 
@@ -161,7 +225,7 @@ export default function ForgotPasswordPage() {
     <div className="flex min-h-screen flex-col bg-slate-100/70">
       <SiteHeader />
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-4 py-10 sm:px-6">
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft sm:p-8">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
           <div className="text-center">
             <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-brand-50 text-brand-700">
               <KeyRound className="h-6 w-6" aria-hidden="true" />
@@ -190,7 +254,7 @@ export default function ForgotPasswordPage() {
               />
             </div>
           ) : recoveryDoneWithoutCode ? (
-            <div className="mt-6 grid gap-4 text-center" aria-live="polite">
+            <div className="mt-6 grid gap-4 text-center" role="status" aria-live="polite">
               <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-brand-50 text-brand-700">
                 <CheckCircle2 className="h-6 w-6" aria-hidden="true" />
               </div>
@@ -208,12 +272,17 @@ export default function ForgotPasswordPage() {
                 <div
                   role="tablist"
                   aria-label={t('forgot.title')}
+                  onKeyDown={handleTabKeyDown}
                   className="mt-6 grid grid-cols-2 gap-1 rounded-full bg-slate-100 p-1"
                 >
                   <button
+                    id="forgot-tab-recovery"
+                    ref={recoveryTabRef}
                     type="button"
                     role="tab"
                     aria-selected={tab === 'recovery'}
+                    aria-controls="forgot-panel-recovery"
+                    tabIndex={tab === 'recovery' ? 0 : -1}
                     onClick={() => {
                       setTab('recovery');
                       setEmailError('');
@@ -223,12 +292,16 @@ export default function ForgotPasswordPage() {
                     {t('forgot.tab.recovery')}
                   </button>
                   <button
+                    id="forgot-tab-email"
+                    ref={emailTabRef}
                     type="button"
                     role="tab"
                     aria-selected={tab === 'email'}
+                    aria-controls="forgot-panel-email"
+                    tabIndex={tab === 'email' ? 0 : -1}
                     onClick={() => {
                       setTab('email');
-                      setRecoveryError('');
+                      clearRecoveryError();
                     }}
                     className={tabClass(tab === 'email')}
                   >
@@ -238,228 +311,278 @@ export default function ForgotPasswordPage() {
               ) : null}
 
               {tab === 'recovery' ? (
-                <form
-                  onSubmit={handleRecoverySubmit}
-                  onKeyDown={blockImeEnter}
-                  className="mt-6 grid gap-4"
+                <div
+                  id="forgot-panel-recovery"
+                  role={emailRecoveryEnabled ? 'tabpanel' : undefined}
+                  aria-labelledby={emailRecoveryEnabled ? 'forgot-tab-recovery' : undefined}
                 >
-                  <label className="grid gap-1.5">
-                    <span className="label !mb-0">{t('auth.username')}</span>
-                    <input
-                      ref={usernameRef}
-                      className="input"
-                      value={username}
-                      onChange={(event) => {
-                        setUsername(event.target.value);
-                        if (recoveryError) setRecoveryError('');
-                      }}
-                      autoComplete="username"
-                      minLength={3}
-                      maxLength={30}
-                      required
-                    />
-                  </label>
-
-                  <label className="grid gap-1.5">
-                    <span className="label !mb-0">{t('forgot.recoveryCodeLabel')}</span>
-                    <input
-                      className="input font-mono uppercase tracking-[0.12em]"
-                      value={recoveryCode}
-                      onChange={(event) => {
-                        setRecoveryCode(formatRecoveryCode(event.target.value));
-                        if (recoveryError) setRecoveryError('');
-                      }}
-                      placeholder="XXXX-XXXX-XXXX"
-                      autoComplete="one-time-code"
-                      spellCheck={false}
-                      maxLength={14}
-                      aria-describedby="forgot-code-hint"
-                      required
-                    />
-                    <span id="forgot-code-hint" className="text-[11px] text-slate-500">
-                      {t('forgot.recoveryCodeHint')}
-                    </span>
-                  </label>
-
-                  <div className="grid gap-1.5">
-                    <label htmlFor="forgot-new-password" className="label !mb-0">
-                      {t('forgot.newPassword')}
-                    </label>
-                    <div className="relative">
+                  <form
+                    onSubmit={handleRecoverySubmit}
+                    onKeyDown={blockImeEnter}
+                    className="mt-6 grid gap-4"
+                  >
+                    <div className="grid gap-1.5">
+                      <label htmlFor="forgot-username" className="label !mb-0">
+                        {t('auth.username')}
+                      </label>
                       <input
-                        id="forgot-new-password"
-                        type={showNewPassword ? 'text' : 'password'}
-                        className="input pr-11"
-                        value={newPassword}
+                        id="forgot-username"
+                        name="username"
+                        ref={usernameRef}
+                        className="input"
+                        value={username}
                         onChange={(event) => {
-                          setNewPassword(event.target.value);
-                          if (recoveryError) setRecoveryError('');
+                          setUsername(event.target.value);
+                          if (recoveryError) clearRecoveryError();
                         }}
-                        aria-describedby="forgot-password-rules"
-                        autoComplete="new-password"
-                        minLength={8}
-                        maxLength={64}
+                        aria-invalid={recoveryErrorField === 'username' || undefined}
+                        aria-describedby={recoveryDescribedBy('username', null)}
+                        autoComplete="username"
+                        autoCorrect="off"
+                        autoCapitalize="none"
+                        spellCheck={false}
+                        enterKeyHint="next"
+                        minLength={3}
+                        maxLength={30}
                         required
                       />
-                      <button
-                        type="button"
-                        onClick={() => setShowNewPassword((prev) => !prev)}
-                        aria-label={showNewPassword ? t('auth.hidePassword') : t('auth.showPassword')}
-                        aria-pressed={showNewPassword}
-                        className="touch-target absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                      >
-                        {showNewPassword ? (
-                          <EyeOff className="h-4 w-4" aria-hidden="true" />
-                        ) : (
-                          <Eye className="h-4 w-4" aria-hidden="true" />
-                        )}
-                      </button>
                     </div>
-                  </div>
 
-                  <div className="grid gap-1.5">
-                    <label htmlFor="forgot-confirm-password" className="label !mb-0">
-                      {t('forgot.confirmPassword')}
-                    </label>
-                    <div className="relative">
+                    <div className="grid gap-1.5">
+                      <label htmlFor="forgot-recovery-code" className="label !mb-0">
+                        {t('forgot.recoveryCodeLabel')}
+                      </label>
                       <input
-                        id="forgot-confirm-password"
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        className="input pr-11"
-                        value={confirmPassword}
+                        id="forgot-recovery-code"
+                        name="recovery_code"
+                        ref={recoveryCodeRef}
+                        className="input font-mono uppercase tracking-[0.12em]"
+                        value={recoveryCode}
                         onChange={(event) => {
-                          setConfirmPassword(event.target.value);
-                          if (recoveryError) setRecoveryError('');
+                          setRecoveryCode(formatRecoveryCode(event.target.value));
+                          if (recoveryError) clearRecoveryError();
                         }}
-                        autoComplete="new-password"
-                        minLength={8}
-                        maxLength={64}
+                        placeholder="XXXX-XXXX-XXXX"
+                        autoComplete="one-time-code"
+                        autoCorrect="off"
+                        autoCapitalize="characters"
+                        spellCheck={false}
+                        enterKeyHint="next"
+                        maxLength={32}
+                        aria-invalid={recoveryErrorField === 'recoveryCode' || undefined}
+                        aria-describedby={recoveryDescribedBy('recoveryCode', 'forgot-code-hint')}
                         required
                       />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword((prev) => !prev)}
-                        aria-label={
-                          showConfirmPassword ? t('auth.hidePassword') : t('auth.showPassword')
-                        }
-                        aria-pressed={showConfirmPassword}
-                        className="touch-target absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                      >
-                        {showConfirmPassword ? (
-                          <EyeOff className="h-4 w-4" aria-hidden="true" />
-                        ) : (
-                          <Eye className="h-4 w-4" aria-hidden="true" />
-                        )}
-                      </button>
+                      <span id="forgot-code-hint" className="text-[11px] text-slate-600">
+                        {t('forgot.recoveryCodeHint')}
+                      </span>
                     </div>
-                  </div>
 
-                  <ul
-                    id="forgot-password-rules"
-                    aria-live="polite"
-                    className="grid gap-1 text-[11px]"
-                  >
-                    {visiblePasswordRules.map((rule) => (
-                      <li
-                        key={rule.id}
-                        className={cn(
-                          'flex items-start gap-1.5 leading-snug transition-colors',
-                          rule.ok ? 'font-medium text-brand-700' : 'text-slate-500'
-                        )}
+                    <div className="grid gap-1.5">
+                      <label htmlFor="forgot-new-password" className="label !mb-0">
+                        {t('forgot.newPassword')}
+                      </label>
+                      <div className="relative">
+                        <input
+                          id="forgot-new-password"
+                          name="new_password"
+                          ref={newPasswordRef}
+                          type={showNewPassword ? 'text' : 'password'}
+                          className="input pr-11"
+                          value={newPassword}
+                          onChange={(event) => {
+                            setNewPassword(event.target.value);
+                            if (recoveryError) clearRecoveryError();
+                          }}
+                          aria-invalid={recoveryErrorField === 'newPassword' || undefined}
+                          aria-describedby={recoveryDescribedBy(
+                            'newPassword',
+                            'forgot-password-rules'
+                          )}
+                          autoComplete="new-password"
+                          enterKeyHint="next"
+                          minLength={8}
+                          maxLength={64}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword((prev) => !prev)}
+                          aria-label={
+                            showNewPassword ? t('auth.hidePassword') : t('auth.showPassword')
+                          }
+                          aria-pressed={showNewPassword}
+                          className="touch-target absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                        >
+                          {showNewPassword ? (
+                            <EyeOff className="h-4 w-4" aria-hidden="true" />
+                          ) : (
+                            <Eye className="h-4 w-4" aria-hidden="true" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-1.5">
+                      <label htmlFor="forgot-confirm-password" className="label !mb-0">
+                        {t('forgot.confirmPassword')}
+                      </label>
+                      <div className="relative">
+                        <input
+                          id="forgot-confirm-password"
+                          name="confirm_password"
+                          ref={confirmPasswordRef}
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          className="input pr-11"
+                          value={confirmPassword}
+                          onChange={(event) => {
+                            setConfirmPassword(event.target.value);
+                            if (recoveryError) clearRecoveryError();
+                          }}
+                          aria-invalid={recoveryErrorField === 'confirmPassword' || undefined}
+                          aria-describedby={recoveryDescribedBy('confirmPassword', null)}
+                          autoComplete="new-password"
+                          enterKeyHint="done"
+                          minLength={8}
+                          maxLength={64}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword((prev) => !prev)}
+                          aria-label={
+                            showConfirmPassword ? t('auth.hidePassword') : t('auth.showPassword')
+                          }
+                          aria-pressed={showConfirmPassword}
+                          className="touch-target absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                        >
+                          {showConfirmPassword ? (
+                            <EyeOff className="h-4 w-4" aria-hidden="true" />
+                          ) : (
+                            <Eye className="h-4 w-4" aria-hidden="true" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    <ul id="forgot-password-rules" className="grid gap-1 text-[11px]">
+                      {visiblePasswordRules.map((rule) => (
+                        <li
+                          key={rule.id}
+                          className={cn(
+                            'flex items-start gap-1.5 leading-snug transition-colors',
+                            rule.ok ? 'font-medium text-brand-700' : 'text-slate-600'
+                          )}
+                        >
+                          <span aria-hidden="true" className="w-3.5 shrink-0 text-center font-bold">
+                            {rule.ok ? '✓' : '○'}
+                          </span>
+                          <span>{t(`auth.rule.${rule.id}`)}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {recoveryError ? (
+                      <p
+                        id="forgot-recovery-error"
+                        role="alert"
+                        className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"
                       >
-                        <span aria-hidden="true" className="w-3.5 shrink-0 text-center font-bold">
-                          {rule.ok ? '✓' : '○'}
-                        </span>
-                        <span>{t(`auth.rule.${rule.id}`)}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  {recoveryError ? (
-                    <p
-                      role="alert"
-                      aria-live="assertive"
-                      className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"
-                    >
-                      {recoveryError}
-                    </p>
-                  ) : null}
-
-                  <button
-                    type="submit"
-                    disabled={recoverySubmitting}
-                    className="btn-primary mt-1 w-full justify-center text-xs"
-                  >
-                    {recoverySubmitting ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                        {recoveryError}
+                      </p>
                     ) : null}
-                    {recoverySubmitting ? t('forgot.submitting') : t('forgot.submitRecovery')}
-                  </button>
-                </form>
+
+                    <button
+                      type="submit"
+                      disabled={recoverySubmitting}
+                      className="btn-primary mt-1 w-full justify-center text-xs"
+                    >
+                      {recoverySubmitting ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                      ) : null}
+                      {recoverySubmitting ? t('forgot.submitting') : t('forgot.submitRecovery')}
+                    </button>
+                  </form>
+                </div>
               ) : (
-                <form
-                  onSubmit={handleEmailSubmit}
-                  onKeyDown={blockImeEnter}
-                  className="mt-6 grid gap-4"
+                <div
+                  id="forgot-panel-email"
+                  role="tabpanel"
+                  aria-labelledby="forgot-tab-email"
                 >
-                  <label className="grid gap-1.5">
-                    <span className="label !mb-0">{t('forgot.emailLabel')}</span>
-                    <input
-                      ref={emailRef}
-                      type="email"
-                      className="input"
-                      value={email}
-                      onChange={(event) => {
-                        setEmail(event.target.value);
-                        if (emailError) setEmailError('');
-                      }}
-                      placeholder={t('forgot.emailPlaceholder')}
-                      autoComplete="email"
-                      required
-                    />
-                  </label>
-
-                  {emailSent ? (
-                    <div
-                      role="status"
-                      aria-live="polite"
-                      className="flex items-start gap-2.5 rounded-xl border border-brand-200 bg-brand-50/80 px-3.5 py-3 text-xs font-medium leading-relaxed text-brand-900"
-                    >
-                      <Mail className="mt-0.5 h-4 w-4 shrink-0 text-brand-700" aria-hidden="true" />
-                      <span>{t('forgot.emailSent')}</span>
-                    </div>
-                  ) : null}
-
-                  {emailError ? (
-                    <p
-                      role="alert"
-                      aria-live="assertive"
-                      className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"
-                    >
-                      {emailError}
-                    </p>
-                  ) : null}
-
-                  <button
-                    type="submit"
-                    disabled={emailSubmitting}
-                    className="btn-primary mt-1 w-full justify-center text-xs"
+                  <form
+                    onSubmit={handleEmailSubmit}
+                    onKeyDown={blockImeEnter}
+                    className="mt-6 grid gap-4"
                   >
-                    {emailSubmitting ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                    <div className="grid gap-1.5">
+                      <label htmlFor="forgot-email" className="label !mb-0">
+                        {t('forgot.emailLabel')}
+                      </label>
+                      <input
+                        id="forgot-email"
+                        name="email"
+                        ref={emailRef}
+                        type="email"
+                        className="input"
+                        value={email}
+                        onChange={(event) => {
+                          setEmail(event.target.value);
+                          if (emailError) setEmailError('');
+                        }}
+                        placeholder={t('forgot.emailPlaceholder')}
+                        autoComplete="email"
+                        spellCheck={false}
+                        enterKeyHint="done"
+                        maxLength={254}
+                        aria-invalid={Boolean(emailError) || undefined}
+                        aria-describedby={emailError ? 'forgot-email-error' : undefined}
+                        required
+                      />
+                    </div>
+
+                    {emailSent ? (
+                      <div
+                        role="status"
+                        aria-live="polite"
+                        className="flex items-start gap-2.5 rounded-xl border border-brand-200 bg-brand-50/80 px-3.5 py-3 text-xs font-medium leading-relaxed text-brand-900"
+                      >
+                        <Mail className="mt-0.5 h-4 w-4 shrink-0 text-brand-700" aria-hidden="true" />
+                        <span>{t('forgot.emailSent')}</span>
+                      </div>
                     ) : null}
-                    {emailSubmitting ? t('forgot.submitting') : t('forgot.submitEmail')}
-                  </button>
-                </form>
+
+                    {emailError ? (
+                      <p
+                        id="forgot-email-error"
+                        role="alert"
+                        className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"
+                      >
+                        {emailError}
+                      </p>
+                    ) : null}
+
+                    <button
+                      type="submit"
+                      disabled={emailSubmitting}
+                      className="btn-primary mt-1 w-full justify-center text-xs"
+                    >
+                      {emailSubmitting ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                      ) : null}
+                      {emailSubmitting ? t('forgot.submitting') : t('forgot.submitEmail')}
+                    </button>
+                  </form>
+                </div>
               )}
 
-              <div className="mt-6 grid gap-2 border-t border-slate-100 pt-4 text-center text-xs text-slate-600">
+              <div className="mt-6 grid gap-1.5 border-t border-slate-100 pt-4 text-center text-xs text-slate-600">
                 <p>
                   {t('forgot.googleHint')}{' '}
                   <button
                     type="button"
                     onClick={() => openAuth('login')}
-                    className="font-bold text-brand-700 hover:underline"
+                    className="inline-flex min-h-[24px] items-center py-0.5 font-bold text-brand-700 hover:underline"
                   >
                     {t('forgot.googleAction')}
                   </button>
@@ -468,7 +591,7 @@ export default function ForgotPasswordPage() {
                   <button
                     type="button"
                     onClick={() => openAuth('login')}
-                    className="font-semibold text-slate-500 transition-colors hover:text-slate-800 hover:underline"
+                    className="inline-flex min-h-[24px] items-center py-0.5 font-semibold text-slate-600 transition-colors hover:text-slate-900 hover:underline"
                   >
                     {t('forgot.backToLogin')}
                   </button>

@@ -105,6 +105,13 @@ export function blockImeEnter(event) {
   }
 }
 
+export function buildRecoveryCodeFilename(username = '') {
+  const safeUser = String(username ?? '').replace(/[^A-Za-z0-9_-]/g, '');
+  return safeUser
+    ? `saigon-guide-recovery-code-${safeUser}.txt`
+    : 'saigon-guide-recovery-code.txt';
+}
+
 export function buildRecoveryCodeFileContent(code, username = '') {
   const formatted = formatRecoveryCode(code) || String(code || '').trim();
   const lines = [

@@ -1,7 +1,11 @@
 import { Check, Copy, Download, ShieldAlert } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useI18n } from '../i18n/I18nContext.jsx';
-import { buildRecoveryCodeFileContent, formatRecoveryCode } from '../lib/recoveryCode.js';
+import {
+  buildRecoveryCodeFileContent,
+  buildRecoveryCodeFilename,
+  formatRecoveryCode
+} from '../lib/recoveryCode.js';
 
 export default function RecoveryCodePanel({
   code,
@@ -20,18 +24,41 @@ export default function RecoveryCodePanel({
   const [copied, setCopied] = useState(false);
   const codeRef = useRef(null);
   const copyBtnRef = useRef(null);
+  const copyTimerRef = useRef(null);
+  const lastStatusRef = useRef('');
 
   const formattedCode = formatRecoveryCode(code) || String(code || '').trim();
 
+  const announceStatus = (tone, rawMessage) => {
+    let message = rawMessage;
+    if (message && message === lastStatusRef.current) {
+      message = `${message}\u00A0`;
+    }
+    lastStatusRef.current = message;
+    setStatusTone(tone);
+    setStatusMessage(message);
+  };
+
   useEffect(() => {
+    clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = null;
     setConfirmed(false);
     setCopied(false);
     setStatusMessage('');
     setStatusTone('neutral');
-    if (autoFocus) {
-      requestAnimationFrame(() => copyBtnRef.current?.focus());
-    }
+    lastStatusRef.current = '';
+
+    if (!autoFocus) return undefined;
+    const rafId = requestAnimationFrame(() => copyBtnRef.current?.focus());
+    return () => cancelAnimationFrame(rafId);
   }, [formattedCode, autoFocus]);
+
+  useEffect(
+    () => () => {
+      clearTimeout(copyTimerRef.current);
+    },
+    []
+  );
 
   const selectCodeText = () => {
     const node = codeRef.current;
@@ -50,37 +77,43 @@ export default function RecoveryCodePanel({
   };
 
   const handleCopy = async () => {
+    clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = null;
     try {
       if (!navigator?.clipboard?.writeText) {
         throw new Error('Clipboard unavailable');
       }
       await navigator.clipboard.writeText(formattedCode);
       setCopied(true);
-      setStatusTone('success');
-      setStatusMessage(t('recovery.panel.copied'));
-      setTimeout(() => setCopied(false), 2500);
+      announceStatus('success', t('recovery.panel.copied'));
+      copyTimerRef.current = setTimeout(() => {
+        setCopied(false);
+        setStatusMessage('');
+        setStatusTone('neutral');
+        copyTimerRef.current = null;
+      }, 2500);
     } catch {
       selectCodeText();
       setCopied(false);
-      setStatusTone('warning');
-      setStatusMessage(t('recovery.panel.copyFallback'));
+      announceStatus('warning', t('recovery.panel.copyFallback'));
     }
   };
 
   const handleDownload = () => {
+    clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = null;
+    setCopied(false);
     const content = buildRecoveryCodeFileContent(formattedCode, username);
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    const safeUser = username ? `-${String(username).replace(/[^A-Za-z0-9_-]/g, '')}` : '';
-    anchor.setAttribute('download', `saigon-guide-recovery-code${safeUser}.txt`);
+    anchor.setAttribute('download', buildRecoveryCodeFilename(username));
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);
     URL.revokeObjectURL(url);
-    setStatusTone('success');
-    setStatusMessage(t('recovery.panel.downloaded'));
+    announceStatus('success', t('recovery.panel.downloaded'));
   };
 
   return (
@@ -98,14 +131,14 @@ export default function RecoveryCodePanel({
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
           {t('recovery.panel.codeLabel')}
         </p>
         <p
           ref={codeRef}
           tabIndex={0}
           aria-label={`${t('recovery.panel.codeLabel')}: ${formattedCode}`}
-          className="mt-2 select-all break-all font-mono text-xl font-extrabold tracking-[0.14em] text-slate-900 sm:text-2xl"
+          className="mt-2 select-all break-words font-mono text-lg font-extrabold tracking-[0.12em] text-slate-900 sm:text-2xl sm:tracking-[0.14em]"
         >
           {formattedCode}
         </p>
@@ -136,7 +169,9 @@ export default function RecoveryCodePanel({
         </div>
 
         <p
+          role="status"
           aria-live="polite"
+          aria-atomic="true"
           className={
             statusMessage
               ? `mt-2.5 text-xs font-medium ${

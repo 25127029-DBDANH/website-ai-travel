@@ -11,7 +11,7 @@ import {
   ShieldCheck,
   Trash2
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import GoogleSignInButton from '../components/GoogleSignInButton.jsx';
 import Modal from '../components/Modal.jsx';
 import RecoveryCodePanel from '../components/RecoveryCodePanel.jsx';
@@ -72,6 +72,8 @@ export default function SettingsPage() {
   const [regenSubmitting, setRegenSubmitting] = useState(false);
   const [regenError, setRegenError] = useState('');
   const [generatedRecoveryCode, setGeneratedRecoveryCode] = useState('');
+  const regenTriggerRef = useRef(null);
+  const regenPasswordRef = useRef(null);
 
   // Security: recovery email state
   const [emailInput, setEmailInput] = useState('');
@@ -82,6 +84,8 @@ export default function SettingsPage() {
   const [verifyCode, setVerifyCode] = useState('');
   const [verifyingEmail, setVerifyingEmail] = useState(false);
   const [verifyError, setVerifyError] = useState('');
+  const recoveryEmailRef = useRef(null);
+  const verifyCodeRef = useRef(null);
 
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deletePassword, setDeletePassword] = useState('');
@@ -102,6 +106,12 @@ export default function SettingsPage() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!showRegenForm) return undefined;
+    const rafId = requestAnimationFrame(() => regenPasswordRef.current?.focus());
+    return () => cancelAnimationFrame(rafId);
+  }, [showRegenForm]);
 
   useEffect(() => {
     if (user?.email) {
@@ -200,6 +210,7 @@ export default function SettingsPage() {
     if (regenSubmitting) return;
     if (!regenPassword) {
       setRegenError(t('error.AUTH_PASSWORD_REQUIRED'));
+      requestAnimationFrame(() => regenPasswordRef.current?.focus());
       return;
     }
 
@@ -218,6 +229,7 @@ export default function SettingsPage() {
       }
     } catch (error) {
       setRegenError(translateApiError(t, error));
+      requestAnimationFrame(() => regenPasswordRef.current?.focus());
     } finally {
       setRegenSubmitting(false);
     }
@@ -229,6 +241,7 @@ export default function SettingsPage() {
     const cleanEmail = emailInput.trim();
     if (!cleanEmail) {
       setEmailError(t('error.AUTH_EMAIL_INVALID'));
+      requestAnimationFrame(() => recoveryEmailRef.current?.focus());
       return;
     }
 
@@ -244,6 +257,7 @@ export default function SettingsPage() {
       setEmailNotice(t('settings.security.email.codeSent', { email: cleanEmail }));
     } catch (error) {
       setEmailError(translateApiError(t, error));
+      requestAnimationFrame(() => recoveryEmailRef.current?.focus());
     } finally {
       setEmailSending(false);
     }
@@ -255,6 +269,7 @@ export default function SettingsPage() {
     const cleanCode = verifyCode.replace(/\D/g, '').slice(0, 6);
     if (cleanCode.length !== 6) {
       setVerifyError(t('error.AUTH_EMAIL_CODE_INVALID'));
+      requestAnimationFrame(() => verifyCodeRef.current?.focus());
       return;
     }
 
@@ -269,6 +284,7 @@ export default function SettingsPage() {
       setToast({ message: t('settings.security.email.verifiedToast'), tone: 'success' });
     } catch (error) {
       setVerifyError(translateApiError(t, error));
+      requestAnimationFrame(() => verifyCodeRef.current?.focus());
     } finally {
       setVerifyingEmail(false);
     }
@@ -592,7 +608,6 @@ export default function SettingsPage() {
                   </div>
                   <ul
                     id="settings-password-rules"
-                    aria-live="polite"
                     className="grid gap-1 text-[11px]"
                   >
                     {visiblePasswordRules.map((rule) => (
@@ -600,7 +615,7 @@ export default function SettingsPage() {
                         key={rule.id}
                         className={cn(
                           'flex items-start gap-1.5 leading-snug transition-colors',
-                          rule.ok ? 'font-medium text-brand-700' : 'text-slate-500'
+                          rule.ok ? 'font-medium text-brand-700' : 'text-slate-600'
                         )}
                       >
                         <span aria-hidden="true" className="w-3.5 shrink-0 text-center font-bold">
@@ -620,7 +635,7 @@ export default function SettingsPage() {
                   ) : null}
                   <div className="flex justify-end">
                     <button type="submit" disabled={passwordSaving} className="btn-primary text-xs">
-                      {passwordSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                      {passwordSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : null}
                       {passwordSaving
                         ? t('settings.password.saving')
                         : t('settings.password.submit')}
@@ -628,7 +643,7 @@ export default function SettingsPage() {
                   </div>
                 </form>
               ) : (
-                <p className="mt-2 text-sm leading-relaxed text-slate-500">
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">
                   {t('settings.password.google')}
                 </p>
               )}
@@ -636,14 +651,14 @@ export default function SettingsPage() {
 
             <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
               <div className="flex items-center gap-2.5">
-                <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-50 text-brand-700">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
                   <Lock className="h-4 w-4" aria-hidden="true" />
                 </span>
-                <div>
+                <div className="min-w-0">
                   <h2 className="font-display text-base font-extrabold text-slate-900">
                     {t('settings.security.title')}
                   </h2>
-                  <p className="text-xs text-slate-500">{t('settings.security.subtitle')}</p>
+                  <p className="text-xs text-slate-600">{t('settings.security.subtitle')}</p>
                 </div>
               </div>
 
@@ -651,14 +666,17 @@ export default function SettingsPage() {
                 {/* Recovery code */}
                 <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-slate-900">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <h3
+                        id="settings-recovery-heading"
+                        className="text-sm font-bold text-slate-900"
+                      >
                         {t('settings.security.recovery.title')}
                       </h3>
                       {user.has_password && typeof user.has_recovery_code === 'boolean' ? (
                         <span
                           className={cn(
-                            'rounded-full px-2.5 py-0.5 text-[11px] font-bold',
+                            'shrink-0 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold',
                             user.has_recovery_code
                               ? 'bg-brand-100 text-brand-800'
                               : 'bg-amber-100 text-amber-800'
@@ -672,13 +690,14 @@ export default function SettingsPage() {
                     </div>
                     {user.has_password && !showRegenForm ? (
                       <button
+                        ref={regenTriggerRef}
                         type="button"
                         onClick={() => {
                           setShowRegenForm(true);
                           setRegenError('');
                           setRegenPassword('');
                         }}
-                        className="control-pill inline-flex items-center gap-1.5 !px-3.5 !py-1.5 text-xs font-bold"
+                        className="control-pill inline-flex shrink-0 items-center gap-1.5 !px-3.5 !py-1.5 text-xs font-bold"
                       >
                         <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
                         {t('settings.security.recovery.regenerate')}
@@ -696,6 +715,7 @@ export default function SettingsPage() {
 
                       {showRegenForm ? (
                         <form
+                          aria-labelledby="settings-recovery-heading"
                           onSubmit={handleRegenerateRecoveryCode}
                           onKeyDown={blockImeEnter}
                           className="mt-3 grid gap-3 rounded-xl border border-slate-200 bg-white p-3.5"
@@ -710,6 +730,8 @@ export default function SettingsPage() {
                             <div className="relative">
                               <input
                                 id="settings-regen-password"
+                                name="current_password"
+                                ref={regenPasswordRef}
                                 type={showRegenPassword ? 'text' : 'password'}
                                 className="input pr-11"
                                 value={regenPassword}
@@ -717,9 +739,11 @@ export default function SettingsPage() {
                                   setRegenPassword(event.target.value);
                                   if (regenError) setRegenError('');
                                 }}
+                                aria-invalid={Boolean(regenError) || undefined}
+                                aria-describedby={regenError ? 'settings-regen-error' : undefined}
                                 autoComplete="current-password"
+                                enterKeyHint="done"
                                 maxLength={72}
-                                autoFocus
                                 required
                               />
                               <button
@@ -744,8 +768,8 @@ export default function SettingsPage() {
 
                           {regenError ? (
                             <p
+                              id="settings-regen-error"
                               role="alert"
-                              aria-live="assertive"
                               className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"
                             >
                               {regenError}
@@ -759,6 +783,7 @@ export default function SettingsPage() {
                                 setShowRegenForm(false);
                                 setRegenPassword('');
                                 setRegenError('');
+                                requestAnimationFrame(() => regenTriggerRef.current?.focus());
                               }}
                               disabled={regenSubmitting}
                               className="control-pill !px-3.5 !py-1.5 text-xs"
@@ -782,7 +807,7 @@ export default function SettingsPage() {
                       ) : null}
                     </>
                   ) : (
-                    <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
+                    <p className="mt-1.5 text-xs leading-relaxed text-slate-600">
                       {t('settings.security.recovery.google')}
                     </p>
                   )}
@@ -790,18 +815,21 @@ export default function SettingsPage() {
 
                 {/* Recovery email (only when email_recovery_enabled) */}
                 {emailRecoveryEnabled ? (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                  <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4 text-brand-700" aria-hidden="true" />
-                        <h3 className="text-sm font-bold text-slate-900">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <Mail className="h-4 w-4 shrink-0 text-brand-700" aria-hidden="true" />
+                        <h3
+                          id="settings-email-heading"
+                          className="text-sm font-bold text-slate-900"
+                        >
                           {t('settings.security.email.title')}
                         </h3>
                       </div>
                       {user.email ? (
                         <span
                           className={cn(
-                            'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold',
+                            'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-bold',
                             user.email_verified || !user.has_password
                               ? 'bg-brand-100 text-brand-800'
                               : 'bg-amber-100 text-amber-800'
@@ -818,28 +846,36 @@ export default function SettingsPage() {
                     </div>
 
                     {!user.has_password ? (
-                      <div className="mt-2 grid gap-1">
+                      <div className="mt-2 grid min-w-0 gap-1">
                         {user.email ? (
-                          <p className="text-sm font-semibold text-slate-900">{user.email}</p>
+                          <p className="text-sm font-semibold text-slate-900 [overflow-wrap:anywhere]">
+                            {user.email}
+                          </p>
                         ) : null}
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-slate-600">
                           {t('settings.security.email.googleNote')}
                         </p>
                       </div>
                     ) : (
-                      <div className="mt-2.5 grid gap-3">
-                        <p className="text-xs text-slate-600">
+                      <div className="mt-2.5 grid min-w-0 gap-3">
+                        <p className="text-xs text-slate-600 [overflow-wrap:anywhere]">
                           {user.email ? user.email : t('settings.security.email.none')}
                         </p>
 
                         <form
+                          aria-labelledby="settings-email-heading"
                           onSubmit={handleAddEmail}
                           onKeyDown={blockImeEnter}
-                          className="grid gap-2.5 sm:grid-cols-[1fr_auto] sm:items-end"
+                          className="grid gap-2.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
                         >
-                          <label className="grid gap-1.5">
-                            <span className="label !mb-0">{t('settings.security.email.label')}</span>
+                          <div className="grid min-w-0 gap-1.5">
+                            <label htmlFor="settings-recovery-email" className="label !mb-0">
+                              {t('settings.security.email.label')}
+                            </label>
                             <input
+                              id="settings-recovery-email"
+                              name="email"
+                              ref={recoveryEmailRef}
                               type="email"
                               className="input bg-white"
                               value={emailInput}
@@ -849,9 +885,14 @@ export default function SettingsPage() {
                               }}
                               placeholder={t('settings.security.email.placeholder')}
                               autoComplete="email"
+                              spellCheck={false}
+                              enterKeyHint="done"
+                              maxLength={254}
+                              aria-invalid={Boolean(emailError) || undefined}
+                              aria-describedby={emailError ? 'settings-email-error' : undefined}
                               required
                             />
-                          </label>
+                          </div>
                           <button
                             type="submit"
                             disabled={emailSending}
@@ -870,8 +911,8 @@ export default function SettingsPage() {
 
                         {emailError ? (
                           <p
+                            id="settings-email-error"
                             role="alert"
-                            aria-live="assertive"
                             className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"
                           >
                             {emailError}
@@ -882,7 +923,7 @@ export default function SettingsPage() {
                           <p
                             role="status"
                             aria-live="polite"
-                            className="rounded-xl bg-brand-50 px-3 py-2 text-xs font-medium text-brand-900"
+                            className="rounded-xl bg-brand-50 px-3 py-2 text-xs font-medium text-brand-900 [overflow-wrap:anywhere]"
                           >
                             {emailNotice}
                           </p>
@@ -890,30 +931,38 @@ export default function SettingsPage() {
 
                         {emailCodeSent || (user.email && !user.email_verified) ? (
                           <form
+                            aria-labelledby="settings-email-heading"
                             onSubmit={handleVerifyEmail}
                             onKeyDown={blockImeEnter}
-                            className="grid gap-2.5 rounded-xl border border-slate-200 bg-white p-3.5 sm:grid-cols-[1fr_auto] sm:items-end"
+                            className="grid gap-2.5 rounded-xl border border-slate-200 bg-white p-3.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
                           >
-                            <label className="grid gap-1.5">
-                              <span className="label !mb-0">
+                            <div className="grid min-w-0 gap-1.5">
+                              <label htmlFor="settings-verify-code" className="label !mb-0">
                                 {t('settings.security.email.codeLabel')}
-                              </span>
+                              </label>
                               <input
+                                id="settings-verify-code"
+                                name="code"
+                                ref={verifyCodeRef}
                                 type="text"
                                 inputMode="numeric"
                                 pattern="[0-9]{6}"
-                                maxLength={6}
+                                maxLength={12}
                                 autoComplete="one-time-code"
+                                spellCheck={false}
+                                enterKeyHint="done"
                                 className="input font-mono tracking-[0.2em]"
                                 value={verifyCode}
                                 onChange={(event) => {
                                   setVerifyCode(event.target.value.replace(/\D/g, '').slice(0, 6));
                                   if (verifyError) setVerifyError('');
                                 }}
+                                aria-invalid={Boolean(verifyError) || undefined}
+                                aria-describedby={verifyError ? 'settings-verify-error' : undefined}
                                 placeholder={t('settings.security.email.codePlaceholder')}
                                 required
                               />
-                            </label>
+                            </div>
                             <button
                               type="submit"
                               disabled={verifyingEmail || verifyCode.length !== 6}
@@ -929,8 +978,8 @@ export default function SettingsPage() {
 
                             {verifyError ? (
                               <p
+                                id="settings-verify-error"
                                 role="alert"
-                                aria-live="assertive"
                                 className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 sm:col-span-2"
                               >
                                 {verifyError}
