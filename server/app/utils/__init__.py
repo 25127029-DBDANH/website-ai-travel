@@ -9,7 +9,9 @@ from app.utils.transit_calculator import (
     TransitError,
     VehicleFare,
     VehiclePricing,
+    build_ride_deep_link,
     calculate_single_fare,
+    calculate_transit,
     estimate_ride_fares,
     haversine_km,
 )
@@ -21,7 +23,9 @@ __all__ = [
     "TransitError",
     "VehicleFare",
     "VehiclePricing",
+    "build_ride_deep_link",
     "calculate_single_fare",
+    "calculate_transit",
     "estimate_ride_fares",
     "haversine_km",
 ]

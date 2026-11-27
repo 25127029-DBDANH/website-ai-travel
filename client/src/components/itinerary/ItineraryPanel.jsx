@@ -371,8 +371,8 @@ export default function ItineraryPanel({
     }
   };
 
-  const handleTriggerIcsDownload = () => {
-    downloadIcsFile(trip, items);
+  const handleTriggerIcsDownload = async () => {
+    await downloadIcsFile(trip, items);
     setCalendarSyncSuccess(true);
   };
 
@@ -688,6 +688,21 @@ export default function ItineraryPanel({
       {/* GỌI XE TRỰC TIẾP TỪ MENU "⋯" */}
       <RidePickerModal
         stop={rideTargetPlace}
+        originStop={
+          rideTargetPlace
+            ? dayItems[
+                Math.max(
+                  0,
+                  dayItems.findIndex(
+                    (it) =>
+                      it === rideTargetPlace ||
+                      (it.day_number === rideTargetPlace.day_number &&
+                        it.order_index === rideTargetPlace.order_index)
+                  ) - 1
+                )
+              ] || null
+            : null
+        }
         isOpen={Boolean(rideTargetPlace)}
         onClose={() => setRideTargetPlace(null)}
       />
