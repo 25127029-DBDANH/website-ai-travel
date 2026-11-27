@@ -5,7 +5,7 @@ Authors :
   - Ngô Tấn Đạt (Database & Data Engineer): Place, PlaceCache
 
 Tables created by Base.metadata.create_all():
-  users, trips, places, places_cache
+  users, password_reset_tokens, trips, places, places_cache
 """
 from __future__ import annotations
 
@@ -14,7 +14,18 @@ import uuid
 from datetime import datetime, timedelta
 from uuid import uuid4
 
-from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Float, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    false,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.utils.time import utc_now
@@ -41,8 +52,11 @@ class User(Base):
     id = Column(String(32), primary_key=True, default=_new_id)
     username = Column(String(60), unique=True, nullable=False, index=True)
     email = Column(String(254), nullable=True, index=True)
+    email_verified = Column(Boolean, nullable=False, default=False, server_default=false())
     google_sub = Column(String(64), nullable=True, unique=True, index=True)
     hashed_password = Column(Text, nullable=False)
+    password_changed_at = Column(DateTime)
+    recovery_code_hash = Column(Text)
     full_name = Column(String(120), nullable=True)
     avatar_url = Column(Text, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
@@ -54,6 +68,24 @@ class User(Base):
         from app.core.security import is_usable_password
 
         return is_usable_password(self.hashed_password)
+
+    @property
+    def has_recovery_code(self) -> bool:
+        return bool(self.recovery_code_hash)
+
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+    __table_args__ = (CheckConstraint("purpose IN ('reset', 'email_verify')"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    purpose: Mapped[str] = mapped_column(String(12))
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
 # ---------------------------------------------------------------------------

@@ -1,13 +1,16 @@
 import { Eye, EyeOff, Loader2, UserRound } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useI18n } from '../i18n/I18nContext.jsx';
 import { cn } from '../lib/cn.js';
 import { translateApiError } from '../lib/errors.js';
 import { hasGoogleSignIn } from '../lib/google.js';
 import { checkPassword, checkUsername } from '../lib/passwordPolicy.js';
+import { blockImeEnter } from '../lib/recoveryCode.js';
 import GoogleSignInButton from './GoogleSignInButton.jsx';
 import Modal from './Modal.jsx';
+import RecoveryCodePanel from './RecoveryCodePanel.jsx';
 
 export default function AuthModal() {
   const { t } = useI18n();
@@ -20,6 +23,8 @@ export default function AuthModal() {
   const [error, setError] = useState('');
   const [errorField, setErrorField] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState('');
+  const [registeredUsername, setRegisteredUsername] = useState('');
   const submittingRef = useRef(false);
   const usernameRef = useRef(null);
   const passwordRef = useRef(null);
@@ -32,8 +37,11 @@ export default function AuthModal() {
     setShowPassword(false);
     setError('');
     setErrorField('');
+    setRecoveryCode('');
+    setRegisteredUsername('');
     submittingRef.current = false;
     setSubmitting(false);
+    requestAnimationFrame(() => usernameRef.current?.focus());
   }, [isAuthOpen, authMode]);
 
   const clearError = () => {
@@ -60,6 +68,7 @@ export default function AuthModal() {
 
   const isLogin = mode === 'login';
   const passwordCheck = !isLogin ? checkPassword(password, username.trim()) : null;
+  const showingRecovery = Boolean(recoveryCode);
 
   const handleGoogleCredential = async (credential) => {
     if (submitting || submittingRef.current) return;
@@ -110,16 +119,28 @@ export default function AuthModal() {
     try {
       if (isLogin) {
         await login({ username: name, password });
+        closeAuth();
       } else {
-        await register({ username: name, password });
+        const data = await register({ username: name, password });
+        if (data?.recovery_code) {
+          setRecoveryCode(data.recovery_code);
+          setRegisteredUsername(data?.user?.username || name);
+        } else {
+          closeAuth();
+        }
       }
-      closeAuth();
     } catch (requestError) {
       setError(translateApiError(t, requestError));
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
     }
+  };
+
+  const handleRecoveryConfirmed = () => {
+    setRecoveryCode('');
+    setRegisteredUsername('');
+    closeAuth();
   };
 
   const tabClass = (active) =>
@@ -131,38 +152,53 @@ export default function AuthModal() {
   return (
     <Modal
       open={isAuthOpen}
-      onClose={() => (submitting ? null : closeAuth())}
-      title={isLogin ? t('auth.title.login') : t('auth.title.register')}
+      onClose={() => (submitting || showingRecovery ? null : closeAuth())}
+      title={
+        showingRecovery
+          ? t('recovery.panel.title')
+          : isLogin
+            ? t('auth.title.login')
+            : t('auth.title.register')
+      }
       footer={
-        <>
-          <button
-            type="button"
-            onClick={closeAuth}
-            disabled={submitting}
-            className="control-pill !px-4 !py-2"
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            type="submit"
-            form="auth-form"
-            disabled={submitting}
-            className="btn-primary !px-4 !py-2 text-xs"
-          >
-            {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-            {submitting
-              ? t('auth.submitting')
-              : isLogin
-                ? t('auth.submit.login')
-                : t('auth.submit.register')}
-          </button>
-        </>
+        showingRecovery ? null : (
+          <>
+            <button
+              type="button"
+              onClick={closeAuth}
+              disabled={submitting}
+              className="control-pill !px-4 !py-2"
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="submit"
+              form="auth-form"
+              disabled={submitting}
+              className="btn-primary !px-4 !py-2 text-xs"
+            >
+              {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              {submitting
+                ? t('auth.submitting')
+                : isLogin
+                  ? t('auth.submit.login')
+                  : t('auth.submit.register')}
+            </button>
+          </>
+        )
       }
     >
-      <div>
-        <span className="mx-auto mb-4 grid h-11 w-11 place-items-center rounded-xl bg-brand-50 text-brand-700">
-          <UserRound className="h-5 w-5" />
-        </span>
+      {showingRecovery ? (
+        <RecoveryCodePanel
+          code={recoveryCode}
+          username={registeredUsername}
+          onConfirm={handleRecoveryConfirmed}
+        />
+      ) : (
+        <div>
+          <span className="mx-auto mb-4 grid h-11 w-11 place-items-center rounded-xl bg-brand-50 text-brand-700">
+            <UserRound className="h-5 w-5" />
+          </span>
           <div className="grid grid-cols-2 gap-1 rounded-full bg-slate-100 p-1">
             <button type="button" onClick={() => switchMode('login')} aria-pressed={isLogin} className={tabClass(isLogin)}>
               {t('auth.tab.login')}
@@ -190,7 +226,8 @@ export default function AuthModal() {
           <form
             id="auth-form"
             onSubmit={handleSubmit}
-            className="grid gap-3 mt-4"
+            onKeyDown={blockImeEnter}
+            className="mt-4 grid gap-3"
           >
             <label className="grid gap-1.5">
               <span className="label !mb-0">{t('auth.username')}</span>
@@ -214,13 +251,24 @@ export default function AuthModal() {
             </label>
 
             {!isLogin && (
-              <p className="rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-medium leading-relaxed text-amber-800">
-                {t('auth.noRecovery')}
+              <p className="rounded-xl bg-brand-50/70 px-3 py-2 text-[11px] font-medium leading-relaxed text-brand-900">
+                {t('auth.recoveryHint')}
               </p>
             )}
 
             <div className="grid gap-1.5">
-              <label htmlFor="auth-password" className="label !mb-0">{t('auth.password')}</label>
+              <div className="flex items-center justify-between gap-2">
+                <label htmlFor="auth-password" className="label !mb-0">{t('auth.password')}</label>
+                {isLogin ? (
+                  <Link
+                    to="/forgot-password"
+                    onClick={closeAuth}
+                    className="text-xs font-semibold text-brand-700 transition-colors hover:underline"
+                  >
+                    {t('auth.forgotPassword')}
+                  </Link>
+                ) : null}
+              </div>
               <div className="relative">
                 <input
                   id="auth-password"
@@ -278,7 +326,7 @@ export default function AuthModal() {
             </div>
 
             {error ? (
-              <p id="auth-form-error" role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+              <p id="auth-form-error" role="alert" aria-live="assertive" className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
                 {error}
               </p>
             ) : null}
@@ -294,7 +342,8 @@ export default function AuthModal() {
               {isLogin ? t('auth.switch.register') : t('auth.switch.login')}
             </button>
           </p>
-      </div>
+        </div>
+      )}
     </Modal>
   );
 }

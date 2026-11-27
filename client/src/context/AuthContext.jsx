@@ -81,6 +81,15 @@ export function AuthProvider({ children }) {
     clearAuthToken();
     setUser(null);
   }, []);
+  const updateUser = useCallback((patch) => {
+    setUser((current) => (current ? { ...current, ...patch } : current));
+  }, []);
+  const refreshUser = useCallback(async () => {
+    if (!getAuthToken()) return null;
+    const data = await api.getMe();
+    if (data?.user) setUser(data.user);
+    return data?.user || null;
+  }, []);
   const deleteAccount = useCallback(async (payload) => {
     const data = await api.deleteAccount(payload);
     clearAuthToken();
@@ -100,6 +109,8 @@ export function AuthProvider({ children }) {
       register,
       loginWithGoogle,
       logout,
+      updateUser,
+      refreshUser,
       deleteAccount
     }),
     [
@@ -113,6 +124,8 @@ export function AuthProvider({ children }) {
       register,
       loginWithGoogle,
       logout,
+      updateUser,
+      refreshUser,
       deleteAccount
     ]
   );

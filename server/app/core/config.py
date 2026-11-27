@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -39,15 +39,36 @@ class Settings(BaseSettings):
 
     GEMINI_API_KEY: str = ""
     GOOGLE_CLIENT_ID: str = ""
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = ""
+    PUBLIC_WEB_URL: str = "http://localhost:5173"
+
+    @field_validator("SMTP_HOST", "SMTP_PORT", "PUBLIC_WEB_URL", mode="before")
+    @classmethod
+    def _use_email_defaults_for_blank_values(cls, value, info):
+        if isinstance(value, str) and not value.strip():
+            return cls.model_fields[info.field_name].default
+        return value
+
+    @property
+    def email_recovery_enabled(self) -> bool:
+        return bool(self.SMTP_USER and self.SMTP_PASSWORD)
 
     @model_validator(mode="after")
     def _validate_production_secrets(self) -> Settings:
+        if not self.SMTP_FROM:
+            self.SMTP_FROM = self.SMTP_USER
         if self.APP_ENV.strip().lower() == "production":
             if not self.JWT_SECRET.strip() or self.JWT_SECRET == DEFAULT_JWT_SECRET:
                 raise ValueError(
                     "JWT_SECRET must be set to a strong, non-default secret when "
                     "APP_ENV=production."
                 )
+            if self.email_recovery_enabled and self.PUBLIC_WEB_URL == "http://localhost:5173":
+                logger.warning("Set PUBLIC_WEB_URL to the public frontend URL for recovery emails.")
         return self
 
     def validate_runtime_config(self) -> None:
