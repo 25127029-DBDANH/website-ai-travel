@@ -42,26 +42,54 @@ async def main() -> None:
 
         print(f"Postgres smoke check passed: {place_count} places seeded.")
 
+        user_id = None
+        trip_id = None
+        try:
+            async with AsyncSessionLocal() as session:
+                user = User(
+                    username=f"smoke_{uuid4().hex[:12]}",
+                    hashed_password="!smoke_unusable_password",
+                )
+                session.add(user)
+                await session.flush()
+                user_id = user.id
+
+                trip = Trip(
+                    user_id=user.id,
+                    title="Postgres smoke trip",
+                )
+                session.add(trip)
+                await session.flush()
+                trip_id = trip.id
+                await session.commit()
+
+                trip.updated_at = utc_now()
+                user.updated_at = utc_now()
+                await session.commit()
+
+            print("Postgres smoke: user/trip insert+update OK")
+        finally:
+            async with AsyncSessionLocal() as session:
+                if trip_id is not None:
+                    trip = await session.get(Trip, trip_id)
+                    if trip is not None:
+                        await session.delete(trip)
+                if user_id is not None:
+                    user = await session.get(User, user_id)
+                    if user is not None:
+                        await session.delete(user)
+                await session.commit()
+
         async with AsyncSessionLocal() as session:
-            user = User(
-                username=f"smoke_{uuid4().hex[:12]}",
-                hashed_password="!smoke_unusable_password",
+            remaining_trips = await session.scalar(
+                select(func.count()).select_from(Trip).where(Trip.id == trip_id)
             )
-            session.add(user)
-            await session.flush()
-
-            trip = Trip(
-                user_id=user.id,
-                title="Postgres smoke trip",
+            remaining_users = await session.scalar(
+                select(func.count()).select_from(User).where(User.id == user_id)
             )
-            session.add(trip)
-            await session.commit()
-
-            trip.updated_at = utc_now()
-            user.updated_at = utc_now()
-            await session.commit()
-
-        print("Postgres smoke: user/trip insert+update OK")
+        if remaining_trips or remaining_users:
+            raise SystemExit("Postgres smoke cleanup failed for User/Trip rows.")
+        print("Postgres smoke: user/trip delete+cleanup OK")
     finally:
         await engine.dispose()
 
