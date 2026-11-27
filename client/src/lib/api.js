@@ -1730,6 +1730,26 @@ export function downloadIcsFile(trip, items) {
   URL.revokeObjectURL(url);
 }
 
+let matchCountUnsupported = false;
+
+export function resetMatchCountSupport() {
+  matchCountUnsupported = false;
+}
+
+export function normalizeMatchCount(data) {
+  const count = Number(data?.count);
+  if (!data || !Number.isInteger(count) || count < 0) return null;
+  const samples = (Array.isArray(data.samples) ? data.samples : [])
+    .filter((item) => item && typeof item === 'object' && item.id != null)
+    .slice(0, 6)
+    .map((item) => ({
+      id: String(item.id),
+      name_vi: String(item.name_vi || item.name || ''),
+      photo_url: typeof item.photo_url === 'string' && item.photo_url ? item.photo_url : null
+    }));
+  return { count, samples };
+}
+
 export const api = {
   // =====================================================================
   // AUTH — FastAPI Backend (Khang) when VITE_USE_BACKEND=true, Mock Data when false
@@ -1982,6 +2002,27 @@ export const api = {
     if (category) params.set('category', category);
     if (limit) params.set('limit', String(limit));
     return request('GET', `/api/v1/places/search?${params.toString()}`);
+  },
+  // T-044/T-045: đếm địa điểm hợp gu. Endpoint tuỳ chọn — tắt backend, 404 hay lỗi đều trả null
+  // để UI ẩn bộ đếm, không báo lỗi. Gọi không kèm token: đây là dữ liệu catalog công khai.
+  matchCount: async ({ interests = [], districts = [] } = {}) => {
+    if (!isBackendEnabled() || matchCountUnsupported) return null;
+    const cleanInterests = (Array.isArray(interests) ? interests : []).filter(Boolean);
+    if (cleanInterests.length === 0) return null;
+    const params = new URLSearchParams({ interests: cleanInterests.join(',') });
+    const cleanDistricts = (Array.isArray(districts) ? districts : []).filter(Boolean);
+    if (cleanDistricts.length) params.set('districts', cleanDistricts.join(','));
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/places/match-count?${params.toString()}`);
+      if (res.status === 404) {
+        matchCountUnsupported = true;
+        return null;
+      }
+      if (!res.ok) return null;
+      return normalizeMatchCount(await res.json());
+    } catch {
+      return null;
+    }
   },
   getNearbyPlaces: async ({ lat, lng, radius_km = 2, limit = 10 } = {}) => {
     if (!isBackendEnabled()) {
@@ -2401,24 +2442,4 @@ export function assetUrl(value) {
   if (/^https?:\/\//i.test(value)) return value;
   if (value.startsWith('/api/v1/')) return `${API_ORIGIN}${value}`;
   return value;
-}
-
-export function openGrabTransport(place) {
-  if (!place) return;
-  const lat = place.latitude || 10.7769;
-  const lng = place.longitude || 106.7009;
-  const name = encodeURIComponent(place.place_name || 'Điểm đến');
-
-  const grabAppUrl = `grab://open?screenType=TRANSPORT&dropoff_lat=${lat}&dropoff_lng=${lng}&dropoff_name=${name}`;
-  const webFallbackUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
-
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if (isMobile) {
-    window.location.href = grabAppUrl;
-    setTimeout(() => {
-      window.open(webFallbackUrl, '_blank');
-    }, 1500);
-  } else {
-    window.open(webFallbackUrl, '_blank');
-  }
 }

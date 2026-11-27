@@ -8,7 +8,6 @@ import {
   Copy,
   ExternalLink,
   MapPin,
-  Navigation,
   RefreshCw,
   Utensils,
   X
@@ -19,10 +18,10 @@ import { useFocusTrap } from '../../hooks/useFocusTrap.js';
 import { useI18n } from '../../i18n/I18nContext.jsx';
 import { api, assetUrl } from '../../lib/api.js';
 import { cn } from '../../lib/cn.js';
+import { GOOGLE_MAPS_LOGO, googleMapsSearchUrl } from '../../lib/externalApps.js';
 import { formatVnd } from '../../lib/format.js';
 import {
   getDisplayPlaceName,
-  googleMapsPlaceUrl,
   resolveCategoryKey
 } from '../../lib/placeDetail.js';
 import CategoryTile from '../CategoryTile.jsx';
@@ -78,6 +77,7 @@ export default function PlaceDrawer({
   const reduced = useReducedMotion();
   const isDesktop = useIsDesktop();
   const titleId = useId();
+  const swapPanelId = useId();
   const panelRef = useRef(null);
   const closeBtnRef = useRef(null);
   const scrollRef = useRef(null);
@@ -142,7 +142,27 @@ export default function PlaceDrawer({
   const showCheckinBadge = Boolean(stop?.checkin_photo);
   const showPhotoOverlay = showIllustrationBadge || showCheckinBadge;
 
-  const mapsUrl = place ? googleMapsPlaceUrl(place.lat, place.lng) : null;
+  const rawSourceUrl =
+    place?.sourceUrl ||
+    entry?.detail?.sourceUrl ||
+    entry?.detail?.source_url ||
+    stop?.sourceUrl ||
+    stop?.source_url ||
+    '';
+  const safeSourceUrl =
+    typeof rawSourceUrl === 'string' && /^https?:\/\//i.test(rawSourceUrl.trim())
+      ? rawSourceUrl.trim()
+      : null;
+  const mapsUrl =
+    safeSourceUrl ||
+    (place
+      ? googleMapsSearchUrl({
+          lat: place.lat,
+          lng: place.lng,
+          name: displayName,
+          address: place.address
+        })
+      : null);
   const isAccepted = Boolean(stop?.is_accepted);
   const isVisited = Boolean(stop?.visited);
   const timeSlot =
@@ -228,7 +248,7 @@ export default function PlaceDrawer({
               animate={panelAnimate}
               exit={panelExit}
               transition={{ duration: reduced ? 0 : 0.2, ease: DRAWER_EASE }}
-              className="relative z-10 flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-3xl border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-soft outline-none md:h-full md:max-h-none md:w-[min(440px,100vw)] md:rounded-none md:border-l md:border-t-0 md:pb-0"
+              className="relative z-10 flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-3xl border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-soft outline-none md:h-full md:max-h-none md:w-[min(440px,100vw)] md:rounded-none md:border-l md:border-t-0 md:pb-0"
             >
               {/* Mobile drag indicator (decorative) */}
               <div
@@ -523,9 +543,16 @@ export default function PlaceDrawer({
                                 href={mapsUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-brand-600 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-700 active:scale-[0.97]"
+                                className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-[#1A73E8] shadow-sm transition-colors hover:border-[#1A73E8]/50 hover:bg-[#1A73E8]/5 active:scale-[0.97]"
                               >
-                                <Navigation className="h-3.5 w-3.5" aria-hidden="true" />
+                                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-white p-0.5">
+                                  <img
+                                    src={GOOGLE_MAPS_LOGO}
+                                    alt=""
+                                    aria-hidden="true"
+                                    className="h-3.5 w-3.5 object-contain"
+                                  />
+                                </span>
                                 <span>{t('place.directions')}</span>
                                 <ExternalLink className="h-3 w-3 opacity-80" aria-hidden="true" />
                               </a>
@@ -584,6 +611,7 @@ export default function PlaceDrawer({
                                 type="button"
                                 onClick={() => setShowSwapList((prev) => !prev)}
                                 aria-expanded={showSwapList}
+                                aria-controls={swapPanelId}
                                 className={cn(
                                   'inline-flex min-h-10 items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-semibold transition-colors active:scale-[0.97]',
                                   showSwapList
@@ -656,7 +684,10 @@ export default function PlaceDrawer({
 
                           {/* Inline swap alternatives picker */}
                           {!isVisited && showSwapList && actions.onSwap ? (
-                            <div className="space-y-2.5 rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
+                            <div
+                              id={swapPanelId}
+                              className="space-y-2.5 rounded-2xl border border-slate-200 bg-slate-50 p-3.5"
+                            >
                               <div className="flex items-center justify-between gap-2">
                                 <h4 className="font-display text-xs font-bold text-slate-900">
                                   {t('place.swap.title')}
@@ -664,7 +695,7 @@ export default function PlaceDrawer({
                                 <button
                                   type="button"
                                   onClick={() => setShowSwapList(false)}
-                                  className="text-xs font-semibold text-slate-500 hover:text-slate-800"
+                                  className="inline-flex min-h-8 items-center rounded-lg px-2 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-200/70 hover:text-slate-900"
                                 >
                                   {t('place.swap.hide')}
                                 </button>

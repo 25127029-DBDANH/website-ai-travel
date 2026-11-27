@@ -85,36 +85,39 @@ test('register, logout/login, create a trip via form, and verify it in My Trips'
   });
 
   await test.step('Create a trip through the wizard and verify itinerary stops', async () => {
-    const tripBasicsHeading = page.getByRole('heading', { level: 3, name: 'Trip basics', exact: true });
-    await tripBasicsHeading.scrollIntoViewIfNeeded();
-    await expect(tripBasicsHeading).toBeVisible();
+    const introHeading = page.getByRole('heading', {
+      level: 3,
+      name: 'Start from a trip idea',
+      exact: true,
+    });
+    await introHeading.scrollIntoViewIfNeeded();
+    await expect(introHeading).toBeVisible();
 
-    await page.getByRole('button', { name: 'Decrease days' }).click();
-    await expect(page.locator('#trip-days output')).toHaveText('2 days');
+    await page.getByRole('button', { name: 'Choose step by step', exact: true }).click();
+    await expect(
+      page.getByRole('heading', { level: 3, name: 'When & where', exact: true })
+    ).toBeVisible();
+
+    const twoDaysButton = page.getByRole('button', { name: '2 days, 1 night', exact: true });
+    await twoDaysButton.click();
+    await expect(twoDaysButton).toHaveAttribute('aria-pressed', 'true');
 
     const nextButton = page.getByRole('button', { name: 'Next', exact: true });
 
     await nextButton.click();
-    await expect(page.getByRole('heading', { level: 3, name: 'Who is going', exact: true })).toBeVisible();
-
-    await nextButton.click();
-    await expect(page.getByRole('heading', { level: 3, name: 'Budget', exact: true })).toBeVisible();
-
-    await nextButton.click();
-    await expect(page.getByRole('heading', { level: 3, name: 'Style & pace', exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 3, name: "Who's coming", exact: true })
+    ).toBeVisible();
 
     await nextButton.click();
     await expect(
-      page.getByRole('heading', { level: 3, name: 'Food & transit', exact: true })
+      page.getByRole('heading', { level: 3, name: 'Your vibe', exact: true })
     ).toBeVisible();
 
-    await page.getByRole('button', { name: 'Skip, review' }).click();
-    await expect(page.getByRole('heading', { level: 3, name: 'Review trip', exact: true })).toBeVisible();
-
-    await page.getByRole('button', { name: 'Build my itinerary' }).click();
+    await page.getByRole('button', { name: 'Build my itinerary now', exact: true }).click();
 
     const conceptDialog = page.getByRole('dialog', { name: 'Your trip concept' });
-    await expect(conceptDialog).toBeVisible();
+    await expect(conceptDialog).toBeVisible({ timeout: 30_000 });
     await conceptDialog.getByRole('button', { name: 'Approve and create itinerary' }).click();
 
     await expect(page).toHaveURL(/\/trip\/(?!demo$)[^/]+$/, { timeout: 30_000 });
@@ -141,4 +144,33 @@ test('register, logout/login, create a trip via form, and verify it in My Trips'
     await expect(savedTripLink).toBeVisible();
     await expect(savedTripLink).toHaveAttribute('href', createdPath);
   });
+});
+
+test('pick a trip idea template, jump to vibe step, and trigger itinerary build', async ({
+  page,
+}) => {
+  await page.goto('/', { waitUntil: 'load' });
+
+  const introHeading = page.getByRole('heading', {
+    level: 3,
+    name: 'Start from a trip idea',
+    exact: true,
+  });
+  await introHeading.scrollIntoViewIfNeeded();
+  await expect(introHeading).toBeVisible();
+
+  await page.getByRole('button', { name: 'Use the Budget food tour idea', exact: true }).click();
+
+  await expect(
+    page.getByRole('heading', { level: 3, name: 'Your vibe', exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Local classics', exact: true })
+  ).toHaveAttribute('aria-pressed', 'true');
+
+  await page.getByRole('button', { name: 'Build my itinerary now', exact: true }).click();
+
+  const waitingDialog = page.getByRole('dialog', { name: 'Building your Saigon trip' });
+  const conceptDialog = page.getByRole('dialog', { name: 'Your trip concept' });
+  await expect(waitingDialog.or(conceptDialog)).toBeVisible({ timeout: 30_000 });
 });

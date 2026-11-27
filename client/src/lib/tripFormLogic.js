@@ -3,13 +3,21 @@ import {
   addDateDays,
   AI_TRANSPORT_MODE,
   CATALOG_DISTRICTS,
+  DEFAULT_STAY_LOCATION,
   defaultTripOptions,
   DISTRICTS,
+  ENERGY_FOR_PACE,
   hcmcDate,
+  INTEREST_KEYS,
+  INTERESTS,
+  LEGACY_PREFERENCE_INTERESTS,
+  MAX_INTERESTS,
   normalizeCompanion,
   normalizeTransportMode,
+  paceFromEnergy,
   PLACES_PER_DAY_BY_PACE,
-  TRIP_OPTION_VALUES
+  TRIP_OPTION_VALUES,
+  TRIP_TEMPLATES
 } from './tripOptions.js';
 
 export { AI_TRANSPORT_MODE, CATALOG_DISTRICTS, PLACES_PER_DAY_BY_PACE };
@@ -23,21 +31,7 @@ export const MIN_DAY_HOURS_MINUTES = 240;
 export const GROUP_COMPANIONS = ['family', 'friends'];
 export const LONG_TRIP_DAYS = 5;
 
-export const QUICK_NOTE_LABELS = {
-  ac_preferred: 'Ưu tiên máy lạnh/trong nhà',
-  limited_walking: 'Hạn chế đi bộ xa'
-};
-
-export const PREFERENCE_CATEGORY = {
-  food: 'food',
-  culture: 'sightseeing',
-  cafe: 'cafe',
-  shopping: 'shopping',
-  nature: 'nature',
-  nightlife: 'entertainment'
-};
-
-export const ADVANCED_KEYS = ['transport_mode', 'pace', 'dietary', 'avoid_districts'];
+export const DEFAULT_INTERESTS = ['street_food', 'cafe_hopping'];
 
 export function compactVnd(value, lang = 'vi') {
   return new Intl.NumberFormat(lang === 'vi' ? 'vi-VN' : 'en-US', {
@@ -50,14 +44,131 @@ export function toggleListValue(list, item) {
   return list.includes(item) ? list.filter((value) => value !== item) : [...list, item];
 }
 
-export function countCustomizedAdvanced(form) {
-  return (
-    (form.pace !== 'moderate' ? 1 : 0) +
-    (form.transport_mode !== 'grab_bike' ? 1 : 0) +
-    (form.dietary.length > 0 ? 1 : 0) +
-    (form.avoid_districts.length > 0 ? 1 : 0) +
-    (form.quick_notes.length > 0 || form.custom_notes.trim() ? 1 : 0)
+// Suy ra vibe_spend (20/50/80) gửi backend theo mức ngân sách mỗi người mỗi ngày.
+export function spendFromBudget(budget, days = 1, groupSize = 1) {
+  const total = Number(budget);
+  if (!Number.isFinite(total) || total <= 0) return 50;
+  const safeDays = Math.max(1, Math.round(Number(days) || 1));
+  const safeGroup = Math.max(1, Math.round(Number(groupSize) || 1));
+  const perPersonPerDay = total / (safeDays * safeGroup);
+  if (perPersonPerDay <= 600_000) return 20;
+  if (perPersonPerDay <= 1_200_000) return 50;
+  return 80;
+}
+
+// Nhịp độ tự suy ra khi người dùng chưa chỉnh tay (pace_override = null).
+export function autoDerivedPace(form) {
+  if (!form || typeof form !== 'object') return 'moderate';
+  if (form.has_children || form.has_elderly || form.mobility === 'limited') return 'relaxed';
+  if (TRIP_OPTION_VALUES.pace.includes(form.template_pace)) return form.template_pace;
+  return 'moderate';
+}
+
+// Nhịp độ hiệu lực: ưu tiên pace_override nếu người dùng đã tự chọn.
+export function derivePace(form) {
+  if (TRIP_OPTION_VALUES.pace.includes(form?.pace_override)) return form.pace_override;
+  return autoDerivedPace(form);
+}
+
+export function sanitizeInterests(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((key, index) => INTEREST_KEYS.includes(key) && list.indexOf(key) === index)
+    .slice(0, MAX_INTERESTS);
+}
+
+// Hợp các giá trị `legacy` của mọi interest đã chọn, giữ thứ tự xuất hiện.
+export function preferencesFromInterests(interests) {
+  const result = [];
+  for (const key of sanitizeInterests(interests)) {
+    const entry = INTERESTS.find((item) => item.key === key);
+    for (const pref of entry?.legacy || []) {
+      if (preferenceOptions.includes(pref) && !result.includes(pref)) result.push(pref);
+    }
+  }
+  return result;
+}
+
+// Map ngược preferences cũ → interests. Lấy xen kẽ để mỗi preference có ít nhất 1 interest
+// trước khi chạm trần MAX_INTERESTS.
+export function interestsFromPreferences(preferences) {
+  const prefs = (Array.isArray(preferences) ? preferences : []).filter(
+    (pref, index, list) => preferenceOptions.includes(pref) && list.indexOf(pref) === index
   );
+  const lists = prefs.map((pref) => LEGACY_PREFERENCE_INTERESTS[pref] || []);
+  const result = [];
+  const longest = Math.max(0, ...lists.map((list) => list.length));
+  for (let round = 0; round < longest; round += 1) {
+    for (const list of lists) {
+      const key = list[round];
+      if (key && !result.includes(key) && result.length < MAX_INTERESTS) result.push(key);
+    }
+  }
+  return result;
+}
+
+// Chuyển field cũ (draft v1/v2, form cũ) sang field mới. Không ghi đè field mới đã có.
+export function migrateLegacyForm(form) {
+  if (!form || typeof form !== 'object') return form;
+  const next = { ...form };
+  if (!Array.isArray(next.interests)) {
+    const fromPrefs = interestsFromPreferences(next.preferences);
+    next.interests = fromPrefs.length ? fromPrefs : [...DEFAULT_INTERESTS];
+  }
+  if (!TRIP_OPTION_VALUES.pace.includes(next.pace_override)) {
+    if (TRIP_OPTION_VALUES.pace.includes(next.pace)) {
+      next.pace_override = next.pace;
+    } else if (
+      next.vibe_energy !== undefined &&
+      next.vibe_energy !== null &&
+      next.vibe_energy !== '' &&
+      Number.isFinite(Number(next.vibe_energy))
+    ) {
+      next.pace_override = paceFromEnergy(Number(next.vibe_energy));
+    } else {
+      next.pace_override = null;
+    }
+  }
+  if (!TRIP_OPTION_VALUES.pace.includes(next.template_pace)) {
+    next.template_pace = null;
+  }
+  // quick_notes trùng ý đã bỏ: ac_preferred → prefer_indoor, limited_walking → mobility.
+  const quickNotes = Array.isArray(next.quick_notes) ? next.quick_notes : [];
+  if (quickNotes.includes('ac_preferred')) next.prefer_indoor = true;
+  if (quickNotes.includes('limited_walking')) next.mobility = 'limited';
+  delete next.quick_notes;
+  delete next.preferences;
+  delete next.pace;
+  delete next.vibe_energy;
+  delete next.vibe_spend;
+  return next;
+}
+
+// Áp mẫu chuyến (mục 3 hợp đồng) lên form hiện tại.
+export function applyTripTemplate(form, templateKey) {
+  const template = TRIP_TEMPLATES.find((item) => item.key === templateKey);
+  if (!template) return form;
+  const base = migrateLegacyForm(form);
+  const next = {
+    ...base,
+    days: template.days,
+    start_location: `${template.district}, TP. Hồ Chí Minh`,
+    interests: [...template.interests],
+    template_pace: template.pace || null,
+    pace_override: null,
+    day_start: template.day_start || '',
+    day_end: template.day_end || ''
+  };
+  if (template.companions) {
+    next.companions = template.companions;
+    next.group_size = clampGroupSize(template.companions, template.group_size ?? 4);
+    next.has_children = Boolean(template.has_children);
+    next.has_elderly = Boolean(template.has_elderly);
+  }
+  const tier = template.budget_preset ?? DEFAULT_BUDGET_PER_PERSON_PER_DAY;
+  next.budget_preset = tier;
+  next.budget = budgetPresetTotal(tier, next.days, next.group_size || 1);
+  return next;
 }
 
 export function describeFilledFields(keys, form, t, formatVndFn, lang) {
@@ -74,16 +185,18 @@ export function describeFilledFields(keys, form, t, formatVndFn, lang) {
           return t('form.field.group_size', { value: form.group_size });
         case 'budget':
           return t('form.field.budget', { value: formatVndFn(form.budget, lang) });
-        case 'preferences':
+        case 'interests':
           return t('form.field.preferences', {
-            value: form.preferences.map((pref) => t(`preference.${pref}`)).join(', ')
+            value: (form.interests || []).map((key) => t(`form.interest.${key}`)).join(', ')
           });
         case 'transport_mode':
           return t('form.field.transport_mode', {
             value: t(`form.option.transport_mode.${form.transport_mode}`)
           });
-        case 'pace':
-          return t('form.field.pace', { value: t(`form.option.pace.${form.pace}`) });
+        case 'pace_override':
+          return form.pace_override
+            ? t('form.field.pace', { value: t(`form.option.pace.${form.pace_override}`) })
+            : null;
         case 'dietary':
           return t('form.field.dietary', {
             value: form.dietary.map((item) => t(`form.option.dietary.${item}`)).join(', ')
@@ -115,7 +228,7 @@ export function budgetPresetTotal(perPersonPerDay, days, groupSize) {
   return perPersonPerDay * Math.max(1, Math.round(days)) * Math.max(1, Math.round(groupSize));
 }
 
-export function defaultTripForm(startLocation = 'Quận 1, TP. Hồ Chí Minh') {
+export function defaultTripForm(startLocation = DEFAULT_STAY_LOCATION) {
   const days = 3;
   const group_size = 1;
   const budget_preset = DEFAULT_BUDGET_PER_PERSON_PER_DAY;
@@ -130,11 +243,14 @@ export function defaultTripForm(startLocation = 'Quận 1, TP. Hồ Chí Minh') 
     has_elderly: false,
     mobility: 'normal',
     prefer_indoor: false,
+    transport_manual: false,
     must_visit: [],
     group_size,
     budget_preset,
     budget: budgetPresetTotal(budget_preset, days, group_size),
-    preferences: ['food', 'cafe']
+    interests: [...DEFAULT_INTERESTS],
+    pace_override: null,
+    template_pace: null
   };
 }
 
@@ -213,17 +329,12 @@ export function districtFromStartLocation(startLocation) {
   return matches.find(([pattern]) => pattern.test(value))?.[1] || 'Quận 1';
 }
 
-export function rawSpecialNotes(quickNotes = [], customNotes = '') {
-  const parts = (quickNotes || [])
-    .map((id) => QUICK_NOTE_LABELS[id])
-    .filter(Boolean);
-  const trimmed = String(customNotes || '').trim();
-  if (trimmed) parts.push(trimmed);
-  return parts.join(', ');
+export function rawSpecialNotes(customNotes = '') {
+  return String(customNotes || '').trim();
 }
 
-export function buildSpecialNotes(quickNotes = [], customNotes = '') {
-  return rawSpecialNotes(quickNotes, customNotes).slice(0, 500);
+export function buildSpecialNotes(customNotes = '') {
+  return rawSpecialNotes(customNotes).slice(0, 500);
 }
 
 function parsedPatch(parsed) {
@@ -238,14 +349,15 @@ function parsedPatch(parsed) {
     patch.budget_preset = null;
   }
   if (parsed.preferences?.length) {
-    const validPrefs = parsed.preferences.filter((pref) => preferenceOptions.includes(pref));
-    if (validPrefs.length) patch.preferences = validPrefs;
+    const interests = interestsFromPreferences(parsed.preferences);
+    if (interests.length) patch.interests = interests;
   }
   if (parsed.transportation) {
     patch.transport_mode = normalizeTransportMode(parsed.transportation);
+    patch.transport_manual = true;
   }
   if (parsed.pace && TRIP_OPTION_VALUES.pace.includes(parsed.pace)) {
-    patch.pace = parsed.pace;
+    patch.pace_override = parsed.pace;
   }
   const dietary = (parsed.dietary || []).filter((value) => FORM_DIETARY.includes(value));
   if (dietary.length) patch.dietary = dietary;
@@ -287,7 +399,7 @@ export function applyParsedToForm(form, parsed, lastParse = null) {
   }
 
   const patch = parsedPatch(parsed);
-  const displayKeys = Object.keys(patch).filter((key) => key !== 'budget_preset');
+  const displayKeys = Object.keys(patch).filter((key) => key !== 'budget_preset' && key !== 'transport_manual');
   const next = { ...base, ...patch };
 
   // Keep preset-linked budget in sync if the sentence changed days/group_size without setting a budget.
@@ -361,6 +473,15 @@ export function validateDayHours(dayStart, dayEnd) {
   return {};
 }
 
+export function isValidInterestList(interests) {
+  return (
+    Array.isArray(interests) &&
+    interests.length >= 1 &&
+    interests.length <= MAX_INTERESTS &&
+    sanitizeInterests(interests).length === interests.length
+  );
+}
+
 export function validateTripForm(form, budgetDraft = null, now = new Date()) {
   const errors = {};
   const start = String(form.start_location || '').trim();
@@ -387,8 +508,8 @@ export function validateTripForm(form, budgetDraft = null, now = new Date()) {
     errors.budget = 'budget';
   }
 
-  if (!Array.isArray(form.preferences) || form.preferences.length === 0) {
-    errors.preferences = 'preferences';
+  if (!isValidInterestList(form.interests)) {
+    errors.interests = 'interests';
   }
 
   Object.assign(errors, validateDayHours(form.day_start, form.day_end));
@@ -397,7 +518,11 @@ export function validateTripForm(form, budgetDraft = null, now = new Date()) {
     errors.must_visit = 'must_visit';
   }
 
-  if (rawSpecialNotes(form.quick_notes, form.custom_notes).length > 500) {
+  if (Array.isArray(form.avoid_districts) && form.avoid_districts.length > MAX_AVOID_DISTRICTS) {
+    errors.avoid_districts = 'avoid_districts';
+  }
+
+  if (rawSpecialNotes(form.custom_notes).length > 500) {
     errors.special_notes = 'special_notes';
   }
 
@@ -407,14 +532,23 @@ export function validateTripForm(form, budgetDraft = null, now = new Date()) {
   };
 }
 
-export function buildAiRequest(form) {
+export function buildAiRequest(rawForm) {
+  const legacyPreferences = Array.isArray(rawForm?.preferences) ? rawForm.preferences : [];
+  const form = migrateLegacyForm(rawForm);
   const start_location = String(form.start_location || '').trim();
   const companion = normalizeCompanion(form.companions);
   const member_count = clampGroupSize(companion, form.group_size);
-  const pace = TRIP_OPTION_VALUES.pace.includes(form.pace) ? form.pace : 'moderate';
+  const interests = sanitizeInterests(form.interests);
+  const pace = derivePace(form);
+  const vibe_energy = ENERGY_FOR_PACE[pace] ?? 50;
   const transport_mode = normalizeTransportMode(form.transport_mode);
   const days = Math.min(14, Math.max(1, Math.round(Number(form.days) || 1)));
-  const preferences = (form.preferences || []).filter((pref) => preferenceOptions.includes(pref));
+  const budget = Math.round(Number(form.budget) || 0);
+  const vibe_spend = spendFromBudget(budget, days, member_count);
+  let preferences = preferencesFromInterests(interests);
+  if (preferences.length === 0) {
+    preferences = legacyPreferences.filter((pref) => preferenceOptions.includes(pref));
+  }
   const dietary = (form.dietary || []).filter((item) => TRIP_OPTION_VALUES.dietary.includes(item));
   const avoid_districts = (form.avoid_districts || [])
     .filter((district) => DISTRICTS.includes(district))
@@ -422,7 +556,7 @@ export function buildAiRequest(form) {
 
   const req = {
     start_location,
-    budget: Math.round(Number(form.budget) || 0),
+    budget,
     days,
     districts: [districtFromStartLocation(start_location)],
     places_per_day: PLACES_PER_DAY_BY_PACE[pace] || 4,
@@ -431,7 +565,10 @@ export function buildAiRequest(form) {
     transport_mode,
     preferences,
     pace,
-    special_notes: buildSpecialNotes(form.quick_notes, form.custom_notes),
+    interests,
+    vibe_energy,
+    vibe_spend,
+    special_notes: buildSpecialNotes(form.custom_notes),
     dietary,
     avoid_districts
   };

@@ -222,7 +222,8 @@ test('applyParsedToForm fills fields, recalculates preset budget when omitted, a
   assert.equal(first.form.budget, 3_000_000);
   assert.equal(first.form.budget_preset, null);
   assert.deepEqual(first.form.dietary, ['vegetarian']);
-  assert.deepEqual(first.form.preferences, ['food', 'cafe']);
+  // T-044: preferences cũ của parser được map ngược sang interests (food → 2 key, cafe → 1 key).
+  assert.deepEqual(first.form.interests, ['street_food', 'cafe_hopping', 'local_classics']);
 
   // Second parse without budget reverts previous untouched parse and recalculates preset budget
   const second = applyParsedToForm(
@@ -236,7 +237,7 @@ test('applyParsedToForm fills fields, recalculates preset budget when omitted, a
   assert.equal(second.form.budget_preset, 1_000_000);
   assert.equal(second.form.budget, 4_000_000);
   assert.deepEqual(second.form.dietary, []);
-  assert.deepEqual(second.form.preferences, ['cafe']);
+  assert.deepEqual(second.form.interests, ['cafe_hopping']);
 });
 
 test('buildAiRequest produces payload conforming to server TripConceptRequest schema', () => {
@@ -247,9 +248,8 @@ test('buildAiRequest produces payload conforming to server TripConceptRequest sc
     group_size: 5,
     budget: 5_000_000.4,
     transport_mode: 'metro_walking',
-    pace: 'relaxed',
-    preferences: ['food', 'cafe', 'culture'],
-    quick_notes: ['ac_preferred'],
+    interests: ['street_food', 'cafe_hopping', 'history'],
+    pace_override: 'relaxed',
     custom_notes: 'Đi cùng người lớn tuổi',
     dietary: ['vegetarian', 'no_seafood'],
     avoid_districts: ['Quận 7']
@@ -266,8 +266,10 @@ test('buildAiRequest produces payload conforming to server TripConceptRequest sc
   assert.equal(req.transport_mode, 'public');
   assert.deepEqual(req.preferences, ['food', 'cafe', 'culture']);
   assert.equal(req.pace, 'relaxed');
-  assert.ok(req.special_notes.includes('Ưu tiên máy lạnh/trong nhà'));
-  assert.ok(req.special_notes.includes('Đi cùng người lớn tuổi'));
+  assert.equal(req.vibe_energy, 25);
+  assert.equal(req.vibe_spend, 20);
+  assert.deepEqual(req.interests, ['street_food', 'cafe_hopping', 'history']);
+  assert.equal(req.special_notes, 'Đi cùng người lớn tuổi');
   assert.ok(req.special_notes.length <= 500);
   assert.deepEqual(req.dietary, ['vegetarian', 'no_seafood']);
   assert.deepEqual(req.avoid_districts, ['Quận 7']);
@@ -278,14 +280,18 @@ test('validateTripForm requires start_location, positive budget, and at least on
   assert.equal(valid.valid, true);
 
   const invalid = validateTripForm(
-    { ...defaultTripForm('   '), days: 15, preferences: [], budget: 0 },
+    { ...defaultTripForm('   '), days: 15, interests: [], budget: 0 },
     '0'
   );
   assert.equal(invalid.valid, false);
   assert.equal(invalid.errors.start_location, 'start');
   assert.equal(invalid.errors.days, 'days');
   assert.equal(invalid.errors.budget, 'budget');
-  assert.equal(invalid.errors.preferences, 'preferences');
+  assert.equal(invalid.errors.interests, 'interests');
+  // Quá 5 sở thích hoặc key lạ cũng không hợp lệ.
+  const tooMany = ['street_food', 'history', 'markets', 'parks', 'riverside', 'chinatown'];
+  assert.equal(validateTripForm({ ...defaultTripForm(), interests: tooMany }).errors.interests, 'interests');
+  assert.equal(validateTripForm({ ...defaultTripForm(), interests: ['food'] }).errors.interests, 'interests');
 });
 
 test('TripForm i18n keys exist in both vi and en and TripForm uses no decorative gradients', () => {

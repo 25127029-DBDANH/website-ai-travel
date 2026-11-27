@@ -3,16 +3,14 @@ import {
   Camera,
   Check,
   CheckCircle2,
-  Clock,
   Compass,
-  ExternalLink,
-  MapPin,
-  Navigation
+  MapPin
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useI18n } from '../../i18n/I18nContext.jsx';
 import { assetUrl } from '../../lib/api.js';
 import { cn } from '../../lib/cn.js';
+import { GOOGLE_MAPS_LOGO, googleMapsDirectionsUrl } from '../../lib/externalApps.js';
 import { formatDayLabel, formatVnd } from '../../lib/format.js';
 import RidePickerModal from '../common/RidePickerModal.jsx';
 import CheckinModal from './CheckinModal.jsx';
@@ -29,6 +27,7 @@ export default function LiveCompanionView({
   const { lang, t } = useI18n();
   const [checkinModalStop, setCheckinModalStop] = useState(null);
   const [ridePickerStop, setRidePickerStop] = useState(null);
+  const [failedPhotoUrl, setFailedPhotoUrl] = useState(null);
 
   const dayCount = Number(trip?.days) || 1;
   const dayItems = useMemo(() => {
@@ -44,11 +43,18 @@ export default function LiveCompanionView({
 
   const visitedCount = dayItems.filter((it) => it.visited).length;
   const progressPercent = dayItems.length > 0 ? Math.round((visitedCount / dayItems.length) * 100) : 0;
+  const nextPhotoSrc = nextStop?.checkin_photo || (nextStop?.photo_url ? assetUrl(nextStop.photo_url) : null);
+  const showNextPhoto = Boolean(nextPhotoSrc && nextPhotoSrc !== failedPhotoUrl);
 
-  const handleOpenGoogleMaps = (stop) => {
-    if (!stop) return;
-    const query = encodeURIComponent(`${stop.place_name}, ${stop.address || 'TP. Hồ Chí Minh'}`);
-    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+  const getStopDirectionsUrl = (stop) => {
+    if (!stop) return null;
+    return googleMapsDirectionsUrl({
+      lat: stop.latitude ?? stop.lat,
+      lng: stop.longitude ?? stop.lng,
+      name: stop.place_name,
+      address: stop.address || 'TP. Hồ Chí Minh',
+      transportMode: trip?.transport_mode || stop.transit_info?.mode
+    });
   };
 
   const handleConfirmCheckin = (data) => {
@@ -62,7 +68,7 @@ export default function LiveCompanionView({
       {/* THANH BANNER CHẾ ĐỘ ĐỒNG HÀNH */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
         <div className="flex items-center gap-3">
-          <span className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-600" />
+          <span aria-hidden="true" className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-600" />
           <div>
             <h3 className="font-display text-sm font-extrabold text-emerald-950 sm:text-base">
               {lang === 'vi' ? 'Chế độ đồng hành trong chuyến đi' : 'On-trip companion'}
@@ -76,16 +82,17 @@ export default function LiveCompanionView({
         </div>
 
         {/* Nút Hoàn thành chuyến đi nhanh ở góc trên */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Bộ chọn ngày */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {Array.from({ length: dayCount }, (_, i) => i + 1).map((day) => (
               <button
                 key={day}
                 type="button"
+                aria-pressed={activeDay === day}
                 onClick={() => onSelectDay(day)}
                 className={cn(
-                  'rounded-xl px-3 py-1.5 text-xs font-bold transition-colors',
+                  'min-h-8 rounded-xl px-3 py-1.5 text-xs font-bold transition-colors',
                   activeDay === day
                     ? 'bg-emerald-700 text-white'
                     : 'border border-emerald-200 bg-white text-slate-700 hover:bg-emerald-100/60'
@@ -100,9 +107,9 @@ export default function LiveCompanionView({
             <button
               type="button"
               onClick={onFinishTrip}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-800 active:scale-[0.97]"
+              className="inline-flex min-h-8 items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-800 active:scale-[0.97]"
             >
-              <CheckCircle2 className="h-3.5 w-3.5" />
+              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
               <span>{lang === 'vi' ? 'Hoàn thành chuyến đi' : 'Finish trip'}</span>
             </button>
           )}
@@ -113,18 +120,25 @@ export default function LiveCompanionView({
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <div className="flex items-center justify-between text-xs font-bold text-slate-700">
           <span className="flex items-center gap-1.5">
-            <Compass className="h-4 w-4 text-brand-600" />
+            <Compass className="h-4 w-4 text-brand-600" aria-hidden="true" />
             <span>{lang === 'vi' ? `Tiến độ ngày ${activeDay}:` : `Day ${activeDay} progress:`}</span>
-            <span className="text-brand-700">
+            <span className="tabular-nums text-brand-700">
               {visitedCount} / {dayItems.length} {lang === 'vi' ? 'điểm đã ghé' : 'stops visited'}
             </span>
           </span>
-          <span className="font-mono text-emerald-700">{progressPercent}%</span>
+          <span className="font-mono tabular-nums text-emerald-700">{progressPercent}%</span>
         </div>
-        <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+        <div
+          role="progressbar"
+          aria-label={lang === 'vi' ? `Tiến độ ngày ${activeDay}` : `Day ${activeDay} progress`}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progressPercent}
+          className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-slate-100"
+        >
           <div
-            className="h-full rounded-full bg-brand-600 transition-all duration-300"
-            style={{ width: `${progressPercent}%` }}
+            className="h-full w-full origin-left rounded-full bg-brand-600 transition-transform duration-300 ease-out-strong"
+            style={{ transform: `scaleX(${progressPercent / 100})` }}
           />
         </div>
       </div>
@@ -135,10 +149,10 @@ export default function LiveCompanionView({
           <div className="bg-brand-600 px-5 py-3 text-white">
             <div className="flex items-center justify-between">
               <span className="inline-flex items-center gap-1.5 text-xs font-bold">
-                <Compass className="h-3.5 w-3.5" />
+                <Compass className="h-3.5 w-3.5" aria-hidden="true" />
                 {lang === 'vi' ? 'Điểm dừng tiếp theo' : 'Next stop'}
               </span>
-              <span className="font-mono text-xs font-bold text-brand-100">
+              <span className="font-mono text-xs font-bold tabular-nums text-brand-100">
                 {nextStop.time_slot}
               </span>
             </div>
@@ -146,38 +160,47 @@ export default function LiveCompanionView({
 
           <div className="grid gap-6 p-5 sm:grid-cols-[200px_minmax(0,1fr)] sm:p-6">
             <div className="relative h-48 w-full overflow-hidden rounded-xl bg-slate-200 sm:h-full">
-              <img
-                src={nextStop.checkin_photo || assetUrl(nextStop.photo_url)}
-                alt={nextStop.place_name}
-                className="h-full w-full object-cover"
-              />
+              {showNextPhoto ? (
+                <img
+                  src={nextPhotoSrc}
+                  alt={nextStop.place_name}
+                  loading="lazy"
+                  decoding="async"
+                  onError={() => setFailedPhotoUrl(nextPhotoSrc)}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="grid h-full w-full place-items-center bg-slate-100 text-slate-400">
+                  <MapPin className="h-8 w-8" aria-hidden="true" />
+                </div>
+              )}
               <span className="absolute bottom-2 left-2 rounded-lg bg-slate-900/85 px-2 py-0.5 text-[10px] font-bold text-white">
                 {nextStop.district}
               </span>
               {nextStop.checkin_photo && (
                 <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-lg bg-emerald-700 px-2 py-0.5 text-[10px] font-bold text-white">
-                  <Camera className="h-3 w-3" />
+                  <Camera className="h-3 w-3" aria-hidden="true" />
                   {lang === 'vi' ? 'Ảnh check-in' : 'Check-in photo'}
                 </span>
               )}
             </div>
 
-            <div className="flex flex-col justify-between">
+            <div className="flex min-w-0 flex-col justify-between">
               <div>
-                <div className="flex items-center gap-2">
-                  <h4 className="font-display text-xl font-extrabold text-slate-900">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h4 className="min-w-0 break-words font-display text-xl font-extrabold text-slate-900">
                     {nextStop.place_name}
                   </h4>
                   {nextStop.is_lunch && (
-                    <span className="rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                    <span className="shrink-0 rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
                       {lang === 'vi' ? 'Bữa trưa' : 'Lunch'}
                     </span>
                   )}
                 </div>
 
-                <p className="mt-1 flex items-start gap-1.5 text-xs text-slate-500">
-                  <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-500" />
-                  <span>{nextStop.address}</span>
+                <p className="mt-1 flex items-start gap-1.5 text-xs text-slate-600">
+                  <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-500" aria-hidden="true" />
+                  <span className="min-w-0 break-words">{nextStop.address}</span>
                 </p>
 
                 <p className="mt-3 text-xs leading-relaxed text-slate-700">
@@ -213,23 +236,31 @@ export default function LiveCompanionView({
 
               {/* 3 NÚT HÀNH ĐỘNG: CHỈ ĐƯỜNG, ĐẶT XE (GRAB / XANH SM / BE), VÀ CHỤP ẢNH */}
               <div className="mt-5 flex flex-wrap items-center gap-2.5 border-t border-slate-100 pt-3">
-                <button
-                  type="button"
-                  onClick={() => handleOpenGoogleMaps(nextStop)}
-                  className="btn-primary !py-2.5 text-xs font-bold"
+                <a
+                  href={getStopDirectionsUrl(nextStop) || 'https://www.google.com/maps'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-xs font-bold text-[#1A73E8] shadow-sm transition-colors hover:border-[#1A73E8]/50 hover:bg-[#1A73E8]/5 active:scale-[0.98]"
                 >
-                  <Navigation className="h-4 w-4" />
-                  <span>{lang === 'vi' ? 'Chỉ đường Google Maps' : 'Open in Google Maps'}</span>
-                </button>
+                  <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-white p-0.5">
+                    <img
+                      src={GOOGLE_MAPS_LOGO}
+                      alt=""
+                      aria-hidden="true"
+                      className="h-3.5 w-3.5 object-contain"
+                    />
+                  </span>
+                  <span>{t('ride.googleMapsDirections')}</span>
+                </a>
 
                 {/* NÚT ĐẶT XE DI CHUYỂN (GRAB / XANH SM / BE) */}
                 <button
                   type="button"
                   onClick={() => setRidePickerStop(nextStop)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-2.5 text-xs font-bold text-white hover:bg-emerald-800 active:scale-[0.98]"
-                  title="Chọn ứng dụng đặt xe: Grab, Xanh SM hoặc Be"
+                  className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-2.5 text-xs font-bold text-white hover:bg-emerald-800 active:scale-[0.98]"
+                  title={lang === 'vi' ? 'Chọn ứng dụng đặt xe: Grab, Xanh SM hoặc Be' : 'Choose ride app: Grab, Xanh SM or Be'}
                 >
-                  <Bike className="h-4 w-4" />
+                  <Bike className="h-4 w-4" aria-hidden="true" />
                   <span>{lang === 'vi' ? 'Đặt xe (Grab / Xanh SM / Be)' : 'Book ride (Grab / Xanh SM / Be)'}</span>
                 </button>
 
@@ -237,9 +268,9 @@ export default function LiveCompanionView({
                 <button
                   type="button"
                   onClick={() => setCheckinModalStop(nextStop)}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-3.5 py-2.5 text-xs font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98]"
+                  className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-3.5 py-2.5 text-xs font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98]"
                 >
-                  <Camera className="h-4 w-4 text-brand-600" />
+                  <Camera className="h-4 w-4 text-brand-600" aria-hidden="true" />
                   <span>
                     {nextStop.checkin_photo
                       ? lang === 'vi'
@@ -279,9 +310,19 @@ export default function LiveCompanionView({
                     : 'border-slate-200 bg-white'
                 )}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
                   <button
                     type="button"
+                    aria-pressed={isDone}
+                    aria-label={
+                      isDone
+                        ? lang === 'vi'
+                          ? `Hủy đánh dấu đã đến: ${item.place_name}`
+                          : `Unmark visited: ${item.place_name}`
+                        : lang === 'vi'
+                          ? `Đánh dấu đã đến: ${item.place_name}`
+                          : `Mark visited: ${item.place_name}`
+                    }
                     onClick={() => onToggleVisited && onToggleVisited(item)}
                     className={cn(
                       'grid h-8 w-8 shrink-0 place-items-center rounded-xl text-xs font-bold transition-colors active:scale-95',
@@ -293,12 +334,12 @@ export default function LiveCompanionView({
                     )}
                     title={isDone ? 'Bấm để hủy đánh dấu đã đến' : 'Bấm để đánh dấu đã đến điểm này'}
                   >
-                    {isDone ? <Check className="h-4 w-4" /> : item.order_index}
+                    {isDone ? <Check className="h-4 w-4" aria-hidden="true" /> : item.order_index}
                   </button>
 
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-slate-500">
+                      <span className="font-mono text-xs font-bold tabular-nums text-slate-600">
                         {item.time_slot}
                       </span>
                       {isDone ? (
@@ -312,45 +353,60 @@ export default function LiveCompanionView({
                       ) : null}
                       {item.checkin_photo && (
                         <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
-                          <Camera className="h-2.5 w-2.5" />
+                          <Camera className="h-2.5 w-2.5" aria-hidden="true" />
                           {lang === 'vi' ? 'Có ảnh' : 'Photo'}
                         </span>
                       )}
                     </div>
-                    <p className={cn('font-display text-sm font-bold', isDone ? 'text-emerald-950' : 'text-slate-900')}>
+                    <p
+                      title={item.place_name}
+                      className={cn('truncate font-display text-sm font-bold', isDone ? 'text-emerald-950' : 'text-slate-900')}
+                    >
                       {item.place_name}
                     </p>
-                    <p className="line-clamp-1 text-[11px] text-slate-500">
+                    <p title={item.address} className="line-clamp-1 text-[11px] text-slate-600">
                       {item.address}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenGoogleMaps(item)}
-                    className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-600 hover:border-brand-300 hover:text-brand-600"
-                    title="Chỉ đường Google Maps"
+                <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+                  <a
+                    href={getStopDirectionsUrl(item) || 'https://www.google.com/maps'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-brand-300 hover:bg-brand-50"
+                    title={t('ride.googleMapsDirections')}
+                    aria-label={`${t('ride.googleMapsDirections')}: ${item.place_name}`}
                   >
-                    <Navigation className="h-3.5 w-3.5" />
-                  </button>
+                    <img
+                      src={GOOGLE_MAPS_LOGO}
+                      alt=""
+                      aria-hidden="true"
+                      className="h-4 w-4 object-contain"
+                    />
+                  </a>
 
                   {/* Nút đặt xe mở modal 3 app */}
                   <button
                     type="button"
                     onClick={() => setRidePickerStop(item)}
                     className="grid h-8 w-8 place-items-center rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                    title="Đặt xe (Grab / Xanh SM / Be)"
+                    title={lang === 'vi' ? 'Đặt xe (Grab / Xanh SM / Be)' : 'Book ride (Grab / Xanh SM / Be)'}
+                    aria-label={
+                      lang === 'vi'
+                        ? `Đặt xe tới ${item.place_name}`
+                        : `Book ride to ${item.place_name}`
+                    }
                   >
-                    <Bike className="h-3.5 w-3.5" />
+                    <Bike className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setCheckinModalStop(item)}
                     className={cn(
-                      'inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-bold transition-colors',
+                      'inline-flex min-h-8 items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold transition-colors sm:px-3',
                       item.checkin_photo
                         ? 'border border-emerald-300 bg-emerald-100 text-emerald-800'
                         : isDone
@@ -358,7 +414,7 @@ export default function LiveCompanionView({
                         : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
                     )}
                   >
-                    <Camera className="h-3.5 w-3.5" />
+                    <Camera className="h-3.5 w-3.5" aria-hidden="true" />
                     <span>
                       {item.checkin_photo
                         ? lang === 'vi'
@@ -408,6 +464,7 @@ export default function LiveCompanionView({
         <RidePickerModal
           stop={ridePickerStop}
           isOpen={Boolean(ridePickerStop)}
+          transportMode={trip?.transport_mode}
           onClose={() => setRidePickerStop(null)}
         />
       )}

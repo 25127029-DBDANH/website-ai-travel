@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Check, Info, Loader2, Minus, Plus, Sparkles, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ChevronDown, Info, LayoutGrid, Loader2, Minus, Plus, SlidersHorizontal, Sparkles, X } from 'lucide-react';
 import { useI18n } from '../../i18n/I18nContext.jsx';
 import { cn } from '../../lib/cn.js';
 import { toggleListValue } from '../../lib/tripFormLogic.js';
@@ -6,15 +6,20 @@ import { toggleListValue } from '../../lib/tripFormLogic.js';
 export const HIGHLIGHT_RING =
   'rounded-2xl ring-2 ring-emerald-300 ring-offset-2 ring-offset-white transition-shadow';
 
-export function StepHeader({ headingRef, title, hint }) {
+export function StepHeader({ headingRef, title, hint, badge }) {
   return (
     <header className="space-y-1">
       <h3
         ref={headingRef}
         tabIndex={-1}
-        className="font-display text-lg font-extrabold tracking-tight text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 sm:text-xl"
+        className="flex flex-wrap items-center gap-2 font-display text-lg font-extrabold tracking-tight text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 sm:text-xl"
       >
         {title}
+        {badge && (
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-sans text-[11px] font-bold tracking-normal text-slate-600">
+            {badge}
+          </span>
+        )}
       </h3>
       {hint && <p className="text-xs leading-relaxed text-slate-600 sm:text-sm">{hint}</p>}
     </header>
@@ -218,6 +223,62 @@ export function WizardBanners({ parseSummary, notices, onDismissParse, onDismiss
   );
 }
 
+export function Accordion({ id, title, summary, open, onToggle, children }) {
+  const buttonId = `${id}-toggle`;
+  const panelId = `${id}-panel`;
+  return (
+    <section className="border-b border-slate-200 last:border-b-0">
+      <h4 className="m-0">
+        <button
+          id={buttonId}
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={onToggle}
+          className="flex min-h-14 w-full items-center justify-between gap-3 px-1 py-3 text-left"
+        >
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-slate-900">{title}</span>
+            <span className="mt-0.5 block truncate text-xs text-slate-600">{summary}</span>
+          </span>
+          <ChevronDown
+            aria-hidden="true"
+            className={cn(
+              'h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 ease-out-strong',
+              open && 'rotate-180'
+            )}
+          />
+        </button>
+      </h4>
+      <div id={panelId} role="region" aria-labelledby={buttonId} hidden={!open} className="px-1 pb-4">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+export function SubmitLabel({ submitting, submissionStage, t }) {
+  if (!submitting) {
+    return (
+      <>
+        {t('form.submit')}
+        <ArrowRight className="h-4 w-4" aria-hidden="true" />
+      </>
+    );
+  }
+  return (
+    <>
+      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+      {submissionStage === 'concept'
+        ? t('form.stage.concept')
+        : submissionStage === 'generate'
+          ? t('form.stage.generate')
+          : t('form.stage.save')}
+    </>
+  );
+}
+
+// Thanh hành động của wizard. Trên mobile dính đáy và chứa luôn thẻ tóm tắt (summarySlot).
 export function WizardFooter({
   step,
   currentIndex,
@@ -225,55 +286,58 @@ export function WizardFooter({
   submissionStage,
   onBack,
   onNext,
-  onSkip,
+  onFinetune,
+  canSubmit,
+  summarySlot,
   t
 }) {
+  const isFirst = currentIndex === 0;
   return (
-    <div className="sticky bottom-0 z-10 -mx-4 mt-5 flex flex-wrap items-center justify-between gap-2 rounded-b-3xl border-t border-slate-200 bg-white px-4 pt-3 safe-bottom sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:pb-0 sm:pt-4">
-      <div>
-        {currentIndex > 0 && (
-          <button type="button" onClick={onBack} className="btn-secondary min-h-11 px-4 text-sm">
+    <div className="sticky bottom-0 z-10 -mx-4 mt-5 rounded-b-3xl border-t border-slate-200 bg-white px-4 pt-3 safe-bottom sm:-mx-6 sm:px-6 lg:static lg:mx-0 lg:rounded-none lg:bg-transparent lg:px-0 lg:pb-0 lg:pt-4">
+      {summarySlot}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button type="button" onClick={onBack} className="btn-secondary min-h-11 px-4 text-sm">
+          {isFirst ? (
+            <LayoutGrid className="h-4 w-4" aria-hidden="true" />
+          ) : (
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            <span>{t('form.wizard.back')}</span>
-          </button>
-        )}
-      </div>
+          )}
+          <span>{isFirst ? t('form.wizard.backToStart') : t('form.wizard.back')}</span>
+        </button>
 
-      <div className="ml-auto flex items-center gap-2">
-        {step === 'constraints' && (
-          <button
-            type="button"
-            onClick={onSkip}
-            className="btn-ghost min-h-11 px-3.5 text-sm font-semibold text-slate-600"
-          >
-            {t('form.wizard.skip')}
-          </button>
-        )}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          {step === 'vibe' && (
+            <button
+              type="button"
+              onClick={onFinetune}
+              className="btn-ghost min-h-11 px-3.5 text-sm font-semibold text-slate-700"
+            >
+              <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+              {t('form.wizard.finetune')}
+            </button>
+          )}
 
-        {step !== 'review' ? (
-          <button type="button" onClick={onNext} className="btn-primary min-h-11 px-5 text-sm font-bold">
-            <span>{t('form.wizard.next')}</span>
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </button>
-        ) : (
-          <button type="submit" disabled={submitting} className="btn-primary min-h-12 px-5 text-sm font-bold">
-            {submitting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                {submissionStage === 'concept'
-                  ? t('form.stage.concept')
-                  : submissionStage === 'generate'
-                    ? t('form.stage.generate')
-                    : t('form.stage.save')}
-              </>
-            ) : (
-              <>
-                {t('form.submit')}
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </>
-            )}
-          </button>
-        )}
+          {canSubmit ? (
+            <button
+              key="wizard-submit"
+              type="submit"
+              disabled={submitting}
+              className="btn-primary min-h-12 px-5 text-sm font-bold"
+            >
+              <SubmitLabel submitting={submitting} submissionStage={submissionStage} t={t} />
+            </button>
+          ) : (
+            <button
+              key="wizard-next"
+              type="button"
+              onClick={onNext}
+              className="btn-primary min-h-11 px-5 text-sm font-bold"
+            >
+              <span>{t('form.wizard.next')}</span>
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

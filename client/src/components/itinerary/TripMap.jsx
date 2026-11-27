@@ -5,12 +5,15 @@ import { useReducedMotion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '../../i18n/I18nContext.jsx';
 import { cn } from '../../lib/cn.js';
+import {
+  FAILOVER_TIMEOUT_MS,
+  getTileProviders,
+  nextProviderIndex,
+  readSavedTileProvider,
+  saveTileProvider,
+  shouldFailover
+} from '../../lib/mapTiles.js';
 
-const TILE_URL =
-  import.meta.env.VITE_MAP_TILE_URL ||
-  'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png';
-const OSM_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.fr/">OpenStreetMap France</a> | &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 const HCMC_CENTER = [10.7769, 106.7009];
 
 function validCoordinate(value, min, max) {
@@ -24,6 +27,15 @@ function toLatLng(stop) {
   return latitude === null || longitude === null ? null : [latitude, longitude];
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export default function TripMap({
   stops = [],
   activeDay = 1,
@@ -35,6 +47,7 @@ export default function TripMap({
 }) {
   const { lang, t } = useI18n();
   const [collapsed, setCollapsed] = useState(false);
+  const [tilesUnavailable, setTilesUnavailable] = useState(false);
   const reduced = useReducedMotion();
   const sectionRef = useRef(null);
   const containerRef = useRef(null);
@@ -43,6 +56,11 @@ export default function TripMap({
   const polylineRef = useRef(null);
   const boundsRef = useRef(null);
   const focusHandledRef = useRef(null);
+  const onOpenDetailRef = useRef(onOpenDetail);
+
+  useEffect(() => {
+    onOpenDetailRef.current = onOpenDetail;
+  }, [onOpenDetail]);
 
   const points = useMemo(
     () =>
@@ -58,18 +76,122 @@ export default function TripMap({
   }, [focusRequest]);
 
   useEffect(() => {
-    if (collapsed || !hasPoints || !containerRef.current) return undefined;
+    if (collapsed || !hasPoints || !containerRef.current) {
+      setTilesUnavailable(false);
+      return undefined;
+    }
 
     const map = L.map(containerRef.current, {
       scrollWheelZoom: true,
       zoomControl: true
     }).setView(HCMC_CENTER, 13);
 
-    L.tileLayer(TILE_URL, {
-      subdomains: 'abc',
-      maxZoom: 19,
-      attribution: OSM_ATTRIBUTION
-    }).addTo(map);
+    const providers = getTileProviders(
+      import.meta.env.VITE_MAP_TILE_URL,
+      readSavedTileProvider()
+    );
+
+    let disposed = false;
+    let currentLayer = null;
+    let currentListeners = null;
+    let failoverTimer = null;
+
+    setTilesUnavailable(false);
+
+    const clearFailoverTimer = () => {
+      if (failoverTimer !== null) {
+        window.clearTimeout(failoverTimer);
+        failoverTimer = null;
+      }
+    };
+
+    const detachCurrentLayer = () => {
+      clearFailoverTimer();
+      if (currentLayer) {
+        if (currentListeners) {
+          currentLayer.off('tileload', currentListeners.onTileLoad);
+          currentLayer.off('tileerror', currentListeners.onTileError);
+          currentListeners = null;
+        }
+        if (map.hasLayer(currentLayer)) {
+          map.removeLayer(currentLayer);
+        }
+        currentLayer = null;
+      }
+    };
+
+    const mountProvider = (index) => {
+      if (disposed) return;
+      detachCurrentLayer();
+
+      const provider = providers[index];
+      if (!provider) {
+        setTilesUnavailable(true);
+        return;
+      }
+
+      let errors = 0;
+      let loaded = 0;
+      let switched = false;
+      const startedAt = Date.now();
+
+      const options = {
+        maxZoom: provider.maxZoom ?? 19,
+        attribution: provider.attribution
+      };
+      if (provider.subdomains) {
+        options.subdomains = provider.subdomains;
+      }
+
+      const layer = L.tileLayer(provider.url, options);
+      currentLayer = layer;
+
+      const advanceProvider = () => {
+        if (disposed || switched || currentLayer !== layer) return;
+        switched = true;
+        const nextIndex = nextProviderIndex(index, providers.length);
+        if (nextIndex === -1) {
+          detachCurrentLayer();
+          setTilesUnavailable(true);
+        } else {
+          mountProvider(nextIndex);
+        }
+      };
+
+      const onTileLoad = () => {
+        if (disposed || currentLayer !== layer) return;
+        loaded += 1;
+        if (loaded === 1) {
+          clearFailoverTimer();
+          setTilesUnavailable(false);
+          saveTileProvider(provider.id);
+        }
+      };
+
+      const onTileError = () => {
+        if (disposed || switched || currentLayer !== layer) return;
+        errors += 1;
+        const elapsedMs = Date.now() - startedAt;
+        if (shouldFailover({ errors, loaded, elapsedMs })) {
+          advanceProvider();
+        }
+      };
+
+      currentListeners = { onTileLoad, onTileError };
+      layer.on('tileload', onTileLoad);
+      layer.on('tileerror', onTileError);
+      layer.addTo(map);
+
+      failoverTimer = window.setTimeout(() => {
+        if (disposed || switched || currentLayer !== layer) return;
+        const elapsedMs = Math.max(FAILOVER_TIMEOUT_MS, Date.now() - startedAt);
+        if (shouldFailover({ errors, loaded, elapsedMs })) {
+          advanceProvider();
+        }
+      }, FAILOVER_TIMEOUT_MS);
+    };
+
+    mountProvider(0);
 
     mapRef.current = map;
     const observer = new ResizeObserver(() => {
@@ -80,6 +202,8 @@ export default function TripMap({
     observer.observe(containerRef.current);
 
     return () => {
+      disposed = true;
+      detachCurrentLayer();
       observer.disconnect();
       map.remove();
       mapRef.current = null;
@@ -134,11 +258,14 @@ export default function TripMap({
       // Popup thông tin nhanh khi click marker
       const costStr = stop.estimated_cost > 0 ? `${Number(stop.estimated_cost).toLocaleString('vi-VN')} đ` : (lang === 'vi' ? 'Miễn phí' : 'Free');
       const visitedBadge = isVisited ? `<span style="background:#059669;color:#fff;border-radius:4px;padding:1px 5px;font-size:9.5px;font-weight:700;margin-left:4px;">Đã đến</span>` : '';
+      const safeName = escapeHtml(stop.place_name);
+      const safeDistrict = escapeHtml(stop.district || 'TP.HCM');
+      const safeSlot = escapeHtml(stop.time_slot || '');
       const popupHtml = `
         <div style="font-family: inherit; min-width: 170px; padding: 2px;">
-          <div style="font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase;">Điểm ${order} · ${stop.time_slot || ''} ${visitedBadge}</div>
-          <div style="font-size: 13px; font-weight: 800; color: #0f172a; margin: 2px 0 4px;">${stop.place_name}</div>
-          <div style="font-size: 11px; color: #64748b;">${stop.district || 'TP.HCM'} · <strong style="color: #2563eb;">${costStr}</strong></div>
+          <div style="font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase;">Điểm ${order} · ${safeSlot} ${visitedBadge}</div>
+          <div style="font-size: 13px; font-weight: 800; color: #0f172a; margin: 2px 0 4px;">${safeName}</div>
+          <div style="font-size: 11px; color: #475569;">${safeDistrict} · <strong style="color: #2563eb;">${escapeHtml(costStr)}</strong></div>
         </div>
       `;
       marker.bindPopup(popupHtml);
@@ -148,8 +275,8 @@ export default function TripMap({
           .getElementById(`stop-${activeDay}-${order}`)
           ?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center' });
         
-        if (onOpenDetail) {
-          onOpenDetail(stop);
+        if (onOpenDetailRef.current) {
+          onOpenDetailRef.current(stop);
         }
       });
 
@@ -182,7 +309,7 @@ export default function TripMap({
     }
 
     map.fitBounds(bounds, { padding: [36, 36], maxZoom: 15 });
-  }, [points, activeDay, collapsed, hasPoints, reduced, lang, onOpenDetail, trafficMode]);
+  }, [points, activeDay, collapsed, hasPoints, reduced, lang, trafficMode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -237,7 +364,7 @@ export default function TripMap({
           <span className="text-xs font-bold text-slate-900">
             {lang === 'vi' ? `Bản đồ Ngày ${activeDay}` : `Day ${activeDay} Map`}
           </span>
-          <span className="text-xs text-slate-500">
+          <span className="text-xs tabular-nums text-slate-600">
             · {points.length} {lang === 'vi' ? 'điểm' : 'stops'}
           </span>
         </div>
@@ -247,6 +374,7 @@ export default function TripMap({
             <button
               type="button"
               onClick={handleResetZoom}
+              aria-label={lang === 'vi' ? 'Xem toàn bộ các điểm trong ngày' : 'Fit all stops'}
               className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 hover:border-brand-300 hover:text-brand-700"
               title={lang === 'vi' ? 'Xem toàn bộ các điểm trong ngày' : 'Fit all stops'}
             >
@@ -261,7 +389,7 @@ export default function TripMap({
               onClick={() => setCollapsed((value) => !value)}
               aria-expanded={!collapsed}
               aria-label={collapsed ? t('itinerary.map.expand') : t('itinerary.map.collapse')}
-              className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-500 hover:text-slate-800"
+              className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:text-slate-900"
             >
               {collapsed ? <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" /> : <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />}
             </button>
@@ -272,7 +400,7 @@ export default function TripMap({
       {/* Container Leaflet */}
       {!collapsed &&
         (points.length === 0 ? (
-          <div className="grid flex-1 place-items-center p-6 text-center text-xs text-slate-400">
+          <div className="grid flex-1 place-items-center p-6 text-center text-xs text-slate-600">
             {t('itinerary.map.empty')}
           </div>
         ) : (
@@ -288,10 +416,21 @@ export default function TripMap({
               role="region"
               aria-label={t('itinerary.map.title')}
               className={cn(
-                'w-full transition-all duration-300',
+                'w-full',
                 isPanelMode ? 'flex-1 min-h-[340px] h-full' : 'h-48 sm:h-60'
               )}
             />
+            {tilesUnavailable && (
+              <div
+                role="status"
+                className="pointer-events-none absolute bottom-2 left-2 z-[1000] max-w-[calc(100%-1rem)]"
+              >
+                <div className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200/90 bg-white/95 px-2.5 py-1.5 text-[11px] font-medium text-slate-700 shadow-sm backdrop-blur-sm">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden="true" />
+                  <span>{t('itinerary.map.tilesUnavailable')}</span>
+                </div>
+              </div>
+            )}
           </div>
         ))}
     </section>

@@ -1,7 +1,6 @@
 import {
   ArrowRight,
   CalendarDays,
-  Check,
   CheckCircle2,
   Compass,
   MapPin,
@@ -296,38 +295,18 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="plan" className="plan-background scroll-mt-16 border-b border-slate-200">
-          <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:px-8 lg:py-20">
-            <Reveal className="rounded-2xl border border-slate-200 bg-white/95 p-5 shadow-sm sm:p-6">
-              <h2 className="font-display text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+        <section id="plan" className="plan-background relative scroll-mt-16 border-b border-slate-200">
+          <div aria-hidden="true" className="absolute inset-0 bg-slate-950/60" />
+          <div className="relative mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
+            <Reveal className="mb-6 max-w-2xl sm:mb-8">
+              <h2 id="plan-heading" className="font-display text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
                 {t('form.title')}
               </h2>
-              <p className="mt-3 max-w-md text-sm leading-relaxed text-slate-600 sm:text-base">
-                {t('form.subtitle')}
-              </p>
-
-              <div className="mt-7 space-y-4">
-                {[1, 2, 3].map((feature) => (
-                  <div key={feature} className="flex items-start gap-3">
-                    <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700">
-                      <Check className="h-3.5 w-3.5" strokeWidth={3} />
-                    </span>
-                    <div>
-                      <p className="text-sm font-bold text-slate-900">
-                        {t(`features.f${feature}.title`)}
-                      </p>
-                      <p className="mt-0.5 max-w-sm text-xs leading-relaxed text-slate-600">
-                        {t(`features.f${feature}.desc`)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-7 inline-flex items-center gap-2 text-xs font-semibold text-slate-600">
-                <MapPin className="h-4 w-4 text-brand-600" />
+              <p className="mt-3 text-sm leading-relaxed text-slate-100 sm:text-base">{t('form.subtitle')}</p>
+              <p className="mt-4 inline-flex items-center gap-2 text-xs font-semibold text-slate-200">
+                <MapPin className="h-4 w-4 text-accent-300" aria-hidden="true" />
                 {t('hero.note')}
-              </div>
+              </p>
             </Reveal>
 
             <Reveal delay={90}>

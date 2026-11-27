@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../../i18n/I18nContext.jsx';
 import { cn } from '../../lib/cn.js';
 import { formatVnd } from '../../lib/format.js';
+import { isImeComposing } from '../../lib/tripWizardLogic.js';
 
 export default function ExpenseTrackerView({ trip, items = [] }) {
   const { lang, t } = useI18n();
@@ -370,7 +371,10 @@ export default function ExpenseTrackerView({ trip, items = [] }) {
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
                               onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleUpdateActual(exp.id, editValue);
+                                if (e.key === 'Enter' && !isImeComposing(e)) {
+                                  e.preventDefault();
+                                  handleUpdateActual(exp.id, editValue);
+                                }
                                 if (e.key === 'Escape') setEditingId(null);
                               }}
                               className="w-28 rounded-lg border border-brand-500 px-2 py-1 text-right font-mono text-xs font-bold focus:outline-none focus:ring-2 focus:ring-brand-300"
