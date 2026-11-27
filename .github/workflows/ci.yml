@@ -125,7 +125,7 @@ jobs:
           fi
       - name: Verify frontend build-time Google OAuth config
         run: |
-          if ! docker compose exec -T client sh -c "grep -R --include='*.js' -q 'ci-smoke.apps.googleusercontent.com' /usr/share/nginx/html/assets"; then
+          if ! docker compose exec -T client sh -c "grep -Rq 'ci-smoke.apps.googleusercontent.com' /usr/share/nginx/html/assets"; then
             docker compose logs --tail=100 client
             exit 1
           fi
