@@ -1,32 +1,37 @@
 import { motion, useReducedMotion } from 'motion/react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { DEMO } from '../demo.jsx';
 import { useI18n } from '../i18n/I18nContext.jsx';
-import { api } from '../lib/api.js';
+import { api, assetUrl } from '../lib/api.js';
+import { cn } from '../lib/cn.js';
 import { translateApiError } from '../lib/errors.js';
 import { formatVnd } from '../lib/format.js';
 import { parseTripSentence } from '../lib/sentenceParser.js';
 import {
-  applyParsedToForm, buildAiRequest, buildTripCreatePayload, canUseLocalItineraryFallback,
-  defaultTripForm, describeFilledFields, makeFallbackConcept, missingParsedLabels, validateTripForm
+  applyParsedToForm, applyTripTemplate, buildAiRequest, buildTripCreatePayload, canUseLocalItineraryFallback,
+  defaultTripForm, describeFilledFields, districtFromStartLocation, makeFallbackConcept, missingParsedLabels,
+  sanitizeInterests, validateTripForm
 } from '../lib/tripFormLogic.js';
-import { hasParsedTripContent } from '../lib/tripOptions.js';
+import { hasParsedTripContent, interestImage } from '../lib/tripOptions.js';
 import {
-  autoAdjustments, clearSessionDraft, findStepForErrors, firstIncompleteStep,
-  focusFirstErrorField, readSessionDraft, stepIndexOf, stepStatus, validateStep,
+  autoAdjustments, clearSessionDraft, findStepForErrors, firstIncompleteStep, focusFirstErrorField,
+  INTRO_STEP, isImeComposing, readSessionDraft, stepIndexOf, stepStatus, SUBMIT_STEP_IDS, validateStep,
   WIZARD_STEPS, writeSessionDraft
 } from '../lib/tripWizardLogic.js';
+import { AiWaitingOverlay } from './tripForm/AiWaitingPanel.jsx';
 import ConceptDialog from './tripForm/ConceptDialog.jsx';
 import { WizardBanners, WizardFooter } from './tripForm/controls.jsx';
-import StepBudget from './tripForm/StepBudget.jsx';
-import StepConstraints from './tripForm/StepConstraints.jsx';
-import StepGroup from './tripForm/StepGroup.jsx';
-import StepReview from './tripForm/StepReview.jsx';
-import StepStyle from './tripForm/StepStyle.jsx';
-import StepTrip from './tripForm/StepTrip.jsx';
+import StepFinetune from './tripForm/StepFinetune.jsx';
+import StepVibe from './tripForm/StepVibe.jsx';
+import StepWhenWhere from './tripForm/StepWhenWhere.jsx';
+import StepWho from './tripForm/StepWho.jsx';
+import TripIntro from './tripForm/TripIntro.jsx';
+import { TripSummaryAside, TripSummarySheet } from './tripForm/TripSummary.jsx';
 import WizardProgress from './tripForm/WizardProgress.jsx';
+
+const LAST_STEP_INDEX = WIZARD_STEPS.length - 1;
 
 export default function TripForm() {
   const { lang, t } = useI18n();
@@ -34,10 +39,12 @@ export default function TripForm() {
   const navigate = useNavigate();
   const reducedMotion = useReducedMotion();
 
-  const [initialDraft] = useState(() => readSessionDraft(t('form.startDefault')));
-  const [form, setForm] = useState(() => initialDraft?.form || defaultTripForm(t('form.startDefault')));
-  const [step, setStep] = useState(() => initialDraft?.step || WIZARD_STEPS[0].id);
-  const [maxStepIndex, setMaxStepIndex] = useState(() => (initialDraft?.step ? stepIndexOf(initialDraft.step) : 0));
+  const [initialDraft] = useState(() => readSessionDraft());
+  const [form, setForm] = useState(() => initialDraft?.form || defaultTripForm());
+  const [step, setStep] = useState(() => initialDraft?.step || INTRO_STEP);
+  const [maxStepIndex, setMaxStepIndex] = useState(() =>
+    initialDraft?.step && initialDraft.step !== INTRO_STEP ? stepIndexOf(initialDraft.step) : 0
+  );
   const [sentence, setSentence] = useState(() => initialDraft?.sentence || '');
   const [budgetDraft, setBudgetDraft] = useState(null);
   const [quickFillError, setQuickFillError] = useState('');
@@ -51,28 +58,50 @@ export default function TripForm() {
   const [submissionStage, setSubmissionStage] = useState('');
   const [concept, setConcept] = useState(null);
   const [pendingTrip, setPendingTrip] = useState(null);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [matchInfo, setMatchInfo] = useState(null);
 
-  const defaultStartRef = useRef(t('form.startDefault'));
   const sentenceRef = useRef(null);
   const stepHeadingRef = useRef(null);
   const didMountRef = useRef(false);
+  const skipHeadingFocusRef = useRef(false);
 
-  useEffect(() => {
-    const previousDefault = defaultStartRef.current;
-    const nextDefault = t('form.startDefault');
-    setForm((cur) => (cur.start_location === previousDefault ? { ...cur, start_location: nextDefault } : cur));
-    defaultStartRef.current = nextDefault;
-  }, [t]);
+  const isIntro = step === INTRO_STEP;
+  const currentIndex = isIntro ? -1 : stepIndexOf(step);
 
   useEffect(() => {
     const timer = setTimeout(() => writeSessionDraft({ form, step, sentence }), 400);
     return () => clearTimeout(timer);
   }, [form, step, sentence]);
 
+  // Đổi bước → đưa focus về tiêu đề bước (trừ khi đang focus ô lỗi).
   useEffect(() => {
-    if (!didMountRef.current) { didMountRef.current = true; return; }
-    requestAnimationFrame(() => stepHeadingRef.current?.focus({ preventScroll: true }));
+    if (!didMountRef.current) { didMountRef.current = true; return undefined; }
+    if (skipHeadingFocusRef.current) { skipHeadingFocusRef.current = false; return undefined; }
+    const raf = requestAnimationFrame(() => stepHeadingRef.current?.focus({ preventScroll: false }));
+    return () => cancelAnimationFrame(raf);
   }, [step]);
+
+  // Bộ đếm "Có N địa điểm hợp gu" (T-045). Debounce 400 ms; null/404/lỗi → ẩn.
+  const interestsKey = sanitizeInterests(form.interests).join(',');
+  const stayDistrict = districtFromStartLocation(form.start_location);
+  useEffect(() => {
+    if (isIntro || !interestsKey) { setMatchInfo(null); return undefined; }
+    let active = true;
+    const timer = setTimeout(async () => {
+      const result = await api.matchCount({ interests: interestsKey.split(','), districts: [stayDistrict] });
+      if (active) setMatchInfo(result);
+    }, 400);
+    return () => { active = false; clearTimeout(timer); };
+  }, [isIntro, interestsKey, stayDistrict]);
+
+  const waitingImages = useMemo(() => {
+    const samples = (matchInfo?.samples || [])
+      .filter((item) => item.photo_url)
+      .map((item) => ({ src: assetUrl(item.photo_url), alt: item.name_vi }));
+    if (samples.length >= 2) return samples.slice(0, 6);
+    return sanitizeInterests(form.interests).map((key) => ({ src: interestImage(key), alt: t(`form.interest.${key}`) }));
+  }, [matchInfo, form.interests, t]);
 
   const update = (patch) => {
     const keys = Object.keys(patch);
@@ -88,7 +117,7 @@ export default function TripForm() {
     });
     setFieldErrors((cur) => {
       const clearTime = keys.includes('day_start') || keys.includes('day_end');
-      const clearNotes = keys.includes('custom_notes') || keys.includes('quick_notes');
+      const clearNotes = keys.includes('custom_notes');
       if (!keys.some((k) => k in cur) && !clearTime && !clearNotes) return cur;
       const next = { ...cur };
       keys.forEach((k) => delete next[k]);
@@ -103,7 +132,16 @@ export default function TripForm() {
     setFieldErrors({});
     setFormError('');
     setStep(nextStepId);
-    setMaxStepIndex((cur) => Math.max(cur, stepIndexOf(nextStepId)));
+    if (nextStepId !== INTRO_STEP) setMaxStepIndex((cur) => Math.max(cur, stepIndexOf(nextStepId)));
+  };
+
+  const showErrorsOn = (stepId, errors) => {
+    if (stepId !== step) {
+      skipHeadingFocusRef.current = true;
+      goToStep(stepId);
+    }
+    setFieldErrors(errors);
+    focusFirstErrorField(errors);
   };
 
   const handleQuickFill = (inputSentence = sentence) => {
@@ -136,14 +174,36 @@ export default function TripForm() {
     goToStep(firstIncompleteStep(adjusted.form, parsed));
   };
 
-  const currentIndex = stepIndexOf(step);
+  const handlePickTemplate = (templateKey) => {
+    const next = applyTripTemplate(form, templateKey);
+    const adjusted = autoAdjustments(form, next);
+    setForm(adjusted.form);
+    setBudgetDraft(null);
+    setLastParse(null);
+    setParseSummary(null);
+    setNotices([]);
+    setHighlighted(new Set());
+    setMaxStepIndex(LAST_STEP_INDEX);
+    goToStep(firstIncompleteStep(adjusted.form));
+  };
 
-  const validateAndJump = (stepToCheck, targetId) => {
-    const errors = validateStep(stepToCheck, form, { budgetDraft });
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
-      focusFirstErrorField(errors);
+  // Nhảy tới bước bất kỳ (thanh tiến độ, thẻ tóm tắt): đi tới thì phải qua được các bước giữa.
+  const handleSelectStep = (targetId) => {
+    if (submitting) return;
+    if (targetId === step) {
+      stepHeadingRef.current?.focus();
       return;
+    }
+    const targetIndex = stepIndexOf(targetId);
+    if (targetIndex > currentIndex) {
+      for (let i = Math.max(0, currentIndex); i < targetIndex; i += 1) {
+        const id = WIZARD_STEPS[i].id;
+        const errors = validateStep(id, form, { budgetDraft });
+        if (Object.keys(errors).length > 0) {
+          showErrorsOn(id, errors);
+          return;
+        }
+      }
     }
     setNotices([]);
     goToStep(targetId);
@@ -151,26 +211,18 @@ export default function TripForm() {
 
   const handleNext = () => {
     const nextStep = WIZARD_STEPS[currentIndex + 1];
-    if (nextStep) validateAndJump(step, nextStep.id);
+    if (nextStep) handleSelectStep(nextStep.id);
   };
 
   const handleBack = () => {
-    const prevStep = WIZARD_STEPS[currentIndex - 1];
-    if (prevStep) { setNotices([]); goToStep(prevStep.id); }
-  };
-
-  const handleSelectStep = (targetId) => {
-    const targetIndex = stepIndexOf(targetId);
-    if (targetIndex > maxStepIndex || targetId === step) return;
-    if (targetIndex > currentIndex) { validateAndJump(step, targetId); return; }
     setNotices([]);
-    goToStep(targetId);
+    goToStep(currentIndex <= 0 ? INTRO_STEP : WIZARD_STEPS[currentIndex - 1].id);
   };
 
   const handleReset = () => {
     clearSessionDraft();
-    setForm(defaultTripForm(t('form.startDefault')));
-    setStep(WIZARD_STEPS[0].id);
+    setForm(defaultTripForm());
+    setStep(INTRO_STEP);
     setMaxStepIndex(0);
     setSentence('');
     setBudgetDraft(null);
@@ -181,14 +233,16 @@ export default function TripForm() {
     setNotices([]);
     setFieldErrors({});
     setFormError('');
+    setSummaryOpen(false);
   };
 
   const handleFormKeyDown = (event) => {
-    if (event.key !== 'Enter' || step === 'review') return;
+    if (event.key !== 'Enter' || isImeComposing(event)) return;
     const target = event.target;
     if (target?.tagName?.toLowerCase() !== 'input' || target.dataset?.skipEnter === 'true') return;
+    // Enter trong ô nhập không tự gửi form; ở bước 1–2 thì sang bước kế.
     event.preventDefault();
-    handleNext();
+    if (!SUBMIT_STEP_IDS.includes(step) && !isIntro) handleNext();
   };
 
   const formatRequestError = (requestError) => {
@@ -201,17 +255,14 @@ export default function TripForm() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (submitting) return;
-    if (step !== 'review') { handleNext(); return; }
+    if (submitting || isIntro) return;
+    if (!SUBMIT_STEP_IDS.includes(step)) { handleNext(); return; }
     setFormError('');
     setQuickFillError('');
 
     const validation = validateTripForm(form, budgetDraft);
     if (!validation.valid) {
-      const errStep = findStepForErrors(validation.errors);
-      if (errStep && errStep !== step) setStep(errStep);
-      setFieldErrors(validation.errors);
-      focusFirstErrorField(validation.errors);
+      showErrorsOn(findStepForErrors(validation.errors) || step, validation.errors);
       return;
     }
     setFieldErrors({});
@@ -276,48 +327,68 @@ export default function TripForm() {
   const statuses = stepStatus(form, { budgetDraft });
   const searchPlaces = useCallback((params) => api.searchPlaces(params), []);
   const sharedStepProps = { form, onPatch: update, errors: fieldErrors, t, highlighted, headingRef: stepHeadingRef };
+  const summaryProps = { form, t, lang, matchInfo, onEdit: handleSelectStep, currentStep: step };
 
   return (
     <>
-      <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} noValidate aria-busy={submitting}
-        className="rounded-3xl border border-slate-200 bg-white shadow-card">
-        <WizardProgress steps={WIZARD_STEPS} currentStep={step} maxStepIndex={maxStepIndex}
-          statuses={statuses} onSelectStep={handleSelectStep} onReset={handleReset} t={t} />
-
-        <fieldset disabled={submitting} className="min-w-0 p-4 sm:p-6">
-          <WizardBanners parseSummary={parseSummary} notices={notices}
-            onDismissParse={() => setParseSummary(null)} onDismissNotices={() => setNotices([])} t={t} />
-
-          <motion.div key={step} initial={reducedMotion ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-            transition={reducedMotion ? { duration: 0 } : { duration: 0.16, ease: [0.23, 1, 0.32, 1] }}>
-            {step === 'trip' && (
-              <StepTrip {...sharedStepProps} sentence={sentence} quickFillError={quickFillError}
-                onSentenceChange={(val) => { setSentence(val); if (quickFillError) setQuickFillError(''); }}
-                onQuickFill={handleQuickFill} sentenceRef={sentenceRef} />
-            )}
-            {step === 'group' && <StepGroup {...sharedStepProps} />}
-            {step === 'budget' && (
-              <StepBudget {...sharedStepProps} lang={lang} budgetDraft={budgetDraft} onBudgetDraftChange={setBudgetDraft} />
-            )}
-            {step === 'style' && <StepStyle {...sharedStepProps} />}
-            {step === 'constraints' && <StepConstraints {...sharedStepProps} onSearchPlaces={searchPlaces} />}
-            {step === 'review' && <StepReview {...sharedStepProps} lang={lang} onEditStep={goToStep} />}
-          </motion.div>
-
-          {formError && (
-            <p id="trip-form-error" role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-semibold text-rose-700">
-              {formError}
-            </p>
+      <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} noValidate aria-busy={submitting} aria-labelledby="plan-heading"
+        className={cn('grid gap-4', !isIntro && 'lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start')}>
+        <div className="min-w-0 rounded-3xl border border-slate-200 bg-white shadow-card">
+          {!isIntro && (
+            <WizardProgress steps={WIZARD_STEPS} currentStep={step} maxStepIndex={maxStepIndex}
+              statuses={statuses} onSelectStep={handleSelectStep} onReset={handleReset} t={t} />
           )}
 
-          <WizardFooter step={step} currentIndex={currentIndex} submitting={submitting} submissionStage={submissionStage}
-            onBack={handleBack} onNext={handleNext} onSkip={() => validateAndJump('constraints', 'review')} t={t} />
-        </fieldset>
+          <fieldset disabled={submitting} className="min-w-0 p-4 sm:p-6">
+            {!isIntro && (
+              <WizardBanners parseSummary={parseSummary} notices={notices}
+                onDismissParse={() => setParseSummary(null)} onDismissNotices={() => setNotices([])} t={t} />
+            )}
+
+            <motion.div key={step} initial={reducedMotion ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+              transition={reducedMotion ? { duration: 0 } : { duration: 0.16, ease: [0.23, 1, 0.32, 1] }}>
+              {isIntro && (
+                <TripIntro t={t} headingRef={stepHeadingRef} onPickTemplate={handlePickTemplate}
+                  onManual={() => goToStep(WIZARD_STEPS[0].id)} sentence={sentence} quickFillError={quickFillError}
+                  onSentenceChange={(val) => { setSentence(val); if (quickFillError) setQuickFillError(''); }}
+                  onQuickFill={handleQuickFill} sentenceRef={sentenceRef} />
+              )}
+              {step === 'when_where' && <StepWhenWhere {...sharedStepProps} />}
+              {step === 'who' && <StepWho {...sharedStepProps} />}
+              {step === 'vibe' && (
+                <StepVibe {...sharedStepProps} lang={lang} budgetDraft={budgetDraft} onBudgetDraftChange={setBudgetDraft} />
+              )}
+              {step === 'finetune' && <StepFinetune {...sharedStepProps} onSearchPlaces={searchPlaces} />}
+            </motion.div>
+
+            {formError && (
+              <p id="trip-form-error" role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-semibold text-rose-700">
+                {formError}
+              </p>
+            )}
+
+            {!isIntro && (
+              <WizardFooter step={step} currentIndex={currentIndex} submitting={submitting} submissionStage={submissionStage}
+                canSubmit={SUBMIT_STEP_IDS.includes(step)} onBack={handleBack} onNext={handleNext}
+                onFinetune={() => handleSelectStep('finetune')} t={t}
+                summarySlot={(
+                  <TripSummarySheet {...summaryProps} open={summaryOpen}
+                    onToggle={(value) => setSummaryOpen((cur) => (typeof value === 'boolean' ? value : !cur))} />
+                )} />
+            )}
+          </fieldset>
+        </div>
+
+        {!isIntro && <TripSummaryAside {...summaryProps} />}
       </form>
+
+      {submitting && submissionStage === 'concept' && !concept && (
+        <AiWaitingOverlay stage="concept" images={waitingImages} t={t} />
+      )}
 
       {concept && (
         <ConceptDialog concept={concept} submitting={submitting} submissionStage={submissionStage}
-          error={formError} lang={lang} t={t}
+          error={formError} lang={lang} t={t} waitingImages={waitingImages}
           onClose={() => { setConcept(null); setPendingTrip(null); setFormError(''); }}
           onApprove={handleApproveConcept} />
       )}

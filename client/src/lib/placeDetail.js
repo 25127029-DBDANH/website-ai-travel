@@ -1,3 +1,5 @@
+import { googleMapsSearchUrl } from './externalApps.js';
+
 const GENERIC_PHOTO_FILES = new Set([
   'pho.png',
   'banh-mi.png',
@@ -408,7 +410,7 @@ export function googleMapsPlaceUrl(lat, lng) {
   const validLat = parseCoord(lat, -90, 90);
   const validLng = parseCoord(lng, -180, 180);
   if (validLat === null || validLng === null) return null;
-  return `https://www.google.com/maps/search/?api=1&query=${validLat},${validLng}`;
+  return googleMapsSearchUrl({ lat: validLat, lng: validLng });
 }
 
 export function resolveCategoryKey(category) {

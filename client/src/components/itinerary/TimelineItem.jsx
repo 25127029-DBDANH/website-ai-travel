@@ -12,8 +12,8 @@ import { useState } from 'react';
 import { useI18n } from '../../i18n/I18nContext.jsx';
 import { api, assetUrl } from '../../lib/api.js';
 import { cn } from '../../lib/cn.js';
+import { googleMapsSearchUrl } from '../../lib/externalApps.js';
 import { formatVnd } from '../../lib/format.js';
-import { osmPlaceUrl } from '../../lib/maps.js';
 import CategoryTile from '../CategoryTile.jsx';
 import OverflowMenu from './OverflowMenu.jsx';
 import StopSwapModal from './StopSwapModal.jsx';
@@ -44,7 +44,12 @@ export default function TimelineItem({
   const isVisited = Boolean(item.visited);
   const photo =
     item.photo_url && item.photo_url !== failedPhoto ? assetUrl(item.photo_url) : null;
-  const mapsUrl = osmPlaceUrl(item.latitude, item.longitude);
+  const mapsUrl = googleMapsSearchUrl({
+    lat: item.latitude,
+    lng: item.longitude,
+    name: item.place_name,
+    address: item.address
+  });
   const timeSlot = item.time_slot || `${item.start_time || '08:30'} - ${item.end_time || '10:15'}`;
 
   const loadSwapSuggestions = async (reason = null) => {
@@ -183,6 +188,8 @@ export default function TimelineItem({
                 alt={item.place_name}
                 loading="lazy"
                 decoding="async"
+                width="224"
+                height="168"
                 onError={() => setFailedPhoto(item.photo_url)}
                 className="h-full w-full object-cover"
               />
@@ -240,11 +247,11 @@ export default function TimelineItem({
             </div>
 
             <div className="min-w-0">
-              <h3 className="line-clamp-2 font-display text-sm font-extrabold leading-snug text-slate-900 sm:text-base">
+              <h3 className="line-clamp-2 break-words font-display text-sm font-extrabold leading-snug text-slate-900 sm:text-base">
                 {item.place_name}
               </h3>
               {item.description ? (
-                <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">
+                <p className="mt-0.5 line-clamp-1 text-xs text-slate-600">
                   {item.description}
                 </p>
               ) : null}

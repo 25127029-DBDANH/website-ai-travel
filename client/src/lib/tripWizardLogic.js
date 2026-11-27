@@ -1,50 +1,96 @@
-import { preferenceOptions } from '../i18n/translations.js';
 import {
   BUDGET_PER_PERSON_PER_DAY,
   defaultTripForm,
+  derivePace,
   FORM_DIETARY,
+  isValidInterestList,
   isValidTravelDate,
   MAX_AVOID_DISTRICTS,
   MAX_MUST_VISIT,
+  migrateLegacyForm,
   rawSpecialNotes,
+  sanitizeInterests,
   validateDayHours
 } from './tripFormLogic.js';
-import { DISTRICTS, TRIP_OPTION_VALUES } from './tripOptions.js';
+import {
+  DISTRICTS,
+  suggestTransport,
+  TRIP_OPTION_VALUES
+} from './tripOptions.js';
 
 export const DRAFT_STORAGE_KEY = 'saigon_guide_trip_draft_v1';
-export const DRAFT_VERSION = 1;
+// v3 (T-054): bỏ 2 thanh trượt vibe_energy/vibe_spend, dùng pace_override (null = tự động) + template_pace.
+export const DRAFT_VERSION = 3;
+const LEGACY_DRAFT_VERSIONS = [1, 2];
 
+// Màn mở đầu (mẫu chuyến + 1 câu) đứng trước 4 bước, không tính vào thanh tiến độ.
+export const INTRO_STEP = 'start';
+
+// Thứ tự = thứ tự hiển thị, để focus đúng ô lỗi đầu tiên.
 export const ERROR_ELEMENT_IDS = [
-  ['start_location', 'trip-start'],
   ['days', 'trip-days'],
   ['travel_date', 'trip-travel-date'],
+  ['start_location', 'trip-start'],
   ['companions', 'trip-companions'],
   ['group_size', 'trip-group-size'],
+  ['interests', 'trip-interests'],
   ['budget', 'trip-budget'],
-  ['preferences', 'trip-preferences'],
+  ['must_visit', 'trip-must-visit'],
+  ['avoid_districts', 'trip-avoid-districts'],
   ['day_start', 'trip-day-start'],
   ['day_end', 'trip-day-end'],
-  ['must_visit', 'trip-must-visit'],
   ['special_notes', 'trip-special-notes']
 ];
 
 export const WIZARD_STEPS = [
-  { id: 'trip', fields: ['travel_date', 'days', 'start_location'] },
-  { id: 'group', fields: ['companions', 'group_size', 'has_children', 'has_elderly', 'mobility'] },
-  { id: 'budget', fields: ['budget', 'budget_preset'] },
-  { id: 'style', fields: ['preferences', 'pace', 'day_start', 'day_end', 'prefer_indoor'] },
+  { id: 'when_where', fields: ['days', 'travel_date', 'start_location'] },
   {
-    id: 'constraints',
-    fields: ['transport_mode', 'dietary', 'avoid_districts', 'must_visit', 'custom_notes', 'quick_notes']
+    id: 'who',
+    fields: ['companions', 'group_size', 'has_children', 'has_elderly', 'mobility', 'transport_mode']
   },
-  { id: 'review', fields: [] }
+  { id: 'vibe', fields: ['interests', 'budget', 'budget_preset'] },
+  {
+    id: 'finetune',
+    optional: true,
+    fields: [
+      'pace_override',
+      'must_visit',
+      'avoid_districts',
+      'dietary',
+      'day_start',
+      'day_end',
+      'prefer_indoor',
+      'custom_notes',
+      'special_notes'
+    ]
+  }
 ];
 
 export const WIZARD_STEP_IDS = WIZARD_STEPS.map((step) => step.id);
 
+// Bước có nút "Tạo lịch trình ngay".
+export const SUBMIT_STEP_IDS = ['vibe', 'finetune'];
+
+const LEGACY_STEP_MAP = {
+  trip: 'when_where',
+  group: 'who',
+  budget: 'vibe',
+  style: 'vibe',
+  constraints: 'finetune',
+  review: 'vibe'
+};
+
 export function stepIndexOf(stepId) {
   const index = WIZARD_STEP_IDS.indexOf(stepId);
   return index === -1 ? 0 : index;
+}
+
+// Enter trong lúc gõ tiếng Việt (Telex/VNI qua IME) chỉ là xác nhận ký tự, không phải submit.
+export function isImeComposing(event) {
+  if (!event) return false;
+  return Boolean(
+    event.isComposing || event.nativeEvent?.isComposing || event.keyCode === 229 || event.which === 229
+  );
 }
 
 export function normalizePlaceResult(place) {
@@ -59,26 +105,36 @@ export function normalizePlaceResult(place) {
   };
 }
 
+function budgetError(form, budgetDraft) {
+  const budgetValue = budgetDraft !== null ? Number(String(budgetDraft).trim()) : form.budget;
+  return (
+    (budgetDraft !== null && !String(budgetDraft).trim()) ||
+    !Number.isFinite(budgetValue) ||
+    budgetValue <= 0 ||
+    budgetValue > 1_000_000_000
+  );
+}
+
 export function validateStep(stepId, form, { budgetDraft = null, now = new Date() } = {}) {
   const errors = {};
   if (!form || typeof form !== 'object') return errors;
 
   switch (stepId) {
-    case 'trip': {
-      const start = String(form.start_location || '').trim();
-      if (!start || start.length > 200) {
-        errors.start_location = 'start';
-      }
+    case 'when_where': {
       if (!Number.isInteger(form.days) || form.days < 1 || form.days > 14) {
         errors.days = 'days';
       }
       if (!isValidTravelDate(form.travel_date, now)) {
         errors.travel_date = 'travel_date';
       }
+      const start = String(form.start_location || '').trim();
+      if (!start || start.length > 200) {
+        errors.start_location = 'start';
+      }
       break;
     }
 
-    case 'group': {
+    case 'who': {
       if (!TRIP_OPTION_VALUES.companions.includes(form.companions)) {
         errors.companions = 'companions';
       }
@@ -94,41 +150,30 @@ export function validateStep(stepId, form, { budgetDraft = null, now = new Date(
       break;
     }
 
-    case 'budget': {
-      const budgetValue = budgetDraft !== null ? Number(String(budgetDraft).trim()) : form.budget;
-      if (
-        (budgetDraft !== null && !String(budgetDraft).trim()) ||
-        !Number.isFinite(budgetValue) ||
-        budgetValue <= 0 ||
-        budgetValue > 1_000_000_000
-      ) {
+    case 'vibe': {
+      if (!isValidInterestList(form.interests)) {
+        errors.interests = 'interests';
+      }
+      if (budgetError(form, budgetDraft)) {
         errors.budget = 'budget';
       }
       break;
     }
 
-    case 'style': {
-      if (!Array.isArray(form.preferences) || form.preferences.length === 0) {
-        errors.preferences = 'preferences';
-      }
-      Object.assign(errors, validateDayHours(form.day_start, form.day_end));
-      break;
-    }
-
-    case 'constraints': {
+    case 'finetune': {
       if (Array.isArray(form.must_visit) && form.must_visit.length > MAX_MUST_VISIT) {
         errors.must_visit = 'must_visit';
       }
       if (Array.isArray(form.avoid_districts) && form.avoid_districts.length > MAX_AVOID_DISTRICTS) {
         errors.avoid_districts = 'avoid_districts';
       }
-      if (rawSpecialNotes(form.quick_notes, form.custom_notes).length > 500) {
+      Object.assign(errors, validateDayHours(form.day_start, form.day_end));
+      if (rawSpecialNotes(form.custom_notes).length > 500) {
         errors.special_notes = 'special_notes';
       }
       break;
     }
 
-    case 'review':
     default:
       break;
   }
@@ -138,39 +183,29 @@ export function validateStep(stepId, form, { budgetDraft = null, now = new Date(
 
 export function stepStatus(form, options = {}) {
   const status = {};
-  let allPriorComplete = true;
-
   for (const step of WIZARD_STEPS) {
-    if (step.id === 'review') {
-      status.review = allPriorComplete ? 'complete' : 'incomplete';
-      continue;
-    }
     const valid = Object.keys(validateStep(step.id, form, options)).length === 0;
     status[step.id] = valid ? 'complete' : 'incomplete';
-    if (!valid) allPriorComplete = false;
   }
-
   return status;
 }
 
+// Bước nên mở sau khi điền nhanh / áp mẫu. Đủ thông tin thì về bước "vibe" — nơi có nút tạo ngay
+// và thẻ tóm tắt bên cạnh đóng vai trò "xem lại".
 export function firstIncompleteStep(form, parsed = null, options = {}) {
   const status = stepStatus(form, options);
-  const dataSteps = WIZARD_STEPS.filter((step) => step.id !== 'review');
-
-  for (const step of dataSteps) {
+  for (const step of WIZARD_STEPS) {
     if (status[step.id] === 'incomplete') return step.id;
   }
 
   if (parsed && typeof parsed === 'object') {
-    if (!parsed.days) return 'trip';
+    if (!parsed.days) return 'when_where';
     if (!parsed.companions && !parsed.group_size && !parsed.has_children && !parsed.has_elderly) {
-      return 'group';
+      return 'who';
     }
-    if (!parsed.budget) return 'budget';
-    if (!Array.isArray(parsed.preferences) || parsed.preferences.length === 0) return 'style';
   }
 
-  return 'review';
+  return 'vibe';
 }
 
 export function findStepForErrors(errors) {
@@ -179,33 +214,39 @@ export function findStepForErrors(errors) {
   if (errorKeys.length === 0) return null;
 
   for (const step of WIZARD_STEPS) {
-    if (step.id === 'review') continue;
-    if (
-      step.fields.some((field) => errorKeys.includes(field)) ||
-      (step.id === 'constraints' && errorKeys.includes('special_notes'))
-    ) {
-      return step.id;
-    }
+    if (step.fields.some((field) => errorKeys.includes(field))) return step.id;
   }
-  return 'trip';
+  return WIZARD_STEPS[0].id;
 }
 
 export function autoAdjustments(prev, next) {
   const adjusted = { ...next };
   const notices = [];
 
-  const familyFlagTurnedOn =
+  const careFlagTurnedOn =
     (!prev?.has_children && Boolean(adjusted.has_children)) ||
-    (!prev?.has_elderly && Boolean(adjusted.has_elderly));
+    (!prev?.has_elderly && Boolean(adjusted.has_elderly)) ||
+    (prev?.mobility !== 'limited' && adjusted.mobility === 'limited');
 
-  if (familyFlagTurnedOn && adjusted.pace === 'packed') {
-    adjusted.pace = 'relaxed';
+  // Có trẻ nhỏ / người lớn tuổi / hạn chế đi bộ mà đang nhịp khám phá nhiều thì trả về tự động (thong thả).
+  if (careFlagTurnedOn && derivePace(prev) === 'packed') {
+    if (adjusted.pace_override === 'packed') adjusted.pace_override = null;
     notices.push('form.notice.paceRelaxed');
   }
 
   if (adjusted.mobility === 'limited' && adjusted.transport_mode === 'walk') {
     adjusted.transport_mode = 'grab_car';
     notices.push('form.notice.transportGrabCar');
+  } else if (!adjusted.transport_manual) {
+    const groupChanged =
+      prev?.mobility !== adjusted.mobility ||
+      Boolean(prev?.has_elderly) !== Boolean(adjusted.has_elderly) ||
+      prev?.companions !== adjusted.companions;
+    const suggested = suggestTransport(adjusted);
+    if (groupChanged && suggested && suggested !== adjusted.transport_mode) {
+      adjusted.transport_mode = suggested;
+      notices.push('form.notice.transportSuggested');
+    }
   }
 
   return { form: adjusted, notices };
@@ -215,7 +256,7 @@ export function serializeDraft({ form, step, sentence = '' }) {
   return JSON.stringify({
     version: DRAFT_VERSION,
     form,
-    step: WIZARD_STEP_IDS.includes(step) ? step : WIZARD_STEPS[0].id,
+    step: WIZARD_STEP_IDS.includes(step) || step === INTRO_STEP ? step : INTRO_STEP,
     sentence: String(sentence || '')
   });
 }
@@ -230,12 +271,15 @@ export function parseDraft(raw, fallbackStartLocation) {
     return null;
   }
 
-  if (!data || typeof data !== 'object' || data.version !== DRAFT_VERSION) return null;
+  if (!data || typeof data !== 'object') return null;
+  if (data.version !== DRAFT_VERSION && !LEGACY_DRAFT_VERSIONS.includes(data.version)) return null;
   if (!data.form || typeof data.form !== 'object' || Array.isArray(data.form)) return null;
 
   const base = defaultTripForm(fallbackStartLocation);
-  const f = data.form;
-  const step = WIZARD_STEP_IDS.includes(data.step) ? data.step : WIZARD_STEPS[0].id;
+  // Draft v1 (preferences/pace/quick_notes) và v2 (vibe_energy/vibe_spend) → chuyển sang v3 trước khi kiểm.
+  const f = LEGACY_DRAFT_VERSIONS.includes(data.version) ? migrateLegacyForm(data.form) : data.form;
+  const rawStep = data.version === 1 ? LEGACY_STEP_MAP[data.step] : data.step;
+  const step = WIZARD_STEP_IDS.includes(rawStep) || rawStep === INTRO_STEP ? rawStep : INTRO_STEP;
 
   const mustVisit = Array.isArray(f.must_visit)
     ? f.must_visit
@@ -244,6 +288,8 @@ export function parseDraft(raw, fallbackStartLocation) {
         .filter((item, idx, list) => list.findIndex((other) => other.id === item.id) === idx)
         .slice(0, MAX_MUST_VISIT)
     : [];
+
+  const interests = sanitizeInterests(f.interests);
 
   const form = {
     ...base,
@@ -266,16 +312,16 @@ export function parseDraft(raw, fallbackStartLocation) {
       f.budget_preset === null || BUDGET_PER_PERSON_PER_DAY.includes(f.budget_preset)
         ? f.budget_preset
         : null,
-    preferences: Array.isArray(f.preferences)
-      ? f.preferences.filter((pref) => preferenceOptions.includes(pref))
-      : base.preferences,
-    pace: TRIP_OPTION_VALUES.pace.includes(f.pace) ? f.pace : base.pace,
+    interests: Array.isArray(f.interests) ? interests : base.interests,
+    pace_override: TRIP_OPTION_VALUES.pace.includes(f.pace_override) ? f.pace_override : null,
+    template_pace: TRIP_OPTION_VALUES.pace.includes(f.template_pace) ? f.template_pace : null,
     day_start: typeof f.day_start === 'string' ? f.day_start : '',
     day_end: typeof f.day_end === 'string' ? f.day_end : '',
     prefer_indoor: Boolean(f.prefer_indoor),
     transport_mode: TRIP_OPTION_VALUES.transport_mode.includes(f.transport_mode)
       ? f.transport_mode
       : base.transport_mode,
+    transport_manual: Boolean(f.transport_manual),
     dietary: Array.isArray(f.dietary)
       ? f.dietary.filter((item) => FORM_DIETARY.includes(item))
       : [],
@@ -283,9 +329,6 @@ export function parseDraft(raw, fallbackStartLocation) {
       ? f.avoid_districts.filter((d) => DISTRICTS.includes(d)).slice(0, MAX_AVOID_DISTRICTS)
       : [],
     must_visit: mustVisit,
-    quick_notes: Array.isArray(f.quick_notes)
-      ? f.quick_notes.filter((note) => TRIP_OPTION_VALUES.quick_notes.includes(note))
-      : [],
     custom_notes: typeof f.custom_notes === 'string' ? f.custom_notes : ''
   };
 
