@@ -24,8 +24,6 @@ async def test_estimate_transit_walkable_route(client: AsyncClient) -> None:
             "origin_lng": 106.6953,
             "dest_lat": 10.7798,
             "dest_lng": 106.6990,
-            "dest_name": "Nhà thờ Đức Bà",
-            "dest_address": "01 Công xã Paris, Quận 1",
         },
     )
     assert response.status_code == 200
@@ -34,16 +32,17 @@ async def test_estimate_transit_walkable_route(client: AsyncClient) -> None:
     assert 0 < data["distance_km"] <= 0.8
     assert data["estimated_fare_vnd"] == 0
     assert data["duration_min"] >= 2
+    assert f"{data['duration_min']} min" in data["label"]
     assert len(data["fares"]) == 6
     assert len(data["providers"]) == 3
     for provider in data["providers"]:
-        assert provider["deep_link"]
+        assert "deep_link" not in provider
         assert provider["duration_min"] > 0
 
 
 @pytest.mark.integration
 async def test_estimate_transit_ride_with_rush_hour_and_rain(client: AsyncClient) -> None:
-    """Cross-city route in rush hour & rain includes +20m buffer and covered car list."""
+    """Cross-city route in rush hour & rain syncs duration_min and label (+20 min)."""
     base_resp = await client.post(
         "/api/v1/transit/estimate",
         json={
@@ -51,7 +50,6 @@ async def test_estimate_transit_ride_with_rush_hour_and_rain(client: AsyncClient
             "origin_lng": 106.6980,
             "dest_lat": 10.7495,
             "dest_lng": 106.6510,
-            "dest_name": "Chợ Bình Tây",
             "current_time": "14:00",
             "is_raining": False,
         },
@@ -62,6 +60,7 @@ async def test_estimate_transit_ride_with_rush_hour_and_rain(client: AsyncClient
     assert base["distance_km"] > 6.0
     assert base["is_rush_hour"] is False
     assert base["is_rain_mode"] is False
+    assert f"{base['duration_min']} min ride" in base["label"]
 
     rush_rain_resp = await client.post(
         "/api/v1/transit/estimate",
@@ -70,7 +69,6 @@ async def test_estimate_transit_ride_with_rush_hour_and_rain(client: AsyncClient
             "origin_lng": 106.6980,
             "dest_lat": 10.7495,
             "dest_lng": 106.6510,
-            "dest_name": "Chợ Bình Tây",
             "current_time": "17:30",
             "is_raining": True,
         },
@@ -80,13 +78,29 @@ async def test_estimate_transit_ride_with_rush_hour_and_rain(client: AsyncClient
     assert rush_rain["is_rush_hour"] is True
     assert rush_rain["is_rain_mode"] is True
     assert rush_rain["duration_min"] == base["duration_min"] + 20
+    assert f"{rush_rain['duration_min']} min ride" in rush_rain["label"]
     assert "GrabCar" in rush_rain["recommended_vehicles"]
 
 
 @pytest.mark.integration
-async def test_estimate_transit_rejects_invalid_coordinates(client: AsyncClient) -> None:
-    """Out-of-range coordinates fail Pydantic validation with HTTP 422."""
-    response = await client.post(
+async def test_estimate_transit_rejects_outside_hcmc_and_invalid_coords(
+    client: AsyncClient,
+) -> None:
+    """Coordinates outside HCMC bounding box or physical limits return HTTP 422."""
+    # Hanoi coordinates — valid GPS, but outside HCMC bounding box
+    outside_resp = await client.post(
+        "/api/v1/transit/estimate",
+        json={
+            "origin_lat": 21.0285,
+            "origin_lng": 105.8542,
+            "dest_lat": 10.7798,
+            "dest_lng": 106.6990,
+        },
+    )
+    assert outside_resp.status_code == 422
+
+    # Physically invalid latitude
+    invalid_resp = await client.post(
         "/api/v1/transit/estimate",
         json={
             "origin_lat": 120.0,
@@ -95,31 +109,93 @@ async def test_estimate_transit_rejects_invalid_coordinates(client: AsyncClient)
             "dest_lng": 106.6990,
         },
     )
-    assert response.status_code == 422
+    assert invalid_resp.status_code == 422
 
 
 @pytest.mark.integration
-async def test_adapt_itinerary_rain_swaps_outdoor_with_db_indoor_place(
+async def test_adapt_itinerary_validation_rejects_bad_types_and_too_many_items(
+    client: AsyncClient,
+) -> None:
+    """Malformed transit fields and oversized item lists fail cleanly with HTTP 422."""
+    bad_type_resp = await client.post(
+        "/api/v1/transit/adapt",
+        json={
+            "is_traffic": True,
+            "items": [
+                {
+                    "day_number": 1,
+                    "place_name": "Dinh Độc Lập",
+                    "transit_info": {"duration_min": "abc"},
+                }
+            ],
+        },
+    )
+    assert bad_type_resp.status_code == 422
+
+    too_many_resp = await client.post(
+        "/api/v1/transit/adapt",
+        json={
+            "items": [{"day_number": 1, "place_name": f"Stop {i}"} for i in range(61)],
+        },
+    )
+    assert too_many_resp.status_code == 422
+
+
+@pytest.mark.integration
+async def test_adapt_itinerary_rain_prefers_same_district_and_category_and_restores_exact_fare(
     client: AsyncClient,
     test_database: tuple[Any, async_sessionmaker[AsyncSession]],
 ) -> None:
-    """Rain scenario replaces outdoor place with same-district indoor Place from DB."""
+    """
+    Rain mode:
+    - Prefers same-district + same-category indoor Place.
+    - Does NOT jump to another district when target district has no indoor place.
+    - Recalculates transit_info for replaced leg and restores exact original fare on off.
+    """
     _, session_factory = test_database
     async with session_factory() as session:
-        session.add(
-            Place(
-                id="indoor-museum-q1",
-                name="Bảo tàng Mỹ thuật TP.HCM",
-                address="97A Phó Đức Chính, Quận 1",
-                district="Quận 1",
-                latitude=10.7698,
-                longitude=106.6995,
-                category="culture",
-                is_indoor=True,
-                entry_fee_vnd=30000,
-                average_rating=4.8,
-                is_active=True,
-            )
+        session.add_all(
+            [
+                Place(
+                    id="q1-food-indoor",
+                    name="Tiệm Bánh Mì Q1",
+                    address="12 Lê Lợi, Quận 1",
+                    district="Quận 1",
+                    latitude=10.7730,
+                    longitude=106.7000,
+                    category="food",
+                    is_indoor=True,
+                    entry_fee_vnd=45000,
+                    average_rating=4.9,
+                    is_active=True,
+                ),
+                Place(
+                    id="q1-culture-indoor",
+                    name="Bảo tàng Mỹ thuật TP.HCM",
+                    address="97A Phó Đức Chính, Quận 1",
+                    district="Quận 1",
+                    latitude=10.7698,
+                    longitude=106.6995,
+                    category="culture",
+                    is_indoor=True,
+                    entry_fee_vnd=30000,
+                    average_rating=4.7,
+                    is_active=True,
+                ),
+                Place(
+                    id="q3-culture-indoor",
+                    name="Bảo tàng Chứng tích Chiến tranh",
+                    address="28 Võ Văn Tần, Quận 3",
+                    district="Quận 3",
+                    latitude=10.7795,
+                    longitude=106.6921,
+                    category="culture",
+                    is_indoor=True,
+                    entry_fee_vnd=40000,
+                    average_rating=4.8,
+                    is_active=True,
+                ),
+            ]
         )
         await session.commit()
 
@@ -132,19 +208,57 @@ async def test_adapt_itinerary_rain_swaps_outdoor_with_db_indoor_place(
             {
                 "day_number": 1,
                 "order_index": 1,
+                "place_id": "start-dinh",
+                "place_name": "Dinh Độc Lập",
+                "district": "Quận 1",
+                "latitude": 10.7769,
+                "longitude": 106.6953,
+                "category": "culture",
+                "is_indoor": True,
+                "visited": False,
+            },
+            {
+                "day_number": 1,
+                "order_index": 2,
                 "place_id": "outdoor-street-q1",
                 "place_name": "Phố đi bộ Nguyễn Huệ",
                 "district": "Quận 1",
+                "latitude": 10.7743,
+                "longitude": 106.7037,
+                "category": "culture",
                 "is_indoor": False,
                 "visited": False,
                 "transit_info": {
                     "mode": "grab_bike",
-                    "duration_min": 12,
+                    "distance_km": 1.2,
+                    "duration_min": 8,
                     "estimated_fare_vnd": 20000,
+                    "label": "🚕 8 min ride (~₫20,000)",
                     "is_rain_mode": False,
                     "is_rush_hour": False,
                 },
-            }
+            },
+            {
+                "day_number": 1,
+                "order_index": 3,
+                "place_id": "outdoor-cangio",
+                "place_name": "Rừng Sác Cần Giờ",
+                "district": "Cần Giờ",
+                "latitude": 10.4833,
+                "longitude": 106.8667,
+                "category": "nature",
+                "is_indoor": False,
+                "visited": False,
+                "transit_info": {
+                    "mode": "grab_bike",
+                    "distance_km": 42.0,
+                    "duration_min": 90,
+                    "estimated_fare_vnd": 20000,
+                    "label": "🚕 90 min ride (~₫20,000)",
+                    "is_rain_mode": False,
+                    "is_rush_hour": False,
+                },
+            },
         ],
     }
 
@@ -152,28 +266,56 @@ async def test_adapt_itinerary_rain_swaps_outdoor_with_db_indoor_place(
     assert resp1.status_code == 200
     data1 = resp1.json()
     assert data1["is_raining"] is True
+
+    # Only Q1 stop replaced, and it chose culture (Bảo tàng Mỹ thuật) over higher-rated food
     assert len(data1["replaced_stops"]) == 1
     assert data1["replaced_stops"][0]["replacement_place_name"] == "Bảo tàng Mỹ thuật TP.HCM"
 
-    updated_item = data1["items"][0]
-    assert updated_item["is_indoor"] is True
-    assert updated_item["place_name"] == "Bảo tàng Mỹ thuật TP.HCM"
-    assert updated_item["transit_info"]["mode"] == "grab_car"
-    assert updated_item["transit_info"]["is_rain_mode"] is True
-    assert updated_item["transit_info"]["estimated_fare_vnd"] == 35000
+    swapped_stop = data1["items"][1]
+    assert swapped_stop["place_name"] == "Bảo tàng Mỹ thuật TP.HCM"
+    assert swapped_stop["transit_info"]["mode"] == "grab_car"
+    assert swapped_stop["transit_info"]["is_rain_mode"] is True
+    assert swapped_stop["transit_info"]["estimated_fare_vnd"] == 35000
 
-    # Calling again must be idempotent on transit fare
-    resp2 = await client.post(
-        "/api/v1/transit/adapt",
-        json={**payload, "items": data1["items"]},
-    )
+    # Cần Giờ stop kept in Cần Giờ (did NOT jump to Quận 3), leg recalculated & switched to car
+    cangio_stop = data1["items"][2]
+    assert cangio_stop["place_name"] == "Rừng Sác Cần Giờ"
+    assert cangio_stop["district"] == "Cần Giờ"
+    assert cangio_stop["transit_info"]["is_rain_mode"] is True
+    cangio_original_fare = cangio_stop["transit_info"]["original_fare_vnd"]
+    expected_cangio_rain_fare = max(35000, round(cangio_original_fare * 1.5))
+    assert cangio_original_fare > 20000
+    assert cangio_stop["transit_info"]["estimated_fare_vnd"] == expected_cangio_rain_fare
+
+    # Calling again is idempotent
+    resp2 = await client.post("/api/v1/transit/adapt", json={**payload, "items": data1["items"]})
     assert resp2.status_code == 200
-    assert resp2.json()["items"][0]["transit_info"]["estimated_fare_vnd"] == 35000
+    assert (
+        resp2.json()["items"][2]["transit_info"]["estimated_fare_vnd"] == expected_cangio_rain_fare
+    )
+
+    # Disabling rain restores exact original fare (no / 1.5 rounding drift)
+    off_resp = await client.post(
+        "/api/v1/transit/adapt",
+        json={
+            "day_number": 1,
+            "is_raining": False,
+            "is_traffic": False,
+            "items": resp2.json()["items"],
+        },
+    )
+    assert off_resp.status_code == 200
+    restored = off_resp.json()["items"][2]["transit_info"]
+    assert restored["is_rain_mode"] is False
+    assert restored["mode"] == "ride"
+    assert restored["estimated_fare_vnd"] == cangio_original_fare
 
 
 @pytest.mark.integration
-async def test_adapt_itinerary_traffic_toggle_on_and_off(client: AsyncClient) -> None:
-    """Rush-hour toggle adds +20 min once (idempotent) and reverts -20 min when disabled."""
+async def test_adapt_itinerary_traffic_applies_even_with_offpeak_current_time(
+    client: AsyncClient,
+) -> None:
+    """`is_traffic: true` adds +20 min and syncs label even if `current_time` is '14:00'."""
     base_items = [
         {
             "day_number": 1,
@@ -183,8 +325,10 @@ async def test_adapt_itinerary_traffic_toggle_on_and_off(client: AsyncClient) ->
             "is_indoor": True,
             "transit_info": {
                 "mode": "grab_bike",
+                "distance_km": 2.5,
                 "duration_min": 15,
                 "estimated_fare_vnd": 25000,
+                "label": "🚕 15 min ride (~₫25,000)",
                 "is_rain_mode": False,
                 "is_rush_hour": False,
             },
@@ -193,18 +337,29 @@ async def test_adapt_itinerary_traffic_toggle_on_and_off(client: AsyncClient) ->
 
     on_resp = await client.post(
         "/api/v1/transit/adapt",
-        json={"day_number": 1, "is_traffic": True, "items": base_items},
+        json={
+            "day_number": 1,
+            "is_traffic": True,
+            "current_time": "14:00",
+            "items": base_items,
+        },
     )
     assert on_resp.status_code == 200
     on_data = on_resp.json()
     assert on_data["is_rush_hour"] is True
     assert on_data["items"][0]["transit_info"]["duration_min"] == 35
     assert on_data["items"][0]["transit_info"]["is_rush_hour"] is True
+    assert "35 min ride" in on_data["items"][0]["transit_info"]["label"]
 
     # Idempotent second call
     on_again = await client.post(
         "/api/v1/transit/adapt",
-        json={"day_number": 1, "is_traffic": True, "items": on_data["items"]},
+        json={
+            "day_number": 1,
+            "is_traffic": True,
+            "current_time": "14:00",
+            "items": on_data["items"],
+        },
     )
     assert on_again.status_code == 200
     assert on_again.json()["items"][0]["transit_info"]["duration_min"] == 35
@@ -217,4 +372,5 @@ async def test_adapt_itinerary_traffic_toggle_on_and_off(client: AsyncClient) ->
     assert off_resp.status_code == 200
     assert off_resp.json()["is_rush_hour"] is False
     assert off_resp.json()["items"][0]["transit_info"]["duration_min"] == 15
+    assert "15 min ride" in off_resp.json()["items"][0]["transit_info"]["label"]
     assert off_resp.json()["items"][0]["transit_info"]["is_rush_hour"] is False

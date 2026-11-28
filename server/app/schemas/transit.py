@@ -7,20 +7,44 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.utils.transit_calculator import VehicleFare
+
+# Bounding box địa lý TP. Hồ Chí Minh (bao gồm nội thành đến Cần Giờ / Củ Chi)
+HCMC_LAT_MIN: float = 10.35
+HCMC_LAT_MAX: float = 11.20
+HCMC_LNG_MIN: float = 106.35
+HCMC_LNG_MAX: float = 107.05
 
 
 class TransitEstimateRequest(BaseModel):
     """Input payload for estimating route distance, duration, and 3-brand ride fares."""
 
-    origin_lat: float = Field(..., ge=-90.0, le=90.0, description="Vĩ độ điểm xuất phát")
-    origin_lng: float = Field(..., ge=-180.0, le=180.0, description="Kinh độ điểm xuất phát")
-    dest_lat: float = Field(..., ge=-90.0, le=90.0, description="Vĩ độ điểm đến")
-    dest_lng: float = Field(..., ge=-180.0, le=180.0, description="Kinh độ điểm đến")
-    dest_name: str | None = Field(default="Điểm đến TP.HCM", description="Tên điểm đến")
-    dest_address: str | None = Field(default="TP. Hồ Chí Minh", description="Địa chỉ điểm đến")
+    origin_lat: float = Field(
+        ...,
+        ge=HCMC_LAT_MIN,
+        le=HCMC_LAT_MAX,
+        description="Vĩ độ điểm xuất phát (trong phạm vi TP.HCM)",
+    )
+    origin_lng: float = Field(
+        ...,
+        ge=HCMC_LNG_MIN,
+        le=HCMC_LNG_MAX,
+        description="Kinh độ điểm xuất phát (trong phạm vi TP.HCM)",
+    )
+    dest_lat: float = Field(
+        ...,
+        ge=HCMC_LAT_MIN,
+        le=HCMC_LAT_MAX,
+        description="Vĩ độ điểm đến (trong phạm vi TP.HCM)",
+    )
+    dest_lng: float = Field(
+        ...,
+        ge=HCMC_LNG_MIN,
+        le=HCMC_LNG_MAX,
+        description="Kinh độ điểm đến (trong phạm vi TP.HCM)",
+    )
     is_raining: bool = Field(default=False, description="Có đang mưa không")
     current_time: str | None = Field(
         default=None,
@@ -30,7 +54,7 @@ class TransitEstimateRequest(BaseModel):
 
 
 class ProviderEstimate(BaseModel):
-    """Grouped transit estimate for a single ride-hailing provider."""
+    """Grouped transit estimate for a single ride-hailing provider (estimated)."""
 
     id: str = Field(description="Mã hãng xe: grab, xanhsm, be")
     name: str = Field(description="Tên hiển thị của hãng xe")
@@ -41,8 +65,6 @@ class ProviderEstimate(BaseModel):
     car_fare_vnd: int = Field(ge=0, description="Giá cước ô tô ước tính (VND)")
     car_duration_min: int = Field(ge=0, description="Thời gian dự kiến đi ô tô (phút)")
     duration_min: int = Field(ge=0, description="Thời gian dự kiến đại diện (phút)")
-    deep_link: str = Field(description="Deep link mở ứng dụng gọi xe")
-    web_fallback_url: str = Field(description="URL dự phòng khi không mở được app trên desktop")
 
 
 class TransitEstimateResponse(BaseModel):
@@ -65,15 +87,53 @@ class TransitEstimateResponse(BaseModel):
     fares: list[VehicleFare] = Field(default_factory=list, description="Danh sách 6 lựa chọn xe")
     providers: list[ProviderEstimate] = Field(
         default_factory=list,
-        description="Danh sách 3 hãng xe kèm deep link",
+        description="Danh sách 3 hãng xe với giá ước tính",
     )
+
+
+class AdaptTransitInfo(BaseModel):
+    """Typed transit segment nested inside an itinerary stop."""
+
+    model_config = ConfigDict(extra="allow")
+
+    mode: str | None = Field(default=None, description="Phương tiện di chuyển")
+    distance_km: float | None = Field(default=None, ge=0, description="Quãng đường (km)")
+    duration_min: int | None = Field(default=None, ge=0, description="Thời gian di chuyển (phút)")
+    estimated_fare_vnd: int | None = Field(default=None, ge=0, description="Cước ước tính (VND)")
+    original_fare_vnd: int | None = Field(default=None, ge=0, description="Cước gốc trước khi mưa")
+    original_mode: str | None = Field(default=None, description="Phương tiện gốc trước khi mưa")
+    is_rain_mode: bool = Field(default=False, description="Trạng thái chế độ trời mưa")
+    is_rush_hour: bool = Field(default=False, description="Trạng thái chế độ giờ cao điểm")
+    label: str | None = Field(default=None, description="Nhãn hiển thị chặng di chuyển")
+
+
+class AdaptItineraryItem(BaseModel):
+    """Typed itinerary stop accepted by POST /api/v1/transit/adapt."""
+
+    model_config = ConfigDict(extra="allow")
+
+    day_number: int | None = Field(default=None, ge=1, description="Ngày thứ mấy của lịch trình")
+    order_index: int | None = Field(default=None, ge=0, description="Thứ tự điểm dừng trong ngày")
+    place_id: str | None = None
+    place_name: str | None = None
+    address: str | None = None
+    district: str | None = None
+    latitude: float | None = Field(default=None, ge=-90.0, le=90.0)
+    longitude: float | None = Field(default=None, ge=-180.0, le=180.0)
+    category: str | None = None
+    is_indoor: bool = False
+    visited: bool = False
+    estimated_cost: int | None = Field(default=None, ge=0)
+    transit_info: AdaptTransitInfo | None = None
 
 
 class TransitAdaptRequest(BaseModel):
     """Input payload for adapting itinerary stops and transit under rain / rush hour."""
 
-    items: list[dict[str, Any]] = Field(
-        default_factory=list, description="Danh sách chặng lịch trình"
+    items: list[AdaptItineraryItem] = Field(
+        default_factory=list,
+        max_length=60,
+        description="Danh sách chặng lịch trình (tối đa 60 chặng)",
     )
     day_number: int | None = Field(
         default=None, ge=1, description="Chỉ áp dụng cho ngày cụ thể nếu truyền"
