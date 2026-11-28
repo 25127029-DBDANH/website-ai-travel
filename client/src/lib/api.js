@@ -1717,13 +1717,12 @@ export function generateIcsContent(trip, items) {
   return lines.join('\r\n');
 }
 
-export function downloadIcsFile(trip, items) {
-  const icsText = generateIcsContent(trip, items);
+function triggerBrowserIcsDownload(icsText, tripId) {
   const blob = new Blob([icsText], { type: 'text/calendar;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.setAttribute('download', `lich-trinh-saigon-${trip?.id || 'chuyen-di'}.ics`);
+  anchor.setAttribute('download', `lich-trinh-saigon-${tripId || 'chuyen-di'}.ics`);
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
@@ -1748,6 +1747,59 @@ export function normalizeMatchCount(data) {
       photo_url: typeof item.photo_url === 'string' && item.photo_url ? item.photo_url : null
     }));
   return { count, samples };
+}
+
+export async function downloadIcsFile(trip, items) {
+  const tripId = trip?.id ? String(trip.id) : 'chuyen-di';
+  const safeItems = Array.isArray(items) ? items : [];
+
+  if (isBackendEnabled() && typeof fetch === 'function') {
+    try {
+      const headers = {};
+      const token = getAuthToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      let res;
+      if (safeItems.length > 0) {
+        headers['Content-Type'] = 'application/json';
+        res = await fetch(`${API_BASE}/api/v1/calendar/export-ics`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            id: tripId,
+            title: trip?.title || 'Chuyến đi Sài Gòn',
+            items: safeItems.map((it) => ({
+              place_name: String(it.place_name || 'Điểm tham quan'),
+              day_number: Math.max(1, Number(it.day_number) || 1),
+              start_time: String(it.start_time || '09:00'),
+              end_time: String(it.end_time || '11:00'),
+              address: it.address || null,
+              description: it.description || null,
+              estimated_cost: Math.max(0, Math.round(Number(it.estimated_cost) || 0)),
+              is_indoor: Boolean(it.is_indoor)
+            }))
+          })
+        });
+      } else if (trip?.id) {
+        res = await fetch(`${API_BASE}/api/v1/calendar/ics/${encodeURIComponent(tripId)}`, {
+          method: 'GET',
+          headers
+        });
+      }
+
+      if (res && res.ok) {
+        const icsText = await res.text();
+        triggerBrowserIcsDownload(icsText, trip?.id);
+        return { source: 'backend', icsText };
+      }
+    } catch {
+      // Fallback to browser-side ICS generation when backend is unreachable
+    }
+  }
+
+  const icsText = generateIcsContent(trip, safeItems);
+  triggerBrowserIcsDownload(icsText, trip?.id);
+  return { source: 'local', icsText };
 }
 
 export const api = {
@@ -2282,39 +2334,171 @@ export const api = {
     });
   },
 
+  // Ước tính cước 3 hãng xe (Grab / Xanh SM / Be) từ Backend (giá ước tính)
+  estimateTransit: async ({
+    originLat,
+    originLng,
+    destLat,
+    destLng,
+    isRaining = false,
+    currentTime = null
+  } = {}) => {
+    if (isBackendEnabled()) {
+      return request('POST', '/api/v1/transit/estimate', {
+        origin_lat: Number(originLat),
+        origin_lng: Number(originLng),
+        dest_lat: Number(destLat),
+        dest_lng: Number(destLng),
+        is_raining: Boolean(isRaining),
+        ...(currentTime ? { current_time: currentTime } : {})
+      });
+    }
+
+    const toRad = (deg) => (Number(deg) * Math.PI) / 180;
+    const dLat = toRad(Number(destLat) - Number(originLat));
+    const dLng = toRad(Number(destLng) - Number(originLng));
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(originLat)) * Math.cos(toRad(destLat)) * Math.sin(dLng / 2) ** 2;
+    const straightKm = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(Math.max(0, 1 - a)));
+    const roadKm = Math.round(straightKm * 1.3 * 100) / 100;
+    const durationMin =
+      roadKm <= 0.8
+        ? Math.max(2, Math.round((roadKm / 5) * 60))
+        : Math.max(5, Math.round((roadKm / 20) * 60));
+    const extra = Math.max(0, roadKm - 2);
+
+    return {
+      mode: roadKm <= 0.8 ? 'walk' : 'ride',
+      straight_distance_km: Math.round(straightKm * 1000) / 1000,
+      distance_km: roadKm,
+      duration_min: durationMin,
+      estimated_fare_vnd: roadKm <= 0.8 ? 0 : Math.ceil((18000 + extra * 5500) / 5000) * 5000,
+      is_rush_hour: false,
+      is_rain_mode: Boolean(isRaining),
+      providers: [
+        {
+          id: 'grab',
+          name: 'Grab',
+          bike_type: 'GrabBike',
+          bike_fare_vnd: Math.round(13800 + extra * 4800),
+          bike_duration_min: Math.max(5, Math.round((roadKm / 22) * 60)),
+          car_type: 'GrabCar',
+          car_fare_vnd: Math.round(29000 + extra * 11000),
+          car_duration_min: Math.max(5, Math.round((roadKm / 18) * 60)),
+          duration_min: durationMin
+        },
+        {
+          id: 'xanhsm',
+          name: 'Xanh SM',
+          bike_type: 'Bike điện',
+          bike_fare_vnd: Math.round(14000 + extra * 4800),
+          bike_duration_min: Math.max(5, Math.round((roadKm / 22) * 60)),
+          car_type: 'Taxi điện',
+          car_fare_vnd: Math.round(25000 + extra * 12500),
+          car_duration_min: Math.max(5, Math.round((roadKm / 18) * 60)),
+          duration_min: durationMin
+        },
+        {
+          id: 'be',
+          name: 'Be',
+          bike_type: 'BeBike',
+          bike_fare_vnd: Math.round(13000 + extra * 4500),
+          bike_duration_min: Math.max(5, Math.round((roadKm / 22) * 60)),
+          car_type: 'BeCar',
+          car_fare_vnd: Math.round(27000 + extra * 10500),
+          car_duration_min: Math.max(5, Math.round((roadKm / 18) * 60)),
+          duration_min: durationMin
+        }
+      ]
+    };
+  },
+
+  // Gọi API thích ứng kịch bản Trời mưa / Giờ cao điểm
+  adaptTransit: async ({
+    items = [],
+    dayNumber = null,
+    isRaining = false,
+    isTraffic = false,
+    currentTime = null,
+    replaceOutdoor = true,
+    defaultTransportMode = 'grab_bike'
+  } = {}) => {
+    return request('POST', '/api/v1/transit/adapt', {
+      items,
+      ...(dayNumber != null ? { day_number: Number(dayNumber) } : {}),
+      is_raining: Boolean(isRaining),
+      is_traffic: Boolean(isTraffic),
+      ...(currentTime ? { current_time: currentTime } : {}),
+      replace_outdoor: Boolean(replaceOutdoor),
+      default_transport_mode: defaultTransportMode
+    });
+  },
+
   // Áp dụng Kịch bản Trời mưa (Rain Mode) cho 1 ngày
   applyRainMode: async (tripId, dayNumber, enableRain) => {
     const data = await getBackendTrip(tripId);
     const trip = data.trip;
     let items = data.itinerary_items || [];
+    const targetDay = Number(dayNumber);
+
+    if (isBackendEnabled()) {
+      const hasRushHour = items.some(
+        (it) => it.day_number === targetDay && it.transit_info?.is_rush_hour
+      );
+      try {
+        const adapted = await api.adaptTransit({
+          items,
+          dayNumber: targetDay,
+          isRaining: Boolean(enableRain),
+          isTraffic: hasRushHour,
+          replaceOutdoor: Boolean(enableRain),
+          defaultTransportMode: trip?.transport_mode || 'grab_bike'
+        });
+        if (Array.isArray(adapted?.items)) {
+          return saveBackendItems(tripId, adapted.items);
+        }
+      } catch {
+        // Fallback to local rule adjustment if backend adapt endpoint fails
+      }
+    }
 
     items = items.map((item) => {
-      if (item.day_number !== Number(dayNumber)) return item;
+      if (item.day_number !== targetDay) return item;
 
       if (enableRain) {
-        let updated = { ...item };
-        // Đổi transit sang xe ô tô GrabCar có mái che
+        const updated = { ...item };
+        // Đổi transit sang xe ô tô GrabCar có mái che (lưu giá gốc để khôi phục chính xác)
         if (updated.transit_info) {
-          updated.transit_info = {
-            ...updated.transit_info,
-            mode: 'grab_car',
-            is_rain_mode: true,
-            estimated_fare_vnd: Math.max(35000, Math.round((updated.transit_info.estimated_fare_vnd || 18000) * 1.5))
-          };
+          const baseFare = Number(updated.transit_info.estimated_fare_vnd ?? 18000);
+          updated.transit_info = updated.transit_info.is_rain_mode
+            ? { ...updated.transit_info, mode: 'grab_car', is_rain_mode: true }
+            : {
+                ...updated.transit_info,
+                original_fare_vnd: baseFare,
+                original_mode: updated.transit_info.mode || trip?.transport_mode || 'grab_bike',
+                mode: 'grab_car',
+                is_rain_mode: true,
+                estimated_fare_vnd: Math.max(35000, Math.round(baseFare * 1.5))
+              };
         }
         return updated;
-      } else {
-        if (item.transit_info && item.transit_info.is_rain_mode) {
-          return {
-            ...item,
-            transit_info: {
-              ...item.transit_info,
-              mode: trip.transport_mode || 'grab_bike',
-              is_rain_mode: false,
-              estimated_fare_vnd: Math.round(item.transit_info.estimated_fare_vnd / 1.5)
-            }
-          };
-        }
+      }
+      if (item.transit_info && item.transit_info.is_rain_mode) {
+        const { original_fare_vnd: origFare, original_mode: origMode, ...restTransit } =
+          item.transit_info;
+        return {
+          ...item,
+          transit_info: {
+            ...restTransit,
+            mode: origMode || trip?.transport_mode || 'grab_bike',
+            is_rain_mode: false,
+            estimated_fare_vnd:
+              origFare != null
+                ? Number(origFare)
+                : Number(item.transit_info.estimated_fare_vnd ?? 0)
+          }
+        };
       }
       return item;
     });
@@ -2325,10 +2509,33 @@ export const api = {
   // Áp dụng Kịch bản Giờ cao điểm (Rush-Hour Mode) cho 1 ngày
   applyTrafficMode: async (tripId, dayNumber, enableTraffic) => {
     const data = await getBackendTrip(tripId);
+    const trip = data.trip;
     let items = data.itinerary_items || [];
+    const targetDay = Number(dayNumber);
+
+    if (isBackendEnabled()) {
+      const hasRainMode = items.some(
+        (it) => it.day_number === targetDay && it.transit_info?.is_rain_mode
+      );
+      try {
+        const adapted = await api.adaptTransit({
+          items,
+          dayNumber: targetDay,
+          isRaining: hasRainMode,
+          isTraffic: Boolean(enableTraffic),
+          replaceOutdoor: false,
+          defaultTransportMode: trip?.transport_mode || 'grab_bike'
+        });
+        if (Array.isArray(adapted?.items)) {
+          return saveBackendItems(tripId, adapted.items);
+        }
+      } catch {
+        // Fallback to local rule adjustment if backend adapt endpoint fails
+      }
+    }
 
     items = items.map((item) => {
-      if (item.day_number !== Number(dayNumber)) return item;
+      if (item.day_number !== targetDay) return item;
 
       if (enableTraffic && item.transit_info && !item.transit_info.is_rush_hour) {
         // Tăng thêm 20 phút kẹt xe vào thời gian di chuyển

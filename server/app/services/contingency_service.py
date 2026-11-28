@@ -126,11 +126,13 @@ def adapt_transit_info(
 
     # Rain mode
     if is_raining:
-        adapted["mode"] = RAIN_DEFAULT_MODE
-        # Idempotent: chỉ nhân phụ phí 1.5x nếu chưa ở trạng thái rain mode
+        # Idempotent: lưu giá & mode gốc trước khi chuyển sang xe có mái che + nhân 1.5x
         if not adapted.get("is_rain_mode", False):
             original_fare = int(adapted.get("estimated_fare_vnd", 20000))
+            adapted["original_fare_vnd"] = original_fare
+            adapted["original_mode"] = str(adapted.get("mode") or "grab_bike")
             adapted["estimated_fare_vnd"] = max(35000, round(original_fare * 1.5))
+        adapted["mode"] = RAIN_DEFAULT_MODE
         adapted["is_rain_mode"] = True
     else:
         adapted["is_rain_mode"] = False

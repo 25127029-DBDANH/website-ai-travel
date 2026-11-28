@@ -10,6 +10,7 @@ from app.utils.transit_calculator import (
     VehicleFare,
     VehiclePricing,
     calculate_single_fare,
+    calculate_transit,
     estimate_ride_fares,
     haversine_km,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "VehicleFare",
     "VehiclePricing",
     "calculate_single_fare",
+    "calculate_transit",
     "estimate_ride_fares",
     "haversine_km",
 ]

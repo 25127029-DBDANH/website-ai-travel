@@ -186,9 +186,31 @@ export default function ItineraryPanel({
   const { lang, t } = useI18n();
   const openPlace = useOpenPlace();
   const { syncStopItems } = usePlaceDrawer();
+  const adaptiveStorageKey = trip?.id ? `saigon-guide-adaptive-${trip.id}` : null;
+  const readAdaptiveState = useCallback(() => {
+    if (adaptiveStorageKey && typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem(adaptiveStorageKey);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return {
+            rainMode: Boolean(parsed?.rainMode),
+            trafficMode: Boolean(parsed?.trafficMode)
+          };
+        }
+      } catch {
+        // Ignore storage errors
+      }
+    }
+    return {
+      rainMode: items.some((it) => Boolean(it.transit_info?.is_rain_mode)),
+      trafficMode: items.some((it) => Boolean(it.transit_info?.is_rush_hour))
+    };
+  }, [adaptiveStorageKey, items]);
+
   const [focusRequest, setFocusRequest] = useState(null);
-  const [rainMode, setRainMode] = useState(false);
-  const [trafficMode, setTrafficMode] = useState(false);
+  const [rainMode, setRainMode] = useState(() => readAdaptiveState().rainMode);
+  const [trafficMode, setTrafficMode] = useState(() => readAdaptiveState().trafficMode);
   const [showRainModal, setShowRainModal] = useState(false);
   const [showTrafficModal, setShowTrafficModal] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
@@ -308,9 +330,31 @@ export default function ItineraryPanel({
     return acts + trans;
   }, [dayItems, memberCount]);
 
+  const saveAdaptiveState = useCallback(
+    (nextRain, nextTraffic) => {
+      if (!adaptiveStorageKey || typeof window === 'undefined') return;
+      try {
+        window.localStorage.setItem(
+          adaptiveStorageKey,
+          JSON.stringify({ rainMode: Boolean(nextRain), trafficMode: Boolean(nextTraffic) })
+        );
+      } catch {
+        // Ignore storage errors
+      }
+    },
+    [adaptiveStorageKey]
+  );
+
+  useEffect(() => {
+    const stored = readAdaptiveState();
+    setRainMode(stored.rainMode);
+    setTrafficMode(stored.trafficMode);
+  }, [adaptiveStorageKey]);
+
   const handleToggleRainMode = () => {
     if (rainMode) {
       setRainMode(false);
+      saveAdaptiveState(false, trafficMode);
       if (onToggleRain) onToggleRain(activeDay, false);
     } else {
       setShowRainModal(true);
@@ -320,22 +364,27 @@ export default function ItineraryPanel({
   const handleKeepOriginalRain = () => {
     setShowRainModal(false);
     setRainMode(true);
+    saveAdaptiveState(true, trafficMode);
     if (onToggleRain) onToggleRain(activeDay, true);
   };
 
-  const handleSelectRainAlternative = (alt) => {
+  const handleSelectRainAlternative = async (alt) => {
     setShowRainModal(false);
     const targetOutdoor = dayItems.find((it) => !it.is_indoor) || dayItems[0];
     if (targetOutdoor && onSwap) {
-      onSwap(targetOutdoor, alt);
+      await onSwap(targetOutdoor, alt);
     }
     setRainMode(true);
-    if (onToggleRain) onToggleRain(activeDay, true);
+    saveAdaptiveState(true, trafficMode);
+    if (onToggleRain) {
+      await onToggleRain(activeDay, true);
+    }
   };
 
   const handleToggleTrafficMode = () => {
     if (trafficMode) {
       setTrafficMode(false);
+      saveAdaptiveState(rainMode, false);
       if (onToggleTraffic) onToggleTraffic(activeDay, false);
     } else {
       setShowTrafficModal(true);
@@ -345,6 +394,7 @@ export default function ItineraryPanel({
   const handleKeepOriginalTraffic = () => {
     setShowTrafficModal(false);
     setTrafficMode(true);
+    saveAdaptiveState(rainMode, true);
     if (onToggleTraffic) onToggleTraffic(activeDay, true);
   };
 
@@ -371,8 +421,8 @@ export default function ItineraryPanel({
     }
   };
 
-  const handleTriggerIcsDownload = () => {
-    downloadIcsFile(trip, items);
+  const handleTriggerIcsDownload = async () => {
+    await downloadIcsFile(trip, items);
     setCalendarSyncSuccess(true);
   };
 
@@ -688,6 +738,16 @@ export default function ItineraryPanel({
       {/* GỌI XE TRỰC TIẾP TỪ MENU "⋯" */}
       <RidePickerModal
         stop={rideTargetPlace}
+        originStop={(() => {
+          if (!rideTargetPlace) return null;
+          const idx = dayItems.findIndex(
+            (it) =>
+              it === rideTargetPlace ||
+              (it.day_number === rideTargetPlace.day_number &&
+                it.order_index === rideTargetPlace.order_index)
+          );
+          return idx > 0 ? dayItems[idx - 1] : null;
+        })()}
         isOpen={Boolean(rideTargetPlace)}
         onClose={() => setRideTargetPlace(null)}
       />

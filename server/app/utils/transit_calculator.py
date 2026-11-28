@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -14,6 +15,13 @@ from pydantic import BaseModel, Field
 # Constants
 # ---------------------------------------------------------------------------
 EARTH_RADIUS_KM: float = 6371.0
+# ASSUMPTION: Hệ số đường nội đô TP.HCM ~1.3 so với đường chim bay (theo docs kiến trúc).
+HCMC_ROAD_FACTOR: float = 1.3
+WALK_THRESHOLD_KM: float = 0.8
+WALK_SPEED_KMH: float = 5.0
+RIDE_SPEED_KMH: float = 20.0
+BIKE_SPEED_KMH: float = 22.0
+CAR_SPEED_KMH: float = 18.0
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +121,7 @@ class VehicleFare(BaseModel):
     vehicle_type: str = Field(description="Loại xe: Bike / Car")
     distance_km: float = Field(ge=0, description="Khoảng cách tính cước (km)")
     estimated_fare_vnd: int = Field(ge=0, description="Cước ước tính (VND, làm tròn)")
+    duration_min: int = Field(default=0, ge=0, description="Thời gian di chuyển ước tính (phút)")
 
 
 # ---------------------------------------------------------------------------
@@ -183,9 +192,7 @@ def calculate_single_fare(pricing: VehiclePricing, distance_km: float) -> int:
         Estimated fare in VND (rounded to nearest integer).
     """
     if distance_km < 0:
-        raise InvalidDistanceError(
-            f"Khoảng cách không thể là số âm: distance_km={distance_km}"
-        )
+        raise InvalidDistanceError(f"Khoảng cách không thể là số âm: distance_km={distance_km}")
 
     if distance_km <= pricing.base_km:
         raw_fare = float(pricing.base_fare_vnd)
@@ -195,6 +202,12 @@ def calculate_single_fare(pricing: VehiclePricing, distance_km: float) -> int:
 
     fare = max(pricing.min_fare_vnd, round(raw_fare))
     return int(fare)
+
+
+def _estimate_duration_min(distance_km: float, speed_kmh: float) -> int:
+    if distance_km <= 0:
+        return 0
+    return max(5, round((distance_km / speed_kmh) * 60.0))
 
 
 def estimate_ride_fares(distance_km: float) -> list[VehicleFare]:
@@ -221,13 +234,57 @@ def estimate_ride_fares(distance_km: float) -> list[VehicleFare]:
 
     for rule in FARE_RULES:
         fare = calculate_single_fare(rule, dist_rounded)
+        speed = BIKE_SPEED_KMH if "bike" in rule.vehicle_type.lower() else CAR_SPEED_KMH
+        duration = _estimate_duration_min(dist_rounded, speed)
         results.append(
             VehicleFare(
                 brand=rule.brand,
                 vehicle_type=rule.vehicle_type,
                 distance_km=dist_rounded,
                 estimated_fare_vnd=fare,
+                duration_min=duration,
             )
         )
 
     return results
+
+
+def calculate_transit(
+    from_lat: float | None,
+    from_lng: float | None,
+    to_lat: float | None,
+    to_lng: float | None,
+) -> dict[str, Any] | None:
+    """
+    Calculate transit summary (mode, road distance, duration, fare, label)
+    between two GPS coordinates using Haversine * HCMC road factor (1.3).
+
+    Returns None if any coordinate is missing (None).
+    """
+    if from_lat is None or from_lng is None or to_lat is None or to_lng is None:
+        return None
+
+    straight_km = haversine_km(float(from_lat), float(from_lng), float(to_lat), float(to_lng))
+    road_distance_km = round(straight_km * HCMC_ROAD_FACTOR, 2)
+
+    if road_distance_km <= WALK_THRESHOLD_KM:
+        walk_minutes = max(2, round((road_distance_km / WALK_SPEED_KMH) * 60.0))
+        return {
+            "mode": "walk",
+            "distance_km": road_distance_km,
+            "duration_min": walk_minutes,
+            "estimated_fare_vnd": 0,
+            "label": f"🚶 {walk_minutes} min walk ({int(road_distance_km * 1000)}m)",
+        }
+
+    ride_minutes = max(5, round((road_distance_km / RIDE_SPEED_KMH) * 60.0))
+    # ASSUMPTION: Giá cước tham chiếu làm tròn lên bội 5.000 VND (docs/02-architecture-db-ai.md).
+    raw_fare = 18000 + max(0.0, road_distance_km - 2.0) * 5500
+    rounded_fare = int(math.ceil(raw_fare / 5000.0) * 5000)
+    return {
+        "mode": "ride",
+        "distance_km": road_distance_km,
+        "duration_min": ride_minutes,
+        "estimated_fare_vnd": rounded_fare,
+        "label": f"🚕 {ride_minutes} min ride (~₫{rounded_fare:,})",
+    }

@@ -2,6 +2,7 @@ import { Check, Copy, ExternalLink, MapPin, Smartphone, X } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useFocusTrap } from '../../hooks/useFocusTrap.js';
 import { useI18n } from '../../i18n/I18nContext.jsx';
+import { api, isBackendEnabled } from '../../lib/api.js';
 import {
   detectPlatform,
   GOOGLE_MAPS_LOGO,
@@ -13,6 +14,29 @@ import {
   rideDestinationText
 } from '../../lib/externalApps.js';
 import { formatVnd } from '../../lib/format.js';
+
+function resolveValidCoords(point) {
+  if (!point || typeof point !== 'object') return null;
+  const rawLat = point.latitude ?? point.lat;
+  const rawLng = point.longitude ?? point.lng;
+  if (
+    rawLat === null ||
+    rawLat === undefined ||
+    rawLat === '' ||
+    typeof rawLat === 'boolean' ||
+    rawLng === null ||
+    rawLng === undefined ||
+    rawLng === '' ||
+    typeof rawLng === 'boolean'
+  ) {
+    return null;
+  }
+  const lat = Number(rawLat);
+  const lng = Number(rawLng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat, lng };
+}
 
 // Màu lấy đúng từ file logo chính hãng (client/public/images/brands/*): Grab #00B14F,
 // Xanh SM #28BDBF, Be #0A60B0. Màu chữ chọn theo tương phản WCAG AA ≥ 4.5:1
@@ -37,6 +61,7 @@ const BRAND_STYLES = {
 
 export default function RidePickerModal({
   stop,
+  originStop = null,
   isOpen,
   onClose,
   transportMode,
@@ -46,6 +71,7 @@ export default function RidePickerModal({
   const titleId = useId();
   const [selectedService, setSelectedService] = useState('grab');
   const [copyState, setCopyState] = useState('idle'); // 'idle' | 'copied' | 'manual'
+  const [estimateState, setEstimateState] = useState({ status: 'idle', data: null });
   const panelRef = useRef(null);
   const closeBtnRef = useRef(null);
   const manualInputRef = useRef(null);
@@ -59,11 +85,64 @@ export default function RidePickerModal({
   }, [platformOverride]);
 
   const stopKey = `${stop?.place_id || stop?.place_name || ''}-${stop?.address || ''}`;
+  const originKey = `${originStop?.place_id || originStop?.place_name || ''}-${originStop?.latitude ?? ''},${originStop?.longitude ?? ''}`;
   const active = Boolean(isOpen && stop);
 
   useEffect(() => {
     setCopyState('idle');
   }, [isOpen, stopKey]);
+
+  useEffect(() => {
+    if (!active) {
+      setEstimateState({ status: 'idle', data: null });
+      return;
+    }
+
+    const originCoords = resolveValidCoords(originStop);
+    const destCoords = resolveValidCoords(stop);
+    const samePoint =
+      originCoords &&
+      destCoords &&
+      Math.abs(originCoords.lat - destCoords.lat) < 1e-6 &&
+      Math.abs(originCoords.lng - destCoords.lng) < 1e-6;
+
+    if (!originCoords || !destCoords || samePoint) {
+      setEstimateState({ status: 'unavailable', data: null });
+      return;
+    }
+
+    if (typeof api.estimateTransit !== 'function') {
+      setEstimateState({ status: 'unavailable', data: null });
+      return;
+    }
+
+    let cancelled = false;
+    setEstimateState({ status: 'loading', data: null });
+
+    api
+      .estimateTransit({
+        originLat: originCoords.lat,
+        originLng: originCoords.lng,
+        destLat: destCoords.lat,
+        destLng: destCoords.lng,
+        isRaining: Boolean(stop.transit_info?.is_rain_mode)
+      })
+      .then((res) => {
+        if (cancelled) return;
+        if (res && Number.isFinite(Number(res.distance_km))) {
+          setEstimateState({ status: 'ready', data: res });
+        } else {
+          setEstimateState({ status: 'error', data: null });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setEstimateState({ status: 'error', data: null });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [active, stopKey, originKey, isBackendEnabled()]);
 
   useFocusTrap({
     active,
@@ -81,9 +160,14 @@ export default function RidePickerModal({
 
   if (!active) return null;
 
-  const estimatedFare = stop.transit_info?.estimated_fare_vnd || 25000;
-  const estimatedMin = stop.transit_info?.duration_min || 15;
-  const distanceKm = stop.transit_info?.distance_km || 1.2;
+  const estimateData = estimateState.status === 'ready' ? estimateState.data : null;
+  const hasEstimate = Boolean(estimateData);
+  const estimatedFare = estimateData?.estimated_fare_vnd;
+  const estimatedMin = estimateData?.duration_min;
+  const distanceKm = estimateData?.distance_km;
+  const providerById = new Map(
+    (estimateData?.providers || []).map((p) => [p.id, p])
+  );
 
   const destinationText = rideDestinationText(stop);
   const selectedApp = RIDE_APPS.find((app) => app.id === selectedService) || RIDE_APPS[0];
@@ -118,7 +202,7 @@ export default function RidePickerModal({
     }
   };
 
-  const formattedFare = formatVnd(estimatedFare, lang);
+  const formattedFare = hasEstimate ? formatVnd(estimatedFare, lang) : '';
 
   return (
     <div
@@ -179,14 +263,16 @@ export default function RidePickerModal({
             </div>
           </div>
 
-          <div className="mt-2.5 flex items-center justify-between border-t border-slate-200 pt-2 text-xs font-semibold text-slate-700">
-            <span className="tabular-nums">
-              {t('ride.tripEstimateMeta', { km: distanceKm, min: estimatedMin })}
-            </span>
-            <span className="font-mono font-bold text-emerald-700 tabular-nums">
-              {t('ride.estimatedFare', { fare: formattedFare })}
-            </span>
-          </div>
+          {hasEstimate ? (
+            <div className="mt-2.5 flex items-center justify-between border-t border-slate-200 pt-2 text-xs font-semibold text-slate-700">
+              <span className="tabular-nums">
+                {t('ride.tripEstimateMeta', { km: distanceKm, min: estimatedMin })}
+              </span>
+              <span className="font-mono font-bold text-emerald-700 tabular-nums">
+                {lang === 'vi' ? `Giá ước tính: ~${formattedFare}` : t('ride.estimatedFare', { fare: formattedFare })}
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {/* Toast sao chép thành công */}
@@ -233,6 +319,7 @@ export default function RidePickerModal({
             const isSelected = selectedService === app.id;
             const style = BRAND_STYLES[app.id] || BRAND_STYLES.grab;
             const plan = rideAppLaunchPlan(app.id, platform);
+            const live = providerById.get(app.id);
 
             return (
               <div
@@ -266,12 +353,15 @@ export default function RidePickerModal({
                       <span className="mt-0.5 block text-xs text-slate-600">
                         {t(`ride.vehicles.${app.id}`)}
                       </span>
-                      <span className="mt-0.5 block font-mono text-[11px] font-semibold text-slate-700 tabular-nums">
-                        ~{formattedFare}{' '}
-                        <span className="font-sans font-normal text-slate-600">
-                          ({t('ride.estimatedBadge')})
+                      {live ? (
+                        <span className="mt-0.5 block font-mono text-[11px] font-semibold text-slate-700 tabular-nums">
+                          {live.bike_type}: ~{formatVnd(live.bike_fare_vnd, lang)} · {live.car_type}: ~
+                          {formatVnd(live.car_fare_vnd, lang)}{' '}
+                          <span className="font-sans font-normal text-slate-600">
+                            ({lang === 'vi' ? 'Giá ước tính' : t('ride.estimatedBadge')})
+                          </span>
                         </span>
-                      </span>
+                      ) : null}
                     </span>
                   </span>
 

@@ -747,6 +747,56 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/transit/estimate:
+    post:
+      tags:
+      - Transit & Adaptive
+      summary: Ước tính quãng đường, thời gian và cước 3 hãng xe (Grab / Xanh SM / Be)
+      operationId: estimate_transit_api_v1_transit_estimate_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitEstimateRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransitEstimateResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/transit/adapt:
+    post:
+      tags:
+      - Transit & Adaptive
+      summary: Áp dụng kịch bản thích ứng trời mưa & giờ cao điểm cho lịch trình
+      operationId: adapt_itinerary_api_v1_transit_adapt_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitAdaptRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransitAdaptResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /:
     get:
       summary: Root
@@ -1612,6 +1662,398 @@ components:
       - msg
       - type
       title: ValidationError
+    VehicleFare:
+      properties:
+        brand:
+          type: string
+          title: Brand
+        vehicle_type:
+          type: string
+          title: Vehicle Type
+        distance_km:
+          type: number
+          minimum: 0.0
+          title: Distance Km
+        estimated_fare_vnd:
+          type: integer
+          minimum: 0
+          title: Estimated Fare Vnd
+        duration_min:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Duration Min
+      type: object
+      required:
+      - brand
+      - vehicle_type
+      - distance_km
+      - estimated_fare_vnd
+      title: VehicleFare
+    ProviderEstimate:
+      properties:
+        id:
+          type: string
+          title: Id
+        name:
+          type: string
+          title: Name
+        bike_type:
+          type: string
+          title: Bike Type
+        bike_fare_vnd:
+          type: integer
+          minimum: 0
+          title: Bike Fare Vnd
+        bike_duration_min:
+          type: integer
+          minimum: 0
+          title: Bike Duration Min
+        car_type:
+          type: string
+          title: Car Type
+        car_fare_vnd:
+          type: integer
+          minimum: 0
+          title: Car Fare Vnd
+        car_duration_min:
+          type: integer
+          minimum: 0
+          title: Car Duration Min
+        duration_min:
+          type: integer
+          minimum: 0
+          title: Duration Min
+      type: object
+      required:
+      - id
+      - name
+      - bike_type
+      - bike_fare_vnd
+      - bike_duration_min
+      - car_type
+      - car_fare_vnd
+      - car_duration_min
+      - duration_min
+      title: ProviderEstimate
+    TransitEstimateRequest:
+      properties:
+        origin_lat:
+          type: number
+          maximum: 11.2
+          minimum: 10.35
+          title: Origin Lat
+        origin_lng:
+          type: number
+          maximum: 107.05
+          minimum: 106.35
+          title: Origin Lng
+        dest_lat:
+          type: number
+          maximum: 11.2
+          minimum: 10.35
+          title: Dest Lat
+        dest_lng:
+          type: number
+          maximum: 107.05
+          minimum: 106.35
+          title: Dest Lng
+        is_raining:
+          type: boolean
+          default: false
+          title: Is Raining
+        current_time:
+          anyOf:
+          - type: string
+            pattern: ^\d{2}:\d{2}$
+          - type: 'null'
+          title: Current Time
+      type: object
+      required:
+      - origin_lat
+      - origin_lng
+      - dest_lat
+      - dest_lng
+      title: TransitEstimateRequest
+    TransitEstimateResponse:
+      properties:
+        mode:
+          type: string
+          title: Mode
+        straight_distance_km:
+          type: number
+          minimum: 0.0
+          title: Straight Distance Km
+        distance_km:
+          type: number
+          minimum: 0.0
+          title: Distance Km
+        duration_min:
+          type: integer
+          minimum: 0
+          title: Duration Min
+        estimated_fare_vnd:
+          type: integer
+          minimum: 0
+          title: Estimated Fare Vnd
+        label:
+          type: string
+          title: Label
+        is_rush_hour:
+          type: boolean
+          default: false
+          title: Is Rush Hour
+        is_rain_mode:
+          type: boolean
+          default: false
+          title: Is Rain Mode
+        recommended_vehicles:
+          items:
+            type: string
+          type: array
+          title: Recommended Vehicles
+        fares:
+          items:
+            $ref: '#/components/schemas/VehicleFare'
+          type: array
+          title: Fares
+        providers:
+          items:
+            $ref: '#/components/schemas/ProviderEstimate'
+          type: array
+          title: Providers
+      type: object
+      required:
+      - mode
+      - straight_distance_km
+      - distance_km
+      - duration_min
+      - estimated_fare_vnd
+      - label
+      title: TransitEstimateResponse
+    AdaptTransitInfo:
+      properties:
+        mode:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Mode
+        distance_km:
+          anyOf:
+          - type: number
+            minimum: 0.0
+          - type: 'null'
+          title: Distance Km
+        duration_min:
+          anyOf:
+          - type: integer
+            minimum: 0
+          - type: 'null'
+          title: Duration Min
+        estimated_fare_vnd:
+          anyOf:
+          - type: integer
+            minimum: 0
+          - type: 'null'
+          title: Estimated Fare Vnd
+        original_fare_vnd:
+          anyOf:
+          - type: integer
+            minimum: 0
+          - type: 'null'
+          title: Original Fare Vnd
+        original_mode:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Original Mode
+        is_rain_mode:
+          type: boolean
+          default: false
+          title: Is Rain Mode
+        is_rush_hour:
+          type: boolean
+          default: false
+          title: Is Rush Hour
+        label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Label
+      type: object
+      title: AdaptTransitInfo
+    AdaptItineraryItem:
+      properties:
+        day_number:
+          anyOf:
+          - type: integer
+            minimum: 1
+          - type: 'null'
+          title: Day Number
+        order_index:
+          anyOf:
+          - type: integer
+            minimum: 0
+          - type: 'null'
+          title: Order Index
+        place_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Place Id
+        place_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Place Name
+        address:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Address
+        district:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: District
+        latitude:
+          anyOf:
+          - type: number
+            maximum: 90.0
+            minimum: -90.0
+          - type: 'null'
+          title: Latitude
+        longitude:
+          anyOf:
+          - type: number
+            maximum: 180.0
+            minimum: -180.0
+          - type: 'null'
+          title: Longitude
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        is_indoor:
+          type: boolean
+          default: false
+          title: Is Indoor
+        visited:
+          type: boolean
+          default: false
+          title: Visited
+        estimated_cost:
+          anyOf:
+          - type: integer
+            minimum: 0
+          - type: 'null'
+          title: Estimated Cost
+        transit_info:
+          anyOf:
+          - $ref: '#/components/schemas/AdaptTransitInfo'
+          - type: 'null'
+      type: object
+      title: AdaptItineraryItem
+    TransitAdaptRequest:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AdaptItineraryItem'
+          maxItems: 60
+          type: array
+          title: Items
+        day_number:
+          anyOf:
+          - type: integer
+            minimum: 1
+          - type: 'null'
+          title: Day Number
+        is_raining:
+          type: boolean
+          default: false
+          title: Is Raining
+        is_traffic:
+          type: boolean
+          default: false
+          title: Is Traffic
+        current_time:
+          anyOf:
+          - type: string
+            pattern: ^\d{2}:\d{2}$
+          - type: 'null'
+          title: Current Time
+        replace_outdoor:
+          type: boolean
+          default: true
+          title: Replace Outdoor
+        default_transport_mode:
+          type: string
+          default: grab_bike
+          title: Default Transport Mode
+      type: object
+      title: TransitAdaptRequest
+    ReplacedStopInfo:
+      properties:
+        day_number:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Day Number
+        order_index:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Order Index
+        original_place_name:
+          type: string
+          title: Original Place Name
+        replacement_place_name:
+          type: string
+          title: Replacement Place Name
+        district:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: District
+      type: object
+      required:
+      - original_place_name
+      - replacement_place_name
+      title: ReplacedStopInfo
+    TransitAdaptResponse:
+      properties:
+        items:
+          items:
+            type: object
+          type: array
+          title: Items
+        is_raining:
+          type: boolean
+          title: Is Raining
+        is_rush_hour:
+          type: boolean
+          title: Is Rush Hour
+        recommended_vehicles:
+          items:
+            type: string
+          type: array
+          title: Recommended Vehicles
+        replaced_stops:
+          items:
+            $ref: '#/components/schemas/ReplacedStopInfo'
+          type: array
+          title: Replaced Stops
+        summary_message:
+          type: string
+          title: Summary Message
+      type: object
+      required:
+      - items
+      - is_raining
+      - is_rush_hour
+      - summary_message
+      title: TransitAdaptResponse
   securitySchemes:
     OAuth2PasswordBearer:
       type: oauth2
