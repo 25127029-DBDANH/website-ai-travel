@@ -1,7 +1,7 @@
 import { ChevronUp, MapPinned, Pencil } from 'lucide-react';
 import { cn } from '../../lib/cn.js';
 import { formatVnd } from '../../lib/format.js';
-import { compactVnd, derivePace } from '../../lib/tripFormLogic.js';
+import { compactVnd, dayHoursSummaryText, derivePace } from '../../lib/tripFormLogic.js';
 import { stayAreaForLocation } from '../../lib/tripOptions.js';
 
 const BUDGET_TIER_KEYS = { 500_000: 'saver', 1_000_000: 'comfort', 2_000_000: 'luxe' };
@@ -33,7 +33,7 @@ function buildRows(form, t, lang) {
     form.must_visit?.length ? t('form.summary.mustVisitCount', { count: form.must_visit.length }) : null,
     form.avoid_districts?.length ? t('form.field.avoid_districts', { value: form.avoid_districts.join(', ') }) : null,
     form.dietary?.length ? form.dietary.map((item) => t(`form.option.dietary.${item}`)).join(', ') : null,
-    form.day_start && form.day_end ? `${form.day_start} – ${form.day_end}` : null,
+    dayHoursSummaryText(form, t),
     form.prefer_indoor ? t('form.finetune.indoorOn') : null
   ].filter(Boolean);
 

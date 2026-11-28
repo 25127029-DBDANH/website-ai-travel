@@ -166,83 +166,88 @@ export default function TripPage() {
     }
   };
 
-  // Kịch bản Trời mưa
-  const handleToggleRain = async (day, enable) => {
+  // Kịch bản Trời mưa (gộp swap điểm + bật/tắt GrabCar trong 1 lần gọi atomic)
+  const handleToggleRain = async (day, enable, replacementSwap = null) => {
     try {
-      const res = await api.applyRainMode(id, day, enable);
+      const res = await api.applyRainMode(id, day, enable, replacementSwap);
       setItems([...res.items]);
       setBudget(res.budget_summary);
       setToast({
         message: enable
-          ? lang === 'vi'
-            ? 'Đã bật chế độ trời mưa: ưu tiên điểm trong nhà và GrabCar.'
-            : 'Rain mode enabled.'
+          ? replacementSwap?.replacement
+            ? lang === 'vi'
+              ? `Đã đổi sang "${replacementSwap.replacement.place_name}" và bật chế độ trời mưa.`
+              : `Swapped to ${replacementSwap.replacement.place_name} with rain mode.`
+            : lang === 'vi'
+              ? 'Đã bật chế độ trời mưa: ưu tiên điểm trong nhà và GrabCar.'
+              : 'Rain mode enabled.'
           : lang === 'vi'
-          ? 'Đã tắt chế độ trời mưa.'
-          : 'Rain mode disabled.',
+            ? 'Đã tắt chế độ trời mưa.'
+            : 'Rain mode disabled.',
         tone: 'success'
       });
     } catch (err) {
-      console.error(err);
+      setToast({ message: translateApiError(tRef.current, err), tone: 'error' });
     }
   };
 
-  // Kịch bản Giờ cao điểm
-  const handleToggleTraffic = async (day, enable) => {
+  // Kịch bản Giờ cao điểm (gộp swap + buffer 20 phút trong 1 lần gọi atomic)
+  const handleToggleTraffic = async (day, enable, replacementSwap = null) => {
     try {
-      const res = await api.applyTrafficMode(id, day, enable);
+      const res = await api.applyTrafficMode(id, day, enable, replacementSwap);
       setItems([...res.items]);
       setBudget(res.budget_summary);
       setToast({
         message: enable
-          ? lang === 'vi'
-            ? 'Đã bật chế độ giờ cao điểm và cộng 20 phút dự phòng.'
-            : 'Rush hour mode enabled.'
+          ? replacementSwap?.replacement
+            ? lang === 'vi'
+              ? `Đã đổi sang "${replacementSwap.replacement.place_name}" và cộng 20 phút dự phòng.`
+              : `Swapped to ${replacementSwap.replacement.place_name} with rush-hour buffer.`
+            : lang === 'vi'
+              ? 'Đã bật chế độ giờ cao điểm và cộng 20 phút dự phòng.'
+              : 'Rush hour mode enabled.'
           : lang === 'vi'
-          ? 'Đã tắt chế độ giờ cao điểm.'
-          : 'Rush hour mode disabled.',
+            ? 'Đã tắt chế độ giờ cao điểm.'
+            : 'Rush hour mode disabled.',
         tone: 'success'
       });
     } catch (err) {
-      console.error(err);
+      setToast({ message: translateApiError(tRef.current, err), tone: 'error' });
     }
   };
 
-  // Tinh chỉnh AI: Giảm 20% chi phí
-  const handleOptimizeBudget = async () => {
+  // Tinh chỉnh AI: Giảm chi phí (bỏ qua các điểm đã check-in)
+  const handleOptimizeBudget = async (day = null) => {
     try {
-      const res = await api.optimizeBudget(id);
+      const res = await api.optimizeBudget(id, day);
       setItems([...res.items]);
       setBudget(res.budget_summary);
       setToast({
         message:
           lang === 'vi'
-            ? 'Đã đổi sang Cơm Tấm Ba Ghiền (55.000 đ), tiết kiệm 40.000 đ.'
-            : 'Budget optimized.',
+            ? 'Đã tối ưu ngân sách và cập nhật lại cước di chuyển.'
+            : 'Budget optimized and transit fares updated.',
         tone: 'success'
       });
     } catch (err) {
-      console.error(err);
+      setToast({ message: translateApiError(tRef.current, err), tone: 'error' });
     }
   };
 
-  // Check-in (Companion)
+  // Check-in (Companion - 1 chiều, đã check-in sẽ khóa chỉnh sửa)
   const handleToggleVisited = async (item) => {
     try {
       const res = await api.toggleVisited(id, item.day_number, item.order_index);
       setItems([...res.items]);
       setToast({
-        message: item.visited
-          ? lang === 'vi'
-            ? `Đã bỏ đánh dấu "${item.place_name}".`
-            : `Unchecked ${item.place_name}.`
-          : lang === 'vi'
-          ? `Đã đánh dấu đến "${item.place_name}".`
-          : `Checked in at ${item.place_name}.`,
+        message:
+          lang === 'vi'
+            ? `Đã đánh dấu đến "${item.place_name}". Điểm này đã được khóa.`
+            : `Checked in at ${item.place_name}. Stop locked.`,
         tone: 'success'
       });
     } catch (err) {
-      console.error(err);
+      setToast({ message: translateApiError(tRef.current, err), tone: 'error' });
     }
   };
 
@@ -260,12 +265,12 @@ export default function TripPage() {
             ? `Đã chốt "${item.place_name}".`
             : `Confirmed ${item.place_name}.`
           : lang === 'vi'
-          ? `Đã bỏ chốt "${item.place_name}".`
-          : `Unconfirmed ${item.place_name}.`,
+            ? `Đã bỏ chốt "${item.place_name}".`
+            : `Unconfirmed ${item.place_name}.`,
         tone: 'success'
       });
     } catch (err) {
-      console.error(err);
+      setToast({ message: translateApiError(tRef.current, err), tone: 'error' });
     }
   };
 
@@ -282,7 +287,7 @@ export default function TripPage() {
         tone: 'success'
       });
     } catch (err) {
-      console.error(err);
+      setToast({ message: translateApiError(tRef.current, err), tone: 'error' });
     }
   };
 

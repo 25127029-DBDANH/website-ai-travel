@@ -649,25 +649,21 @@ export default function PlaceDrawer({
                               </button>
                             ) : null}
 
-                            {actions.onToggleVisited ? (
+                            {!isVisited && actions.onToggleVisited ? (
                               <button
                                 type="button"
                                 onClick={() => actions.onToggleVisited(stop)}
-                                aria-pressed={isVisited}
-                                className={cn(
-                                  'inline-flex min-h-10 items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-semibold transition-colors active:scale-[0.97]',
-                                  isVisited
-                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                                    : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-300 hover:text-emerald-700'
-                                )}
+                                aria-pressed={false}
+                                className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition-colors hover:border-emerald-300 hover:text-emerald-700 active:scale-[0.97]"
                               >
                                 <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                                <span>
-                                  {isVisited
-                                    ? t('itinerary.card.unmarkVisited')
-                                    : t('itinerary.card.markVisited')}
-                                </span>
+                                <span>{t('itinerary.card.markVisited')}</span>
                               </button>
+                            ) : isVisited ? (
+                              <span className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-xs font-semibold text-emerald-800">
+                                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                <span>{t('itinerary.card.visitedLocked')}</span>
+                              </span>
                             ) : null}
 
                             {actions.onLocate ? (
@@ -797,6 +793,9 @@ export default function PlaceDrawer({
 
       <RidePickerModal
         stop={rideStop}
+        originStop={actions?.originStop || null}
+        memberCount={actions?.memberCount || 1}
+        transportMode={actions?.transportMode}
         isOpen={Boolean(showRideModal && rideStop)}
         onClose={() => setShowRideModal(false)}
       />

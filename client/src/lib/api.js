@@ -4,6 +4,11 @@
 import { getAuthToken, setAuthToken, clearAuthToken, getSessionId } from './auth.js';
 import { pickRandomUniquePhotos, selectMarqueePhotos, shuffle } from './marqueePhotos.js';
 import { generateMockRecoveryCode } from './recoveryCode.js';
+import {
+  estimateRoadDistanceKm,
+  recalculateDayTransits,
+  resolvePointCoords
+} from './transitPricing.js';
 
 const RAW_API_BASE = (import.meta.env?.VITE_API_BASE || 'http://localhost:8000').replace(/\/$/, '');
 const API_ORIGIN = RAW_API_BASE.replace(/\/api\/v1$/, '');
@@ -1625,6 +1630,33 @@ async function updateBackendItem(tripId, dayNumber, orderIndex, updates) {
   return cacheBackendItems(tripId, result.items || []);
 }
 
+function replaceStopAt(items, dayNumber, orderIndex, replacement, { keepName = null } = {}) {
+  const targetIdx = items.findIndex(
+    (it) => it.day_number === Number(dayNumber) && it.order_index === Number(orderIndex)
+  );
+  if (targetIdx === -1) throw new ApiError('Trip item not found', 'TRIP_ITEM_NOT_FOUND', 404);
+  const original = items[targetIdx];
+  if (original.visited) {
+    throw new ApiError('Stop is already checked in and locked', 'ITEM_VISITED_LOCKED', 409);
+  }
+  const next = [...items];
+  next[targetIdx] = {
+    ...original,
+    ...replacement,
+    place_id: replacement.place_id || replacement.id || original.place_id,
+    place_name: keepName || replacement.place_name || replacement.name || original.place_name,
+    day_number: original.day_number,
+    order_index: original.order_index,
+    time_slot: original.time_slot,
+    start_time: original.start_time,
+    end_time: original.end_time,
+    transit_info: original.transit_info,
+    visited: false,
+    is_accepted: original.is_accepted || false
+  };
+  return next;
+}
+
 function missing() {
   return new ApiError('Không tìm thấy chuyến đi này.', 'NOT_FOUND', 404);
 }
@@ -2207,7 +2239,7 @@ export const api = {
   },
 
   // =====================================================================
-  // LOCAL-ONLY operations (used by other team members' components)
+  // LOCAL-ONLY operations & Atomic Itinerary Mutations
   // =====================================================================
   // Lấy danh sách địa điểm thay thế tương đương
   getAlternatives: (item) => {
@@ -2223,39 +2255,113 @@ export const api = {
     return [...sameCat, ...sameDist, ...others].slice(0, 4);
   },
 
-  // Đổi địa điểm trực tiếp trên giao diện
-  swapPlace: async (tripId, dayNumber, orderIndex, replacement) => {
-    const data = await getBackendTrip(tripId);
-    const items = data.itinerary_items || [];
-
-    const targetIdx = items.findIndex(
-      (it) => it.day_number === Number(dayNumber) && it.order_index === Number(orderIndex)
+  // Lấy danh sách địa điểm trong nhà cùng quận/gần nhất cho chế độ Trời mưa
+  getIndoorAlternatives: async (stop, excludePlaceIds = []) => {
+    const excludedIds = new Set(
+      [stop?.place_id, stop?.id, ...(Array.isArray(excludePlaceIds) ? excludePlaceIds : [])].filter(Boolean)
     );
-    if (targetIdx === -1) throw new ApiError('Trip item not found', 'TRIP_ITEM_NOT_FOUND', 404);
+    const excludedName = String(stop?.place_name || stop?.name || '').trim().toLowerCase();
+    const targetDistrict = String(stop?.district || '').trim().toLowerCase();
+    const stopCoords = resolvePointCoords(stop);
 
-    const original = items[targetIdx];
-    items[targetIdx] = {
-      ...replacement,
-      day_number: original.day_number,
-      order_index: original.order_index,
-      time_slot: original.time_slot,
-      start_time: original.start_time,
-      end_time: original.end_time,
-      transit_info: original.transit_info,
-      visited: original.visited || false,
-      is_accepted: original.is_accepted || false
+    const normalizeIndoorCandidate = (p) => {
+      const pid = p.place_id || p.id;
+      const pname = p.place_name || p.name;
+      const candCoords = resolvePointCoords(p);
+      const distKm =
+        stopCoords && candCoords
+          ? estimateRoadDistanceKm(stopCoords.lat, stopCoords.lng, candCoords.lat, candCoords.lng)
+          : null;
+      return {
+        ...p,
+        place_id: pid,
+        place_name: pname,
+        editorial_score: p.editorial_score ?? p.rating ?? 4.6,
+        is_indoor: true,
+        estimated_cost: Number(p.estimated_cost ?? 0),
+        distance_km: distKm,
+        distance_note:
+          distKm != null
+            ? distKm < 1
+              ? `Cách ~${Math.max(50, Math.round(distKm * 1000))}m · Trong nhà`
+              : `Cách ~${distKm.toFixed(1)} km · Trong nhà`
+            : `${p.district || 'Sài Gòn'} · Trong nhà`
+      };
     };
-    return saveBackendItems(tripId, items);
+
+    const pickBest = (pool) => {
+      const seen = new Set();
+      const filtered = [];
+      for (const raw of pool) {
+        if (!raw || typeof raw !== 'object' || !raw.is_indoor) continue;
+        const pid = raw.place_id || raw.id;
+        const pname = String(raw.place_name || raw.name || '').trim().toLowerCase();
+        if (!pname || pname === excludedName) continue;
+        if (pid && (excludedIds.has(pid) || seen.has(pid))) continue;
+        if (pid) seen.add(pid);
+        filtered.push(normalizeIndoorCandidate(raw));
+      }
+      filtered.sort((a, b) => {
+        const aSameDist = targetDistrict && String(a.district || '').trim().toLowerCase() === targetDistrict ? 1 : 0;
+        const bSameDist = targetDistrict && String(b.district || '').trim().toLowerCase() === targetDistrict ? 1 : 0;
+        if (aSameDist !== bSameDist) return bSameDist - aSameDist;
+        const aDist = a.distance_km ?? 999;
+        const bDist = b.distance_km ?? 999;
+        if (aDist !== bDist) return aDist - bDist;
+        return Number(b.editorial_score || 0) - Number(a.editorial_score || 0);
+      });
+      return filtered.slice(0, 4);
+    };
+
+    if (isBackendEnabled()) {
+      try {
+        const params = new URLSearchParams({ limit: '40' });
+        if (stop?.district) params.set('district', stop.district);
+        const res = await request('GET', `/api/v1/places/search?${params.toString()}`);
+        let pool = Array.isArray(res?.results) ? res.results : [];
+        let ranked = pickBest(pool);
+        if (ranked.length < 3 && stop?.district) {
+          const wideRes = await request('GET', '/api/v1/places/search?limit=50');
+          const widePool = Array.isArray(wideRes?.results) ? wideRes.results : [];
+          ranked = pickBest([...pool, ...widePool]);
+        }
+        if (ranked.length > 0) return ranked;
+      } catch {
+        // Fallback cleanly to local catalog below
+      }
+    }
+
+    return pickBest(PLACES);
   },
 
-  // Đánh dấu đã ghé thăm (Check-in Companion)
+  // Đổi địa điểm trực tiếp trên giao diện (kèm tính lại khoảng cách & cước 2 chặng liền kề)
+  swapPlace: async (tripId, dayNumber, orderIndex, replacement) => {
+    const data = await getBackendTrip(tripId);
+    const trip = data.trip || {};
+    const swapped = replaceStopAt(
+      data.itinerary_items || [],
+      dayNumber,
+      orderIndex,
+      replacement
+    );
+    const nextItems = recalculateDayTransits(swapped, dayNumber, {
+      defaultMode: trip.transport_mode || 'grab_bike',
+      memberCount: trip.member_count || 1
+    });
+    return saveBackendItems(tripId, nextItems);
+  },
+
+  // Đánh dấu đã ghé thăm (Check-in Companion - chỉ khóa 1 chiều, đã check-in không cho sửa)
   toggleVisited: async (tripId, dayNumber, orderIndex) => {
     const data = await getBackendTrip(tripId);
     const target = (data.itinerary_items || []).find(
       (it) => it.day_number === Number(dayNumber) && it.order_index === Number(orderIndex)
     );
     if (!target) throw new ApiError('Trip item not found', 'TRIP_ITEM_NOT_FOUND', 404);
-    return updateBackendItem(tripId, dayNumber, orderIndex, { visited: !target.visited });
+    if (target.visited) {
+      throw new ApiError('Stop is already checked in and locked', 'ITEM_VISITED_LOCKED', 409);
+    }
+    return updateBackendItem(tripId, dayNumber, orderIndex, { visited: true });
   },
 
   // Chốt / Chấp nhận địa điểm trong lịch trình (Accept stop)
@@ -2265,6 +2371,9 @@ export const api = {
       (it) => it.day_number === Number(dayNumber) && it.order_index === Number(orderIndex)
     );
     if (!target) throw new ApiError('Trip item not found', 'TRIP_ITEM_NOT_FOUND', 404);
+    if (target.visited) {
+      throw new ApiError('Stop is already checked in and locked', 'ITEM_VISITED_LOCKED', 409);
+    }
     return updateBackendItem(tripId, dayNumber, orderIndex, { is_accepted: !target.is_accepted });
   },
 
@@ -2275,6 +2384,9 @@ export const api = {
       (it) => it.day_number === Number(dayNumber) && it.order_index === Number(orderIndex)
     );
     if (!target) throw new ApiError('Trip item not found', 'TRIP_ITEM_NOT_FOUND', 404);
+    if (target.visited) {
+      throw new ApiError('Stop is already checked in and locked', 'ITEM_VISITED_LOCKED', 409);
+    }
     return updateBackendItem(tripId, dayNumber, orderIndex, {
       visited: true,
       ...(photoUrl ? { photo_url: photoUrl } : {}),
@@ -2282,98 +2394,127 @@ export const api = {
     });
   },
 
-  // Áp dụng Kịch bản Trời mưa (Rain Mode) cho 1 ngày
-  applyRainMode: async (tripId, dayNumber, enableRain) => {
+  // Áp dụng Kịch bản Trời mưa (Rain Mode) — gộp swap (nếu có) + bật GrabCar trong 1 lần lưu atomic
+  applyRainMode: async (tripId, dayNumber, enableRain, replacementSwap = null) => {
     const data = await getBackendTrip(tripId);
-    const trip = data.trip;
-    let items = data.itinerary_items || [];
+    const trip = data.trip || {};
+    const targetDay = Number(dayNumber);
+    let items = [...(data.itinerary_items || [])];
 
-    items = items.map((item) => {
-      if (item.day_number !== Number(dayNumber)) return item;
-
-      if (enableRain) {
-        let updated = { ...item };
-        // Đổi transit sang xe ô tô GrabCar có mái che
-        if (updated.transit_info) {
-          updated.transit_info = {
-            ...updated.transit_info,
-            mode: 'grab_car',
-            is_rain_mode: true,
-            estimated_fare_vnd: Math.max(35000, Math.round((updated.transit_info.estimated_fare_vnd || 18000) * 1.5))
-          };
-        }
-        return updated;
-      } else {
-        if (item.transit_info && item.transit_info.is_rain_mode) {
-          return {
-            ...item,
-            transit_info: {
-              ...item.transit_info,
-              mode: trip.transport_mode || 'grab_bike',
-              is_rain_mode: false,
-              estimated_fare_vnd: Math.round(item.transit_info.estimated_fare_vnd / 1.5)
-            }
-          };
-        }
-      }
-      return item;
-    });
-
-    return saveBackendItems(tripId, items);
-  },
-
-  // Áp dụng Kịch bản Giờ cao điểm (Rush-Hour Mode) cho 1 ngày
-  applyTrafficMode: async (tripId, dayNumber, enableTraffic) => {
-    const data = await getBackendTrip(tripId);
-    let items = data.itinerary_items || [];
-
-    items = items.map((item) => {
-      if (item.day_number !== Number(dayNumber)) return item;
-
-      if (enableTraffic && item.transit_info && !item.transit_info.is_rush_hour) {
-        // Tăng thêm 20 phút kẹt xe vào thời gian di chuyển
-        return {
-          ...item,
-          transit_info: {
-            ...item.transit_info,
-            duration_min: item.transit_info.duration_min + 20,
-            is_rush_hour: true
-          }
-        };
-      }
-      if (!enableTraffic && item.transit_info?.is_rush_hour) {
-        return {
-          ...item,
-          transit_info: {
-            ...item.transit_info,
-            duration_min: Math.max(0, item.transit_info.duration_min - 20),
-            is_rush_hour: false
-          }
-        };
-      }
-      return item;
-    });
-
-    return saveBackendItems(tripId, items);
-  },
-
-  // Tinh chỉnh AI: Tối ưu tiết kiệm ngân sách 20% (Hoán đổi quán đặc sản bình dân thật sự)
-  optimizeBudget: async (tripId) => {
-    const data = await getBackendTrip(tripId);
-    const items = data.itinerary_items || [];
-
-    // Tìm điểm ăn uống có chi phí cao nhất để đổi sang quán đặc sản Michelin bình dân
-    const expensiveFood = items.find((it) => it.estimated_cost >= 80000 && it.category === 'food') || items[2];
-    if (expensiveFood) {
-      expensiveFood.place_id = 'p-com-tam-ba-ghien';
-      expensiveFood.place_name = 'Cơm Tấm Ba Ghiền';
-      expensiveFood.estimated_cost = 55000;
-      expensiveFood.description = 'Quán cơm tấm sườn nướng than hoa trứ danh Sài Gòn đạt chứng nhận Michelin Bib Gourmand giá bình dân.';
-      expensiveFood.address = '84 Đặng Văn Ngữ, Phường 10, Phú Nhuận';
-      expensiveFood.district = 'Phú Nhuận';
+    if (enableRain && replacementSwap?.target && replacementSwap?.replacement) {
+      items = replaceStopAt(
+        items,
+        replacementSwap.target.day_number ?? targetDay,
+        replacementSwap.target.order_index,
+        replacementSwap.replacement
+      );
     }
 
-    return saveBackendItems(tripId, items);
+    items = items.map((item) => {
+      if (item.day_number !== targetDay || item.visited || !item.transit_info) return item;
+      if (enableRain) {
+        return {
+          ...item,
+          transit_info: { ...item.transit_info, mode: 'grab_car', is_rain_mode: true }
+        };
+      }
+      if (item.transit_info.is_rain_mode) {
+        return {
+          ...item,
+          transit_info: {
+            ...item.transit_info,
+            mode: trip.transport_mode || 'grab_bike',
+            is_rain_mode: false
+          }
+        };
+      }
+      return item;
+    });
+
+    const nextItems = recalculateDayTransits(items, targetDay, {
+      defaultMode: trip.transport_mode || 'grab_bike',
+      memberCount: trip.member_count || 1
+    });
+    return saveBackendItems(tripId, nextItems);
+  },
+
+  // Áp dụng Kịch bản Giờ cao điểm (Rush-Hour Mode) — gộp swap + buffer 20 phút trong 1 lần lưu atomic
+  applyTrafficMode: async (tripId, dayNumber, enableTraffic, replacementSwap = null) => {
+    const data = await getBackendTrip(tripId);
+    const trip = data.trip || {};
+    const targetDay = Number(dayNumber);
+    let items = [...(data.itinerary_items || [])];
+
+    if (enableTraffic && replacementSwap?.target && replacementSwap?.replacement) {
+      items = replaceStopAt(
+        items,
+        replacementSwap.target.day_number ?? targetDay,
+        replacementSwap.target.order_index,
+        replacementSwap.replacement
+      );
+    }
+
+    items = items.map((item) => {
+      if (item.day_number !== targetDay || item.visited || !item.transit_info) return item;
+      return {
+        ...item,
+        transit_info: { ...item.transit_info, is_rush_hour: Boolean(enableTraffic) }
+      };
+    });
+
+    const nextItems = recalculateDayTransits(items, targetDay, {
+      defaultMode: trip.transport_mode || 'grab_bike',
+      memberCount: trip.member_count || 1
+    });
+    return saveBackendItems(tripId, nextItems);
+  },
+
+  // Tinh chỉnh AI: Tối ưu tiết kiệm ngân sách (chỉ đổi điểm chưa check-in và tính lại cước)
+  optimizeBudget: async (tripId, dayNumber = null) => {
+    const data = await getBackendTrip(tripId);
+    const trip = data.trip || {};
+    const items = [...(data.itinerary_items || [])];
+
+    const scopePool = dayNumber != null
+      ? items.filter((it) => it.day_number === Number(dayNumber) && !it.visited)
+      : items.filter((it) => !it.visited);
+    const candidatePool = scopePool.length > 0 ? scopePool : items.filter((it) => !it.visited);
+    if (candidatePool.length === 0) {
+      throw new ApiError('All stops are already checked in and locked', 'ITEM_VISITED_LOCKED', 409);
+    }
+
+    const targetStop =
+      [...candidatePool]
+        .filter((it) => it.category === 'food' && Number(it.estimated_cost || 0) >= 80000)
+        .sort((a, b) => Number(b.estimated_cost || 0) - Number(a.estimated_cost || 0))[0] ||
+      [...candidatePool].sort((a, b) => Number(b.estimated_cost || 0) - Number(a.estimated_cost || 0))[0];
+
+    const budgetCatalogSpot =
+      PLACES.find((p) => p.place_id === 'p-com-tam-ba-ghien') || {
+        place_id: 'p-com-tam-ba-ghien',
+        place_name: 'Cơm Tấm Ba Ghiền Đặng Văn Ngữ',
+        category: 'food',
+        description: 'Quán cơm tấm sườn nướng than hoa trứ danh Sài Gòn đạt chứng nhận Michelin Bib Gourmand giá bình dân.',
+        address: '84 Đặng Văn Ngữ, Phường 10, Phú Nhuận',
+        district: 'Phú Nhuận',
+        latitude: 10.7925,
+        longitude: 106.6710,
+        estimated_cost: 55000,
+        is_indoor: true
+      };
+
+    const swapped = replaceStopAt(
+      items,
+      targetStop.day_number,
+      targetStop.order_index,
+      { ...budgetCatalogSpot, estimated_cost: 55000 },
+      { keepName: 'Cơm Tấm Ba Ghiền' }
+    );
+    const nextItems = recalculateDayTransits(swapped, targetStop.day_number, {
+      defaultMode: trip.transport_mode || 'grab_bike',
+      memberCount: trip.member_count || 1
+    });
+    return saveBackendItems(tripId, nextItems);
   },
 
   getMessages: async (id) => {

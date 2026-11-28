@@ -1,7 +1,7 @@
-import { Calendar, Check, MapPin, X } from 'lucide-react';
+import { Calendar, Check, Clock, MapPin, X } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '../../lib/cn.js';
-import { daysPatch, LONG_TRIP_DAYS } from '../../lib/tripFormLogic.js';
+import { dayHoursSummaryText, daysPatch, LONG_TRIP_DAYS } from '../../lib/tripFormLogic.js';
 import { addDateDays, DAY_PRESETS, hcmcDate, STAY_AREAS, stayAreaForLocation } from '../../lib/tripOptions.js';
 import { FieldError, HIGHLIGHT_RING, StepHeader, Stepper } from './controls.jsx';
 
@@ -19,6 +19,7 @@ export default function StepWhenWhere({ form, onPatch, errors, t, highlighted, h
   const [customStay, setCustomStay] = useState(() => !stayKey);
   const showCustomStay = customStay || !stayKey || Boolean(errors?.start_location);
   const showStepper = customDays || !DAY_PRESETS.includes(form.days) || Boolean(errors?.days);
+  const activeHoursSummary = dayHoursSummaryText(form, t);
 
   const today = hcmcDate();
   const minDate = addDateDays(today, -1);
@@ -84,6 +85,22 @@ export default function StepWhenWhere({ form, onPatch, errors, t, highlighted, h
           <p id="trip-days-hint" className="mt-1.5 text-xs text-amber-700">
             {t('form.daysLongHint')}
           </p>
+        )}
+        {activeHoursSummary && (
+          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+            <span className="flex min-w-0 items-center gap-1.5 font-medium">
+              <Clock className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden="true" />
+              <span>{t('form.dayHoursActiveNotice', { summary: activeHoursSummary })}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => onPatch({ day_start: '', day_end: '', day_schedules: [] })}
+              className="inline-flex min-h-7 shrink-0 items-center gap-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-[11px] font-bold text-amber-900 transition-colors hover:bg-amber-100"
+            >
+              <X className="h-3 w-3" aria-hidden="true" />
+              <span>{t('form.dayHoursClear')}</span>
+            </button>
+          </div>
         )}
       </div>
 

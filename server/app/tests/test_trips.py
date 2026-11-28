@@ -124,3 +124,78 @@ async def test_shared_trip_is_read_only_and_omits_private_fields(
     old_link = await authenticated_client.get(f"/api/v1/trips/shared/{token}")
     assert revoked.status_code == 200, revoked.text
     assert old_link.status_code == 404
+
+
+@pytest.mark.integration
+async def test_checked_in_item_is_locked_against_patch_and_put(
+    authenticated_client: AsyncClient, trip_payload: dict[str, object]
+) -> None:
+    items = [
+        {
+            "day_number": 1,
+            "order_index": 1,
+            "place_id": "p-1",
+            "place_name": "Shin Coffee",
+            "category": "cafe",
+            "estimated_cost": 45000,
+            "visited": False,
+            "is_accepted": False,
+            "transit_info": {"mode": "grab_car", "distance_km": 0.5, "estimated_fare_vnd": 32000},
+        },
+        {
+            "day_number": 1,
+            "order_index": 2,
+            "place_id": "p-2",
+            "place_name": "Phở Quỳnh",
+            "category": "food",
+            "estimated_cost": 85000,
+            "visited": False,
+            "is_accepted": False,
+            "transit_info": {"mode": "grab_car", "distance_km": 1.1, "estimated_fare_vnd": 32000},
+        },
+    ]
+    created = await create_trip(authenticated_client, {**trip_payload, "itinerary_items": items})
+
+    checked = await authenticated_client.patch(
+        f"/api/v1/trips/{created['id']}/items/1/1", json={"visited": True}
+    )
+    assert checked.status_code == 200, checked.text
+
+    # Further PATCH on visited item must fail with 409 ITEM_VISITED_LOCKED
+    uncheck = await authenticated_client.patch(
+        f"/api/v1/trips/{created['id']}/items/1/1", json={"visited": False}
+    )
+    assert uncheck.status_code == 409
+    assert uncheck.json()["detail"] == "ITEM_VISITED_LOCKED"
+
+    accept_locked = await authenticated_client.patch(
+        f"/api/v1/trips/{created['id']}/items/1/1", json={"is_accepted": True}
+    )
+    assert accept_locked.status_code == 409
+    assert accept_locked.json()["detail"] == "ITEM_VISITED_LOCKED"
+
+    # PUT attempting to swap/uncheck/mutate transit_info of visited item must also 409
+    locked_items = checked.json()["items"]
+    mutated_put = await authenticated_client.put(
+        f"/api/v1/trips/{created['id']}",
+        json={
+            "itinerary_items": [
+                {**locked_items[0], "place_name": "Hacked Stop"},
+                locked_items[1],
+            ]
+        },
+    )
+    assert mutated_put.status_code == 409
+    assert mutated_put.json()["detail"] == "ITEM_VISITED_LOCKED"
+
+    # PUT keeping visited item 1 untouched while swapping unvisited item 2 must succeed
+    valid_put = await authenticated_client.put(
+        f"/api/v1/trips/{created['id']}",
+        json={
+            "itinerary_items": [
+                locked_items[0],
+                {**locked_items[1], "place_name": "Cơm Tấm Ba Ghiền", "estimated_cost": 55000},
+            ]
+        },
+    )
+    assert valid_put.status_code == 200, valid_put.text

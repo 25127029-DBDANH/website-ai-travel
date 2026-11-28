@@ -6,6 +6,8 @@ import { translations } from '../src/i18n/translations.js';
 import {
   applyTripTemplate,
   buildAiRequest,
+  dayHoursSummaryText,
+  daysPatch,
   defaultTripForm,
   derivePace,
   interestsFromPreferences,
@@ -411,4 +413,27 @@ test('WizardFooter gives distinct keys to submit and next buttons so React never
   assert.ok(nextKey, 'next button in WizardFooter must have a key prop');
   assert.notEqual(submitKey, nextKey, 'submit and next buttons must have distinct keys');
   assert.match(nextMatch[0], /\btype="button"/, 'next button must explicitly set type="button"');
+});
+
+test('expanding 1-day late-start night template to 2 days moves evening hours to Day 1 day_schedules', () => {
+  const nightForm = applyTripTemplate(defaultTripForm(), 'night');
+  assert.equal(nightForm.days, 1);
+  assert.equal(nightForm.day_start, '16:00');
+  assert.equal(nightForm.day_end, '23:30');
+
+  const twoDayForm = { ...nightForm, ...daysPatch(nightForm, 2) };
+  assert.equal(twoDayForm.days, 2);
+  assert.equal(twoDayForm.day_start, '');
+  assert.equal(twoDayForm.day_end, '');
+  assert.deepEqual(twoDayForm.day_schedules, [
+    { day_number: 1, day_start: '16:00', day_end: '23:30' }
+  ]);
+
+  const req = buildAiRequest(twoDayForm);
+  assert.deepEqual(req.day_schedules, [
+    { day_number: 1, day_start: '16:00', day_end: '23:30' }
+  ]);
+
+  const summary = dayHoursSummaryText(twoDayForm, (k, vars) => (vars ? `${k}:${vars.day}` : k));
+  assert.ok(summary.includes('16:00–23:30'));
 });
