@@ -13,6 +13,14 @@ import {
   rideDestinationText
 } from '../../lib/externalApps.js';
 import { formatVnd } from '../../lib/format.js';
+import {
+  carsNeededForGroup,
+  estimateBrandFares,
+  estimateRoadDistanceKm,
+  MIN_FARE_KM,
+  resolvePointCoords,
+  WALK_THRESHOLD_KM
+} from '../../lib/transitPricing.js';
 
 // Màu lấy đúng từ file logo chính hãng (client/public/images/brands/*): Grab #00B14F,
 // Xanh SM #28BDBF, Be #0A60B0. Màu chữ chọn theo tương phản WCAG AA ≥ 4.5:1
@@ -37,6 +45,8 @@ const BRAND_STYLES = {
 
 export default function RidePickerModal({
   stop,
+  originStop = null,
+  memberCount = 1,
   isOpen,
   onClose,
   transportMode,
@@ -81,9 +91,39 @@ export default function RidePickerModal({
 
   if (!active) return null;
 
-  const estimatedFare = stop.transit_info?.estimated_fare_vnd || 25000;
-  const estimatedMin = stop.transit_info?.duration_min || 15;
-  const distanceKm = stop.transit_info?.distance_km || 1.2;
+  const isRaining = Boolean(stop.transit_info?.is_rain_mode);
+  const originCoords = resolvePointCoords(originStop);
+  const destCoords = resolvePointCoords(stop);
+  const distanceKm =
+    originCoords && destCoords
+      ? estimateRoadDistanceKm(originCoords.lat, originCoords.lng, destCoords.lat, destCoords.lng)
+      : stop.transit_info?.distance_km ?? 1.2;
+  const estimatedMin =
+    stop.transit_info?.duration_min || Math.max(2, Math.round((distanceKm / 20) * 60));
+
+  const safeMemberCount = Math.max(1, Number(memberCount) || 1);
+  const carsNeeded = Math.max(
+    Number(stop.transit_info?.cars_needed) || 1,
+    carsNeededForGroup(safeMemberCount)
+  );
+  const effectiveMode = isRaining
+    ? 'grab_car'
+    : transportMode || stop.transit_info?.mode || 'grab_bike';
+  const preferCar = effectiveMode === 'grab_car' || safeMemberCount > 2;
+
+  const brandFares = estimateBrandFares(distanceKm, {
+    isRaining,
+    memberCount: safeMemberCount
+  });
+  const selectedFareInfo = brandFares.find((b) => b.id === selectedService) || brandFares[0];
+  const estimatedFare = preferCar
+    ? selectedFareInfo.totalCarFareVnd
+    : selectedFareInfo.bikeFareVnd;
+
+  const isMinFare = distanceKm <= MIN_FARE_KM;
+  const isShortWalk = distanceKm > 0 && distanceKm < WALK_THRESHOLD_KM && !isRaining;
+  const shortWalkMeters = Math.max(50, Math.round(distanceKm * 1000));
+  const shortWalkMin = Math.max(1, Math.round((distanceKm / 5) * 60));
 
   const destinationText = rideDestinationText(stop);
   const selectedApp = RIDE_APPS.find((app) => app.id === selectedService) || RIDE_APPS[0];
@@ -95,7 +135,7 @@ export default function RidePickerModal({
     lng: stop.longitude ?? stop.lng,
     name: stop.place_name || stop.name,
     address: stop.address,
-    transportMode: transportMode || stop.transit_info?.mode
+    transportMode: effectiveMode
   });
 
   const copyDestinationInClick = () => {
@@ -180,13 +220,41 @@ export default function RidePickerModal({
           </div>
 
           <div className="mt-2.5 flex items-center justify-between border-t border-slate-200 pt-2 text-xs font-semibold text-slate-700">
-            <span className="tabular-nums">
-              {t('ride.tripEstimateMeta', { km: distanceKm, min: estimatedMin })}
+            <span className="inline-flex flex-wrap items-center gap-1.5 tabular-nums">
+              <span>{t('ride.tripEstimateMeta', { km: distanceKm, min: estimatedMin })}</span>
+              {isRaining ? (
+                <span className="rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-800">
+                  {t('ride.rainModeTag')}
+                </span>
+              ) : null}
+              {carsNeeded > 1 && preferCar ? (
+                <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                  {t('ride.carsCount', { cars: carsNeeded })}
+                </span>
+              ) : null}
             </span>
             <span className="font-mono font-bold text-emerald-700 tabular-nums">
               {t('ride.estimatedFare', { fare: formattedFare })}
             </span>
           </div>
+
+          {isMinFare ? (
+            <p className="mt-2 rounded-xl bg-amber-50/90 px-2.5 py-1.5 text-[11px] leading-snug text-amber-900">
+              {isRaining ? t('ride.minFareRainNote') : t('ride.minFareNote')}
+            </p>
+          ) : null}
+
+          {safeMemberCount > 4 ? (
+            <p className="mt-1.5 rounded-xl bg-slate-100 px-2.5 py-1.5 text-[11px] leading-snug text-slate-700">
+              {t('ride.groupCarsNote', { count: safeMemberCount, cars: carsNeeded })}
+            </p>
+          ) : null}
+
+          {isShortWalk ? (
+            <p className="mt-1.5 rounded-xl bg-emerald-50 px-2.5 py-1.5 text-[11px] font-medium leading-snug text-emerald-800">
+              {t('ride.shortWalkHint', { meters: shortWalkMeters, min: shortWalkMin })}
+            </p>
+          ) : null}
         </div>
 
         {/* Toast sao chép thành công */}
@@ -233,6 +301,10 @@ export default function RidePickerModal({
             const isSelected = selectedService === app.id;
             const style = BRAND_STYLES[app.id] || BRAND_STYLES.grab;
             const plan = rideAppLaunchPlan(app.id, platform);
+            const fareInfo = brandFares.find((b) => b.id === app.id) || brandFares[0];
+            const primaryFareVnd = preferCar ? fareInfo.totalCarFareVnd : fareInfo.bikeFareVnd;
+            const primaryLabel = preferCar ? fareInfo.carType : fareInfo.bikeType;
+            const isCheapest = preferCar ? fareInfo.isCheapestCar : fareInfo.isCheapestBike;
 
             return (
               <div
@@ -262,14 +334,36 @@ export default function RidePickerModal({
                     </span>
 
                     <span className="min-w-0">
-                      <span className="block font-display text-sm font-bold text-slate-900">{app.name}</span>
-                      <span className="mt-0.5 block text-xs text-slate-600">
-                        {t(`ride.vehicles.${app.id}`)}
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-display text-sm font-bold text-slate-900">
+                          {app.name}
+                        </span>
+                        {isCheapest ? (
+                          <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
+                            {t('ride.cheapestBadge')}
+                          </span>
+                        ) : null}
+                        {app.id === 'xanhsm' ? (
+                          <span className="rounded-md bg-teal-100 px-1.5 py-0.5 text-[10px] font-bold text-teal-800">
+                            {t('ride.electricBadge')}
+                          </span>
+                        ) : null}
+                        {app.id === 'grab' && !isCheapest ? (
+                          <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
+                            {t('ride.popularBadge')}
+                          </span>
+                        ) : null}
                       </span>
-                      <span className="mt-0.5 block font-mono text-[11px] font-semibold text-slate-700 tabular-nums">
-                        ~{formattedFare}{' '}
+                      <span className="mt-0.5 block text-xs text-slate-600">
+                        {primaryLabel} · {t(`ride.vehicles.${app.id}`)}
+                      </span>
+                      <span className="mt-0.5 block font-mono text-[11px] font-bold text-slate-900 tabular-nums">
+                        ~{formatVnd(primaryFareVnd, lang)}{' '}
                         <span className="font-sans font-normal text-slate-600">
-                          ({t('ride.estimatedBadge')})
+                          ({t('ride.carSummaryLine', {
+                            carFare: formatVnd(fareInfo.totalCarFareVnd, lang),
+                            bikeFare: formatVnd(fareInfo.bikeFareVnd, lang)
+                          })})
                         </span>
                       </span>
                     </span>

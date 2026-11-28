@@ -367,6 +367,39 @@ async def get_trip(
 # ---------------------------------------------------------------------------
 # PUT /{trip_id} — Update trip
 # ---------------------------------------------------------------------------
+def _ensure_visited_items_locked(
+    existing_items: list[dict],
+    incoming_items: list[dict],
+) -> None:
+    """Reject any PUT update that removes, unchecks, swaps, or mutates a visited stop."""
+    incoming_by_key = {
+        (item.get("day_number"), item.get("order_index")): item
+        for item in incoming_items
+    }
+    for old_item in existing_items:
+        if not old_item.get("visited"):
+            continue
+        key = (old_item.get("day_number"), old_item.get("order_index"))
+        new_item = incoming_by_key.get(key)
+        if new_item is None or not new_item.get("visited"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="ITEM_VISITED_LOCKED",
+            )
+        if (
+            new_item.get("place_id") != old_item.get("place_id")
+            or new_item.get("place_name") != old_item.get("place_name")
+            or bool(new_item.get("is_accepted")) != bool(old_item.get("is_accepted"))
+            or (new_item.get("transit_info") or {}) != (old_item.get("transit_info") or {})
+            or new_item.get("checkin_photo") != old_item.get("checkin_photo")
+            or new_item.get("checkin_note") != old_item.get("checkin_note")
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="ITEM_VISITED_LOCKED",
+            )
+
+
 @router.put("/{trip_id}", response_model=TripOut)
 async def update_trip(
     trip_id: str,
@@ -380,6 +413,7 @@ async def update_trip(
     if payload.status is not None:
         trip.status = payload.status
     if payload.itinerary_items is not None:
+        _ensure_visited_items_locked(_parse_items(trip), payload.itinerary_items)
         trip.itinerary_json = json.dumps(payload.itinerary_items)
         trip.place_count = len(payload.itinerary_items)
         if payload.itinerary_items:
@@ -415,6 +449,11 @@ async def update_trip_item(
     )
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="TRIP_ITEM_NOT_FOUND")
+    if item.get("visited"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="ITEM_VISITED_LOCKED",
+        )
 
     updates = payload.model_dump(exclude_unset=True)
     if "visited" in updates:

@@ -157,7 +157,8 @@ export function applyTripTemplate(form, templateKey) {
     template_pace: template.pace || null,
     pace_override: null,
     day_start: template.day_start || '',
-    day_end: template.day_end || ''
+    day_end: template.day_end || '',
+    day_schedules: []
   };
   if (template.companions) {
     next.companions = template.companions;
@@ -239,6 +240,7 @@ export function defaultTripForm(startLocation = DEFAULT_STAY_LOCATION) {
     travel_date: '',
     day_start: '',
     day_end: '',
+    day_schedules: [],
     has_children: false,
     has_elderly: false,
     mobility: 'normal',
@@ -287,6 +289,29 @@ export function daysPatch(current, nextDays) {
   const patch = { days };
   if (current.budget_preset != null) {
     patch.budget = budgetPresetTotal(current.budget_preset, days, current.group_size || 1);
+  }
+  const existingSchedules = Array.isArray(current.day_schedules) ? current.day_schedules : [];
+  if (
+    current.days === 1 &&
+    days > 1 &&
+    existingSchedules.length === 0 &&
+    current.day_start &&
+    (parseTimeToMinutes(current.day_start) ?? 0) >= 15 * 60
+  ) {
+    // Khi nâng từ mẫu 1 ngày buổi tối sang nhiều ngày, chỉ giữ khung tối cho Ngày 1 để các ngày sau linh hoạt.
+    patch.day_schedules = [
+      {
+        day_number: 1,
+        day_start: current.day_start,
+        day_end: current.day_end || '23:30'
+      }
+    ];
+    patch.day_start = '';
+    patch.day_end = '';
+  } else if (existingSchedules.length > 0) {
+    patch.day_schedules = existingSchedules.filter(
+      (entry) => Number(entry?.day_number) >= 1 && Number(entry?.day_number) <= days
+    );
   }
   return patch;
 }
@@ -473,6 +498,51 @@ export function validateDayHours(dayStart, dayEnd) {
   return {};
 }
 
+export function normalizeDaySchedules(daySchedules, days = 14) {
+  if (!Array.isArray(daySchedules)) return [];
+  const maxDay = Math.min(14, Math.max(1, Math.round(Number(days) || 14)));
+  const byDay = new Map();
+  for (const entry of daySchedules) {
+    if (!entry || typeof entry !== 'object') continue;
+    const dayNumber = Math.round(Number(entry.day_number));
+    if (!Number.isInteger(dayNumber) || dayNumber < 1 || dayNumber > maxDay) continue;
+    const dayStart = String(entry.day_start || '').trim();
+    const dayEnd = String(entry.day_end || '').trim();
+    if (!dayStart && !dayEnd) continue;
+    byDay.set(dayNumber, { day_number: dayNumber, day_start: dayStart, day_end: dayEnd });
+  }
+  return [...byDay.values()].sort((a, b) => a.day_number - b.day_number);
+}
+
+export function validateDaySchedules(daySchedules, days = 14) {
+  const entries = normalizeDaySchedules(daySchedules, days);
+  for (const entry of entries) {
+    const err = validateDayHours(entry.day_start, entry.day_end);
+    const code = err.day_start || err.day_end;
+    if (code) return { day_schedules: code };
+  }
+  return {};
+}
+
+export function dayHoursSummaryText(form, t) {
+  const days = Math.max(1, Number(form?.days) || 1);
+  const perDay = normalizeDaySchedules(form?.day_schedules, days);
+  if (perDay.length > 0) {
+    if (perDay.length <= 2) {
+      return perDay
+        .map((entry) =>
+          `${t('form.dayHoursDayItem', { day: entry.day_number })}: ${entry.day_start}–${entry.day_end}`
+        )
+        .join(' · ');
+    }
+    return t('form.dayHoursPerDaySummary', { count: perDay.length });
+  }
+  if (form?.day_start && form?.day_end) {
+    return `${form.day_start} – ${form.day_end}`;
+  }
+  return null;
+}
+
 export function isValidInterestList(interests) {
   return (
     Array.isArray(interests) &&
@@ -513,6 +583,7 @@ export function validateTripForm(form, budgetDraft = null, now = new Date()) {
   }
 
   Object.assign(errors, validateDayHours(form.day_start, form.day_end));
+  Object.assign(errors, validateDaySchedules(form.day_schedules, form.days));
 
   if (Array.isArray(form.must_visit) && form.must_visit.length > MAX_MUST_VISIT) {
     errors.must_visit = 'must_visit';
@@ -587,6 +658,13 @@ export function buildAiRequest(rawForm) {
   ) {
     req.day_start = dayStart;
     req.day_end = dayEnd;
+  }
+
+  const validDaySchedules = normalizeDaySchedules(form.day_schedules, days).filter(
+    (entry) => Object.keys(validateDayHours(entry.day_start, entry.day_end)).length === 0
+  );
+  if (validDaySchedules.length > 0) {
+    req.day_schedules = validDaySchedules;
   }
 
   if (form.has_children === true) req.has_children = true;

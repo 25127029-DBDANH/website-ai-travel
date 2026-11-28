@@ -42,6 +42,17 @@ export default function LiveCompanionView({
   }, [dayItems]);
 
   const visitedCount = dayItems.filter((it) => it.visited).length;
+  const memberCount = Number(trip?.member_count) || (trip?.companion === 'solo' ? 1 : 4);
+  const rideOriginStop = useMemo(() => {
+    if (!ridePickerStop) return null;
+    const idx = dayItems.findIndex(
+      (it) =>
+        it.day_number === ridePickerStop.day_number &&
+        it.order_index === ridePickerStop.order_index
+    );
+    return idx > 0 ? dayItems[idx - 1] : null;
+  }, [dayItems, ridePickerStop]);
+
   const progressPercent = dayItems.length > 0 ? Math.round((visitedCount / dayItems.length) * 100) : 0;
   const nextPhotoSrc = nextStop?.checkin_photo || (nextStop?.photo_url ? assetUrl(nextStop.photo_url) : null);
   const showNextPhoto = Boolean(nextPhotoSrc && nextPhotoSrc !== failedPhotoUrl);
@@ -58,7 +69,7 @@ export default function LiveCompanionView({
   };
 
   const handleConfirmCheckin = (data) => {
-    if (!checkinModalStop || !onSaveCheckin) return;
+    if (!checkinModalStop || checkinModalStop.visited || !onSaveCheckin) return;
     onSaveCheckin(checkinModalStop, data);
     setCheckinModalStop(null);
   };
@@ -253,34 +264,43 @@ export default function LiveCompanionView({
                   <span>{t('ride.googleMapsDirections')}</span>
                 </a>
 
-                {/* NÚT ĐẶT XE DI CHUYỂN (GRAB / XANH SM / BE) */}
-                <button
-                  type="button"
-                  onClick={() => setRidePickerStop(nextStop)}
-                  className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-2.5 text-xs font-bold text-white hover:bg-emerald-800 active:scale-[0.98]"
-                  title={lang === 'vi' ? 'Chọn ứng dụng đặt xe: Grab, Xanh SM hoặc Be' : 'Choose ride app: Grab, Xanh SM or Be'}
-                >
-                  <Bike className="h-4 w-4" aria-hidden="true" />
-                  <span>{lang === 'vi' ? 'Đặt xe (Grab / Xanh SM / Be)' : 'Book ride (Grab / Xanh SM / Be)'}</span>
-                </button>
+                {/* NÚT ĐẶT XE DI CHUYỂN (chỉ hiện khi điểm chưa check-in) */}
+                {!nextStop?.visited ? (
+                  <button
+                    type="button"
+                    onClick={() => setRidePickerStop(nextStop)}
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-emerald-700 px-3.5 py-2.5 text-xs font-bold text-white hover:bg-emerald-800 active:scale-[0.98]"
+                    title={lang === 'vi' ? 'Chọn ứng dụng đặt xe: Grab, Xanh SM hoặc Be' : 'Choose ride app: Grab, Xanh SM or Be'}
+                  >
+                    <Bike className="h-4 w-4" aria-hidden="true" />
+                    <span>{lang === 'vi' ? 'Đặt xe (Grab / Xanh SM / Be)' : 'Book ride (Grab / Xanh SM / Be)'}</span>
+                  </button>
+                ) : null}
 
-                {/* NÚT CHỤP ẢNH CHECK-IN (BẰNG MÁY ẢNH HOẶC TẢI ẢNH LÊN) */}
-                <button
-                  type="button"
-                  onClick={() => setCheckinModalStop(nextStop)}
-                  className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-3.5 py-2.5 text-xs font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98]"
-                >
-                  <Camera className="h-4 w-4 text-brand-600" aria-hidden="true" />
-                  <span>
-                    {nextStop.checkin_photo
-                      ? lang === 'vi'
-                        ? 'Xem / đổi ảnh check-in'
-                        : 'View check-in photo'
-                      : lang === 'vi'
-                        ? 'Chụp ảnh check-in'
-                        : 'Photo check-in'}
+                {/* NÚT CHỤP ẢNH CHECK-IN (nếu đã đến và chưa có ảnh thì khóa nút chỉnh sửa) */}
+                {nextStop?.visited && !nextStop?.checkin_photo ? (
+                  <span className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs font-bold text-emerald-800">
+                    <Check className="h-4 w-4 text-emerald-700" aria-hidden="true" />
+                    <span>{t('itinerary.card.visitedLocked')}</span>
                   </span>
-                </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setCheckinModalStop(nextStop)}
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-brand-200 bg-brand-50 px-3.5 py-2.5 text-xs font-bold text-brand-800 hover:bg-brand-100 active:scale-[0.98]"
+                  >
+                    <Camera className="h-4 w-4 text-brand-600" aria-hidden="true" />
+                    <span>
+                      {nextStop.checkin_photo
+                        ? lang === 'vi'
+                          ? 'Xem ảnh check-in'
+                          : 'View check-in photo'
+                        : lang === 'vi'
+                          ? 'Chụp ảnh check-in'
+                          : 'Photo check-in'}
+                    </span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -313,26 +333,33 @@ export default function LiveCompanionView({
                 <div className="flex min-w-0 flex-1 items-center gap-3">
                   <button
                     type="button"
+                    disabled={isDone}
                     aria-pressed={isDone}
                     aria-label={
                       isDone
-                        ? lang === 'vi'
-                          ? `Hủy đánh dấu đã đến: ${item.place_name}`
-                          : `Unmark visited: ${item.place_name}`
+                        ? `${t('itinerary.card.visitedLocked')}: ${item.place_name}`
                         : lang === 'vi'
                           ? `Đánh dấu đã đến: ${item.place_name}`
                           : `Mark visited: ${item.place_name}`
                     }
-                    onClick={() => onToggleVisited && onToggleVisited(item)}
+                    onClick={() => {
+                      if (!isDone && onToggleVisited) onToggleVisited(item);
+                    }}
                     className={cn(
-                      'grid h-8 w-8 shrink-0 place-items-center rounded-xl text-xs font-bold transition-colors active:scale-95',
+                      'grid h-8 w-8 shrink-0 place-items-center rounded-xl text-xs font-bold transition-colors',
                       isDone
-                        ? 'bg-emerald-700 text-white'
+                        ? 'cursor-default bg-emerald-700 text-white'
                         : isNext
-                        ? 'bg-brand-600 text-white hover:bg-emerald-700'
-                        : 'bg-slate-100 text-slate-700 hover:bg-emerald-100 hover:text-emerald-800'
+                        ? 'bg-brand-600 text-white hover:bg-emerald-700 active:scale-95'
+                        : 'bg-slate-100 text-slate-700 hover:bg-emerald-100 hover:text-emerald-800 active:scale-95'
                     )}
-                    title={isDone ? 'Bấm để hủy đánh dấu đã đến' : 'Bấm để đánh dấu đã đến điểm này'}
+                    title={
+                      isDone
+                        ? t('itinerary.card.visitedLocked')
+                        : lang === 'vi'
+                          ? 'Bấm để đánh dấu đã đến điểm này'
+                          : 'Mark stop as visited'
+                    }
                   >
                     {isDone ? <Check className="h-4 w-4" aria-hidden="true" /> : item.order_index}
                   </button>
@@ -387,46 +414,49 @@ export default function LiveCompanionView({
                     />
                   </a>
 
-                  {/* Nút đặt xe mở modal 3 app */}
-                  <button
-                    type="button"
-                    onClick={() => setRidePickerStop(item)}
-                    className="grid h-8 w-8 place-items-center rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                    title={lang === 'vi' ? 'Đặt xe (Grab / Xanh SM / Be)' : 'Book ride (Grab / Xanh SM / Be)'}
-                    aria-label={
-                      lang === 'vi'
-                        ? `Đặt xe tới ${item.place_name}`
-                        : `Book ride to ${item.place_name}`
-                    }
-                  >
-                    <Bike className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
+                  {/* Nút đặt xe mở modal 3 app (ẩn nếu đã check-in) */}
+                  {!isDone ? (
+                    <button
+                      type="button"
+                      onClick={() => setRidePickerStop(item)}
+                      className="grid h-8 w-8 place-items-center rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                      title={lang === 'vi' ? 'Đặt xe (Grab / Xanh SM / Be)' : 'Book ride (Grab / Xanh SM / Be)'}
+                      aria-label={
+                        lang === 'vi'
+                          ? `Đặt xe tới ${item.place_name}`
+                          : `Book ride to ${item.place_name}`
+                      }
+                    >
+                      <Bike className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  ) : null}
 
-                  <button
-                    type="button"
-                    onClick={() => setCheckinModalStop(item)}
-                    className={cn(
-                      'inline-flex min-h-8 items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold transition-colors sm:px-3',
-                      item.checkin_photo
-                        ? 'border border-emerald-300 bg-emerald-100 text-emerald-800'
-                        : isDone
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                    )}
-                  >
-                    <Camera className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span>
-                      {item.checkin_photo
-                        ? lang === 'vi'
-                          ? 'Xem ảnh'
-                          : 'Photo'
-                        : isDone
-                          ? lang === 'vi'
-                            ? 'Đã đến'
-                            : 'Visited'
-                          : 'Check-in'}
+                  {isDone && !item.checkin_photo ? (
+                    <span className="inline-flex min-h-8 items-center gap-1 rounded-xl border border-emerald-200 bg-emerald-100 px-2.5 py-1.5 text-xs font-bold text-emerald-800 sm:px-3">
+                      <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>{lang === 'vi' ? 'Đã đến' : 'Visited'}</span>
                     </span>
-                  </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setCheckinModalStop(item)}
+                      className={cn(
+                        'inline-flex min-h-8 items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold transition-colors sm:px-3',
+                        item.checkin_photo
+                          ? 'border border-emerald-300 bg-emerald-100 text-emerald-800'
+                          : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                      )}
+                    >
+                      <Camera className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>
+                        {item.checkin_photo
+                          ? lang === 'vi'
+                            ? 'Xem ảnh'
+                            : 'Photo'
+                          : 'Check-in'}
+                      </span>
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -463,6 +493,8 @@ export default function LiveCompanionView({
       {ridePickerStop && (
         <RidePickerModal
           stop={ridePickerStop}
+          originStop={rideOriginStop}
+          memberCount={memberCount}
           isOpen={Boolean(ridePickerStop)}
           transportMode={trip?.transport_mode}
           onClose={() => setRidePickerStop(null)}
@@ -473,6 +505,7 @@ export default function LiveCompanionView({
       {checkinModalStop && (
         <CheckinModal
           stop={checkinModalStop}
+          readOnly={Boolean(checkinModalStop?.visited)}
           onConfirm={handleConfirmCheckin}
           onClose={() => setCheckinModalStop(null)}
         />

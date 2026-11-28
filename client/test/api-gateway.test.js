@@ -87,3 +87,112 @@ test('API Gateway defaults to VITE_USE_BACKEND = true and can toggle to Mock Dat
   setUseBackend(null);
   assert.equal(isBackendEnabled(), true);
 });
+
+test('api swapPlace, applyRainMode, and visited lock behave atomically in mock mode', async () => {
+  setUseBackend(false);
+  try {
+    const customItems = [
+      {
+        day_number: 1,
+        order_index: 1,
+        place_id: 'p-1',
+        place_name: 'Dinh Độc Lập',
+        district: 'Quận 1',
+        category: 'sightseeing',
+        latitude: 10.777,
+        longitude: 106.6953,
+        estimated_cost: 65000,
+        end_time: '10:00',
+        is_indoor: false,
+        visited: false
+      },
+      {
+        day_number: 1,
+        order_index: 2,
+        place_id: 'p-2',
+        place_name: 'Phố đi bộ Nguyễn Huệ',
+        district: 'Quận 1',
+        category: 'sightseeing',
+        latitude: 10.774,
+        longitude: 106.7035,
+        estimated_cost: 0,
+        start_time: '10:15',
+        end_time: '12:00',
+        is_indoor: false,
+        visited: false,
+        transit_info: { mode: 'grab_car', distance_km: 1.0, estimated_fare_vnd: 32000 }
+      },
+      {
+        day_number: 1,
+        order_index: 3,
+        place_id: 'p-3',
+        place_name: 'Phở Hòa Pasteur',
+        district: 'Quận 3',
+        category: 'food',
+        latitude: 10.788,
+        longitude: 106.691,
+        estimated_cost: 95000,
+        start_time: '12:15',
+        end_time: '13:30',
+        is_indoor: true,
+        visited: false,
+        transit_info: { mode: 'grab_car', distance_km: 1.5, estimated_fare_vnd: 32000 }
+      }
+    ];
+
+    const created = await api.createTrip({
+      title: 'Atomic Lock Test',
+      days: 1,
+      budget: 2000000,
+      member_count: 4,
+      transport_mode: 'grab_car',
+      itinerary_items: customItems
+    });
+
+    // Lock stop 1 via check-in
+    await api.toggleVisited(created.id, 1, 1);
+
+    // Locked stop cannot be unchecked, accepted, or swapped
+    await assert.rejects(() => api.toggleVisited(created.id, 1, 1), (err) => err.code === 'ITEM_VISITED_LOCKED');
+    await assert.rejects(() => api.toggleAcceptPlace(created.id, 1, 1), (err) => err.code === 'ITEM_VISITED_LOCKED');
+    await assert.rejects(
+      () => api.swapPlace(created.id, 1, 1, { place_id: 'x', place_name: 'Other', latitude: 10.8, longitude: 106.7 }),
+      (err) => err.code === 'ITEM_VISITED_LOCKED'
+    );
+
+    // Swapping stop 2 to Tan Son Nhat recalculates distance & fare cleanly
+    const afterSwap = await api.swapPlace(created.id, 1, 2, {
+      place_id: 'p-tsn',
+      place_name: 'Công viên Hoàng Văn Thụ',
+      district: 'Tân Bình',
+      latitude: 10.8005,
+      longitude: 106.663,
+      estimated_cost: 0,
+      is_indoor: false
+    });
+    const swappedStop2 = afterSwap.items.find((it) => it.order_index === 2);
+    assert.ok(swappedStop2.transit_info.distance_km > 4.0);
+    assert.ok(swappedStop2.transit_info.estimated_fare_vnd > 45000);
+
+    // Atomic rain swap + enable sets replacement AND rain mode in one save
+    const afterRain = await api.applyRainMode(created.id, 1, true, {
+      target: swappedStop2,
+      replacement: {
+        place_id: 'p-bao-tang',
+        place_name: 'Bảo tàng Mỹ thuật TP.HCM',
+        district: 'Quận 1',
+        latitude: 10.7698,
+        longitude: 106.6995,
+        estimated_cost: 30000,
+        is_indoor: true
+      }
+    });
+    const rainStop2 = afterRain.items.find((it) => it.order_index === 2);
+    const rainStop3 = afterRain.items.find((it) => it.order_index === 3);
+    assert.equal(rainStop2.place_name, 'Bảo tàng Mỹ thuật TP.HCM');
+    assert.equal(rainStop2.transit_info.is_rain_mode, true);
+    assert.equal(rainStop3.transit_info.is_rain_mode, true);
+  } finally {
+    setUseBackend(null);
+  }
+});

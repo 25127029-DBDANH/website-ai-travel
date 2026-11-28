@@ -31,7 +31,11 @@ from app.schemas.ai import (
     TripGenerationResponse,
 )
 from app.services.interests import INTEREST_DEFINITIONS, interest_score, legacy_preferences
-from app.utils.transit_calculator import estimate_ride_fares, haversine_km
+from app.utils.transit_calculator import (
+    cars_needed_for_group,
+    estimate_ride_fares,
+    estimate_road_distance_km,
+)
 
 logger = logging.getLogger(__name__)
 ModelT = TypeVar("ModelT", bound=BaseModel)
@@ -172,6 +176,57 @@ def _is_open_during_window(
     start = 0 if window_start is None else window_start
     end = 24 * 60 if window_end is None else window_end
     return any(start < close_min and open_min < end for open_min, close_min in intervals)
+
+
+def _format_hhmm(total_minutes: int) -> str:
+    clamped = max(0, min(23 * 60 + 59, total_minutes))
+    hours, minutes = divmod(clamped, 60)
+    return f"{hours:02d}:{minutes:02d}"
+
+
+def _build_day_time_slots(
+    places_per_day: int,
+    day_start: str | None,
+    day_end: str | None,
+) -> list[tuple[str, str]]:
+    """Build evenly spaced schedule slots inside [day_start, day_end] or default slots."""
+    if day_start is None and day_end is None:
+        return list(_TIME_SLOTS[:places_per_day])
+
+    start_min = _parse_hhmm(day_start)
+    end_min = _parse_hhmm(day_end)
+    if start_min is None and end_min is None:
+        return list(_TIME_SLOTS[:places_per_day])
+    if start_min is None:
+        start_min = 8 * 60 + 30
+    if end_min is None:
+        end_min = 22 * 60
+    if end_min <= start_min:
+        end_min = min(23 * 60 + 59, start_min + max(240, places_per_day * 60))
+
+    span = end_min - start_min
+    gap = 15 if span >= places_per_day * 45 + max(0, places_per_day - 1) * 15 else 10
+    total_gaps = max(0, places_per_day - 1) * gap
+    usable = max(places_per_day * 30, span - total_gaps)
+    per_stop = min(120, usable // places_per_day)
+
+    slots: list[tuple[str, str]] = []
+    cursor = start_min
+    for _ in range(places_per_day):
+        slot_end = min(23 * 60 + 59, cursor + per_stop)
+        slots.append((_format_hhmm(cursor), _format_hhmm(slot_end)))
+        cursor = slot_end + gap
+    return slots
+
+
+def _resolve_day_window(
+    request: TripConceptRequest,
+    day_number: int,
+) -> tuple[str | None, str | None]:
+    for entry in getattr(request, "day_schedules", None) or []:
+        if entry.day_number == day_number:
+            return entry.day_start, entry.day_end
+    return getattr(request, "day_start", None), getattr(request, "day_end", None)
 
 
 class GeminiServiceError(RuntimeError):
@@ -447,7 +502,9 @@ class GeminiService:
             result = self._fallback_itinerary(request, places)
             source = "fallback"
         result.itinerary_items = self._fill_transit_info(
-            result.itinerary_items, request.transport_mode
+            result.itinerary_items,
+            request.transport_mode,
+            member_count=request.member_count,
         )
         self._log_step_metrics("generate", len(places), len(prompt), started_at, source)
         return self._with_source(result, source)
@@ -678,6 +735,13 @@ class GeminiService:
 
         window_start = _parse_hhmm(getattr(request, "day_start", None))
         window_end = _parse_hhmm(getattr(request, "day_end", None))
+        day_schedules = getattr(request, "day_schedules", None) or []
+        if window_start is None and window_end is None and len(day_schedules) >= request.days:
+            starts = [m for m in (_parse_hhmm(w.day_start) for w in day_schedules) if m is not None]
+            ends = [m for m in (_parse_hhmm(w.day_end) for w in day_schedules) if m is not None]
+            if starts and ends:
+                window_start = min(starts)
+                window_end = max(ends)
         has_time_window = window_start is not None or window_end is not None
 
         filtered = [
@@ -793,7 +857,27 @@ class GeminiService:
         day_end = getattr(request, "day_end", None)
         valid_start = day_start if _parse_hhmm(day_start) is not None else None
         valid_end = day_end if _parse_hhmm(day_end) is not None else None
-        if valid_start and valid_end:
+        day_schedules = sorted(
+            getattr(request, "day_schedules", None) or [],
+            key=lambda w: w.day_number,
+        )
+        if day_schedules:
+            by_day = {w.day_number: f"{w.day_start} - {w.day_end}" for w in day_schedules}
+            default_label = (
+                f"{valid_start} - {valid_end}"
+                if valid_start and valid_end
+                else "linh hoạt (08:30 - 20:00)"
+            )
+            per_day_parts = [
+                f"Ngày {d}: {by_day.get(d, default_label)}"
+                for d in range(1, request.days + 1)
+            ]
+            constraints.append(
+                "Khung giờ theo từng ngày: "
+                + "; ".join(per_day_parts)
+                + " (xếp từng ngày đúng khung giờ riêng, không ép các ngày giống nhau)"
+            )
+        elif valid_start and valid_end:
             constraints.append(
                 f"Khung giờ mỗi ngày: {valid_start} - {valid_end} "
                 "(xếp các điểm trong khung giờ này)"
@@ -969,11 +1053,18 @@ class GeminiService:
                 day_places.append(place)
             selected.extend(day_places)
 
+        slots_by_day = {
+            day: _build_day_time_slots(
+                request.places_per_day, *_resolve_day_window(request, day)
+            )
+            for day in range(1, request.days + 1)
+        }
         items: list[ItineraryItemResponse] = []
         for index, place in enumerate(selected):
             day_number = index // request.places_per_day + 1
             order_index = index % request.places_per_day + 1
-            start_time, end_time = _TIME_SLOTS[order_index - 1]
+            start_time, end_time = slots_by_day[day_number][order_index - 1]
+            start_min = _parse_hhmm(start_time) or 0
             items.append(
                 ItineraryItemResponse(
                     **_model_dict(place),
@@ -982,7 +1073,7 @@ class GeminiService:
                     time_slot=f"{start_time} - {end_time}",
                     start_time=start_time,
                     end_time=end_time,
-                    is_lunch=place.category == "food" and order_index == 3,
+                    is_lunch=place.category == "food" and order_index == 3 and start_min < 15 * 60,
                     transit_info=None,
                     visited=False,
                 )
@@ -1028,8 +1119,10 @@ class GeminiService:
     def _fill_transit_info(
         items: list[ItineraryItemResponse],
         transport_mode: str,
+        *,
+        member_count: int = 1,
     ) -> list[ItineraryItemResponse]:
-        """Fill ``transit_info`` for the 2nd+ stop of each day using haversine + fare estimation."""
+        """Fill ``transit_info`` for the 2nd+ stop of each day with road-adjusted fares."""
 
         speed_kmh = _MODE_SPEED_KMH.get(transport_mode, 20.0)
         _MODE_FARE_MAP: dict[str, str] = {
@@ -1039,6 +1132,7 @@ class GeminiService:
             "public": "Bike",
         }
         fare_keyword = _MODE_FARE_MAP.get(transport_mode, "Bike")
+        cars_needed = cars_needed_for_group(member_count) if transport_mode == "grab_car" else 1
 
         sorted_items = sorted(items, key=lambda it: (it.day_number, it.order_index))
         result: list[ItineraryItemResponse] = []
@@ -1049,24 +1143,25 @@ class GeminiService:
                 prev = item
                 continue
 
-            dist_km = round(
-                haversine_km(prev.latitude, prev.longitude, item.latitude, item.longitude),
-                2,
+            dist_km = estimate_road_distance_km(
+                prev.latitude, prev.longitude, item.latitude, item.longitude
             )
-            duration_min = max(1, round(dist_km / speed_kmh * 60))
+            duration_min = max(2, round(dist_km / speed_kmh * 60))
 
             if transport_mode == "walk":
                 fare_vnd = 0
             else:
                 fares = estimate_ride_fares(dist_km)
                 matched = [f for f in fares if fare_keyword.lower() in f.vehicle_type.lower()]
-                fare_vnd = matched[0].estimated_fare_vnd if matched else 0
+                base_fare = matched[0].estimated_fare_vnd if matched else 0
+                fare_vnd = base_fare * cars_needed if transport_mode == "grab_car" else base_fare
 
             transit = TransitInfoResponse(
                 distance_km=dist_km,
                 duration_min=duration_min,
                 mode=transport_mode,
                 estimated_fare_vnd=fare_vnd,
+                cars_needed=cars_needed,
                 start_time=prev.end_time,
                 end_time=item.start_time,
             )

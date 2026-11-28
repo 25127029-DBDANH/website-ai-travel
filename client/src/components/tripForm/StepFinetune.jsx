@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { cn } from '../../lib/cn.js';
 import {
   CATALOG_DISTRICTS,
+  dayHoursSummaryText,
   derivePace,
   FORM_DIETARY,
   MAX_AVOID_DISTRICTS,
@@ -19,7 +20,7 @@ const SECTION_FIELDS = {
   must_visit: ['must_visit'],
   avoid: ['avoid_districts'],
   dietary: ['dietary'],
-  hours: ['day_start', 'day_end'],
+  hours: ['day_start', 'day_end', 'day_schedules'],
   notes: ['special_notes', 'custom_notes']
 };
 
@@ -34,19 +35,47 @@ export default function StepFinetune({ form, onPatch, errors, t, highlighted, he
   const errorText = (field) => (errors?.[field] ? t(`form.validation.${errors[field]}`) : '');
   const mustVisit = form.must_visit || [];
   const atLimit = mustVisit.length >= MAX_MUST_VISIT;
-  const dayHoursError = errorText('day_start') || errorText('day_end');
+  const dayHoursError = errorText('day_start') || errorText('day_end') || errorText('day_schedules');
+  const daySchedules = Array.isArray(form.day_schedules) ? form.day_schedules : [];
+  const hasConfiguredHours = Boolean(form.day_start || form.day_end || daySchedules.length > 0);
 
   const isOpen = (id) => {
     if (SECTION_FIELDS[id].some((field) => errors?.[field])) return true;
     if (id in userToggled) return userToggled[id];
+    if (id === 'hours' && hasConfiguredHours) return true;
     return SECTION_FIELDS[id].some((field) => highlighted?.has(field));
   };
   const toggle = (id) =>
     setUserToggled((cur) => {
-      const hasHighlight = SECTION_FIELDS[id].some((field) => highlighted?.has(field));
+      const hasHighlight =
+        SECTION_FIELDS[id].some((field) => highlighted?.has(field)) ||
+        (id === 'hours' && hasConfiguredHours);
       const currentlyOpen = id in cur ? cur[id] : hasHighlight;
       return { ...cur, [id]: !currentlyOpen };
     });
+
+  const updateDayWindow = (dayNumber, field, value) => {
+    const existing = daySchedules.find((entry) => entry.day_number === dayNumber) || {
+      day_number: dayNumber,
+      day_start: '',
+      day_end: ''
+    };
+    const updatedEntry = { ...existing, [field]: value };
+    const others = daySchedules.filter((entry) => entry.day_number !== dayNumber);
+    if (!updatedEntry.day_start && !updatedEntry.day_end) {
+      onPatch({ day_schedules: others });
+    } else {
+      onPatch({
+        day_schedules: [...others, updatedEntry].sort((a, b) => a.day_number - b.day_number)
+      });
+    }
+  };
+
+  const clearDayWindow = (dayNumber) => {
+    onPatch({
+      day_schedules: daySchedules.filter((entry) => entry.day_number !== dayNumber)
+    });
+  };
 
   useEffect(() => {
     const trimmed = placeQuery.trim();
@@ -107,7 +136,7 @@ export default function StepFinetune({ form, onPatch, errors, t, highlighted, he
     dietary: form.dietary.length
       ? form.dietary.map((item) => t(`form.option.dietary.${item}`)).join(', ')
       : empty,
-    hours: form.day_start && form.day_end ? `${form.day_start} – ${form.day_end}` : t('form.review.flexibleHours'),
+    hours: dayHoursSummaryText(form, t) || t('form.review.flexibleHours'),
     notes:
       [form.prefer_indoor ? t('form.finetune.indoorOn') : null, form.custom_notes.trim() || null]
         .filter(Boolean)
@@ -382,6 +411,11 @@ export default function StepFinetune({ form, onPatch, errors, t, highlighted, he
         >
           <fieldset className="min-w-0">
             <legend className="sr-only">{t('form.dayHoursLabel')}</legend>
+            {form.days > 1 && (
+              <p className="mb-1.5 text-xs font-semibold text-slate-700">
+                {t('form.dayHoursAllDaysTitle')}
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label htmlFor="trip-day-start" className="mb-1 block text-xs font-medium text-slate-700">
@@ -419,10 +453,10 @@ export default function StepFinetune({ form, onPatch, errors, t, highlighted, he
                   {t('form.dayHoursHint')}
                 </p>
               )}
-              {(form.day_start || form.day_end) && (
+              {hasConfiguredHours && (
                 <button
                   type="button"
-                  onClick={() => onPatch({ day_start: '', day_end: '' })}
+                  onClick={() => onPatch({ day_start: '', day_end: '', day_schedules: [] })}
                   className="inline-flex min-h-8 items-center gap-0.5 text-xs font-semibold text-slate-600 hover:text-slate-900"
                 >
                   <X className="h-3 w-3" aria-hidden="true" />
@@ -430,6 +464,63 @@ export default function StepFinetune({ form, onPatch, errors, t, highlighted, he
                 </button>
               )}
             </div>
+
+            {form.days > 1 && (
+              <div className="mt-4 space-y-2 border-t border-slate-100 pt-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-800">
+                    {t('form.dayHoursByDayTitle')}
+                  </p>
+                  <p className="text-[11px] text-slate-500">{t('form.dayHoursByDayHint')}</p>
+                </div>
+                <div className="space-y-2">
+                  {Array.from({ length: form.days }, (_, idx) => idx + 1).map((dayNum) => {
+                    const entry = daySchedules.find((item) => item.day_number === dayNum);
+                    return (
+                      <div
+                        key={dayNum}
+                        className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200/80 bg-slate-50/70 px-3 py-2"
+                      >
+                        <span className="min-w-16 text-xs font-bold text-slate-800">
+                          {t('form.dayHoursDayItem', { day: dayNum })}
+                        </span>
+                        <input
+                          id={`trip-day-${dayNum}-start`}
+                          type="time"
+                          aria-label={`${t('form.dayHoursDayItem', { day: dayNum })} — ${t('form.dayStartLabel')}`}
+                          value={entry?.day_start || ''}
+                          onChange={(event) => updateDayWindow(dayNum, 'day_start', event.target.value)}
+                          className="input !w-auto min-w-[7.5rem] !py-1.5 text-xs"
+                        />
+                        <span className="text-xs text-slate-400">–</span>
+                        <input
+                          id={`trip-day-${dayNum}-end`}
+                          type="time"
+                          aria-label={`${t('form.dayHoursDayItem', { day: dayNum })} — ${t('form.dayEndLabel')}`}
+                          value={entry?.day_end || ''}
+                          onChange={(event) => updateDayWindow(dayNum, 'day_end', event.target.value)}
+                          className="input !w-auto min-w-[7.5rem] !py-1.5 text-xs"
+                        />
+                        {entry ? (
+                          <button
+                            type="button"
+                            onClick={() => clearDayWindow(dayNum)}
+                            className="inline-flex min-h-7 items-center gap-0.5 rounded-lg px-2 text-[11px] font-semibold text-slate-600 hover:bg-slate-200/70 hover:text-slate-900"
+                          >
+                            <X className="h-3 w-3" aria-hidden="true" />
+                            <span>{t('form.dayHoursFlexibleDay')}</span>
+                          </button>
+                        ) : (
+                          <span className="text-[11px] font-medium text-slate-500">
+                            {t('form.dayHoursFlexibleDay')}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </fieldset>
         </Accordion>
 

@@ -8,9 +8,11 @@ import {
   MAX_AVOID_DISTRICTS,
   MAX_MUST_VISIT,
   migrateLegacyForm,
+  normalizeDaySchedules,
   rawSpecialNotes,
   sanitizeInterests,
-  validateDayHours
+  validateDayHours,
+  validateDaySchedules
 } from './tripFormLogic.js';
 import {
   DISTRICTS,
@@ -59,6 +61,7 @@ export const WIZARD_STEPS = [
       'dietary',
       'day_start',
       'day_end',
+      'day_schedules',
       'prefer_indoor',
       'custom_notes',
       'special_notes'
@@ -168,6 +171,7 @@ export function validateStep(stepId, form, { budgetDraft = null, now = new Date(
         errors.avoid_districts = 'avoid_districts';
       }
       Object.assign(errors, validateDayHours(form.day_start, form.day_end));
+      Object.assign(errors, validateDaySchedules(form.day_schedules, form.days));
       if (rawSpecialNotes(form.custom_notes).length > 500) {
         errors.special_notes = 'special_notes';
       }
@@ -317,6 +321,7 @@ export function parseDraft(raw, fallbackStartLocation) {
     template_pace: TRIP_OPTION_VALUES.pace.includes(f.template_pace) ? f.template_pace : null,
     day_start: typeof f.day_start === 'string' ? f.day_start : '',
     day_end: typeof f.day_end === 'string' ? f.day_end : '',
+    day_schedules: normalizeDaySchedules(f.day_schedules, Number.isInteger(f.days) ? f.days : base.days),
     prefer_indoor: Boolean(f.prefer_indoor),
     transport_mode: TRIP_OPTION_VALUES.transport_mode.includes(f.transport_mode)
       ? f.transport_mode

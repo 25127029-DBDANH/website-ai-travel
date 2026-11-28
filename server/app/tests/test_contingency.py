@@ -201,3 +201,35 @@ def test_adapt_transit_info_idempotent():
     # Third call
     third_call = adapt_transit_info(second_call, current_time=time(17, 30), is_raining=True)
     assert third_call == second_call
+
+
+def test_adapt_itinerary_items_preserves_visited_stops():
+    """Checked-in stops remain in place with untouched transit_info during rain filtering."""
+    visited_transit = {"mode": "grab_bike", "duration_min": 10, "estimated_fare_vnd": 15000}
+    items = [
+        {
+            "place_name": "Hồ Con Rùa",
+            "is_indoor": False,
+            "visited": True,
+            "transit_info": dict(visited_transit),
+        },
+        {
+            "place_name": "Công viên 23/9",
+            "is_indoor": False,
+            "visited": False,
+            "transit_info": {"mode": "grab_bike", "duration_min": 12, "estimated_fare_vnd": 15000},
+        },
+        {
+            "place_name": "Bảo tàng Mỹ thuật",
+            "is_indoor": True,
+            "visited": False,
+            "transit_info": {"mode": "grab_bike", "duration_min": 12, "estimated_fare_vnd": 15000},
+        },
+    ]
+
+    adapted = adapt_itinerary_items(
+        items, current_time=time(18, 0), is_raining=True, filter_outdoor=True
+    )
+    assert [item["place_name"] for item in adapted] == ["Hồ Con Rùa", "Bảo tàng Mỹ thuật"]
+    assert adapted[0]["transit_info"] == visited_transit
+    assert adapted[1]["transit_info"]["is_rain_mode"] is True

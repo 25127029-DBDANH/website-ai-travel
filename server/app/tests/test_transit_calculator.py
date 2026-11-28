@@ -11,7 +11,9 @@ from app.utils.transit_calculator import (
     InvalidDistanceError,
     VehicleFare,
     calculate_single_fare,
+    cars_needed_for_group,
     estimate_ride_fares,
+    estimate_road_distance_km,
     haversine_km,
 )
 
@@ -143,3 +145,23 @@ def test_estimate_ride_fares_negative_distance():
     """Negative distance must raise InvalidDistanceError."""
     with pytest.raises(InvalidDistanceError):
         estimate_ride_fares(-0.5)
+
+
+def test_estimate_ride_fares_distinct_brand_car_prices():
+    """Short car trips must still show distinct estimates per provider."""
+    fares = {item.vehicle_type: item.estimated_fare_vnd for item in estimate_ride_fares(1.5)}
+    assert len({fares["GrabCar"], fares["Taxi điện"], fares["BeCar"]}) == 3
+    assert fares["Taxi điện"] == 27000
+    assert fares["BeCar"] == 29000
+    assert fares["GrabCar"] == 32000
+
+
+def test_estimate_road_distance_and_group_cars():
+    """Road multiplier exceeds Haversine and group size scales 4-seat car count."""
+    straight = haversine_km(10.7769, 106.6953, 10.7798, 106.6990)
+    road = estimate_road_distance_km(10.7769, 106.6953, 10.7798, 106.6990)
+    assert road > straight
+    assert cars_needed_for_group(1) == 1
+    assert cars_needed_for_group(4) == 1
+    assert cars_needed_for_group(5) == 2
+    assert cars_needed_for_group(8) == 2

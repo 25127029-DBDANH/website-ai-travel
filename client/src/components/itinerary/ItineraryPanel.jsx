@@ -15,7 +15,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useOpenPlace, usePlaceDrawer } from '../../context/PlaceDrawerContext.jsx';
 import { DEMO } from '../../demo.jsx';
 import { useI18n } from '../../i18n/I18nContext.jsx';
-import { downloadIcsFile } from '../../lib/api.js';
+import { api, downloadIcsFile } from '../../lib/api.js';
 import { cn } from '../../lib/cn.js';
 import { formatDayLabel, formatVnd } from '../../lib/format.js';
 import RidePickerModal from '../common/RidePickerModal.jsx';
@@ -190,6 +190,8 @@ export default function ItineraryPanel({
   const [rainMode, setRainMode] = useState(false);
   const [trafficMode, setTrafficMode] = useState(false);
   const [showRainModal, setShowRainModal] = useState(false);
+  const [rainAlternatives, setRainAlternatives] = useState([]);
+  const [loadingRainAlts, setLoadingRainAlts] = useState(false);
   const [showTrafficModal, setShowTrafficModal] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
@@ -246,24 +248,101 @@ export default function ItineraryPanel({
   const dayCount = Number(trip?.days) || 1;
   const memberCount = Number(trip?.member_count) || (trip?.companion === 'solo' ? 1 : 4);
 
+  const targetOutdoor = useMemo(
+    () => dayItems.find((it) => !it.visited && !it.is_indoor) || null,
+    [dayItems]
+  );
+  const hasOnlyVisitedOutdoor = useMemo(
+    () => !targetOutdoor && dayItems.some((it) => !it.is_indoor),
+    [targetOutdoor, dayItems]
+  );
+  const budgetCandidateStop = useMemo(() => {
+    const unvisited = dayItems.filter((it) => !it.visited);
+    return (
+      [...unvisited]
+        .filter((it) => it.category === 'food' && Number(it.estimated_cost || 0) >= 80000)
+        .sort((a, b) => Number(b.estimated_cost || 0) - Number(a.estimated_cost || 0))[0] ||
+      [...unvisited].sort((a, b) => Number(b.estimated_cost || 0) - Number(a.estimated_cost || 0))[0] ||
+      null
+    );
+  }, [dayItems]);
+  const rideOriginStop = useMemo(() => {
+    if (!rideTargetPlace) return null;
+    const idx = dayItems.findIndex(
+      (it) =>
+        it.day_number === rideTargetPlace.day_number &&
+        it.order_index === rideTargetPlace.order_index
+    );
+    return idx > 0 ? dayItems[idx - 1] : null;
+  }, [dayItems, rideTargetPlace]);
+
+  useEffect(() => {
+    const unvisited = dayItems.filter((it) => !it.visited);
+    setRainMode(unvisited.some((it) => it.transit_info?.is_rain_mode));
+    setTrafficMode(unvisited.some((it) => it.transit_info?.is_rush_hour));
+  }, [dayItems]);
+
+  useEffect(() => {
+    if (!showRainModal) return undefined;
+    let cancelled = false;
+    const anchorStop = targetOutdoor || dayItems.find((it) => !it.visited) || dayItems[0];
+    if (!anchorStop) {
+      setRainAlternatives([]);
+      return undefined;
+    }
+    setLoadingRainAlts(true);
+    api
+      .getIndoorAlternatives(
+        anchorStop,
+        dayItems.map((it) => it.place_id).filter(Boolean)
+      )
+      .then((list) => {
+        if (!cancelled) {
+          setRainAlternatives(
+            Array.isArray(list) && list.length > 0 ? list : NEARBY_RAIN_ALTERNATIVES
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setRainAlternatives(NEARBY_RAIN_ALTERNATIVES);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingRainAlts(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showRainModal, targetOutdoor, dayItems]);
+
   const buildPlaceActions = useCallback(
-    (stop) => ({
-      stop,
-      memberCount,
-      swapping: Boolean(swappingKey),
-      onToggleAccept,
-      onSwap,
-      onToggleVisited,
-      onLocate: handleLocate,
-      allowBookRide: true,
-      onOpenCheckin: onOpenLiveMode
-        ? () => {
-            onOpenLiveMode();
-          }
-        : undefined
-    }),
+    (stop) => {
+      const dayList = itemsByDay.get(stop?.day_number) || [];
+      const stopIdx = dayList.findIndex(
+        (it) => it.day_number === stop?.day_number && it.order_index === stop?.order_index
+      );
+      const originStop = stopIdx > 0 ? dayList[stopIdx - 1] : null;
+      return {
+        stop,
+        originStop,
+        memberCount,
+        transportMode: trip?.transport_mode,
+        swapping: Boolean(swappingKey),
+        onToggleAccept,
+        onSwap,
+        onToggleVisited,
+        onLocate: handleLocate,
+        allowBookRide: true,
+        onOpenCheckin: onOpenLiveMode
+          ? () => {
+              onOpenLiveMode();
+            }
+          : undefined
+      };
+    },
     [
+      itemsByDay,
       memberCount,
+      trip?.transport_mode,
       swappingKey,
       onToggleAccept,
       onSwap,
@@ -308,51 +387,60 @@ export default function ItineraryPanel({
     return acts + trans;
   }, [dayItems, memberCount]);
 
-  const handleToggleRainMode = () => {
+  const handleToggleRainMode = async () => {
     if (rainMode) {
       setRainMode(false);
-      if (onToggleRain) onToggleRain(activeDay, false);
+      if (onToggleRain) await onToggleRain(activeDay, false);
     } else {
       setShowRainModal(true);
     }
   };
 
-  const handleKeepOriginalRain = () => {
+  const handleKeepOriginalRain = async () => {
     setShowRainModal(false);
     setRainMode(true);
-    if (onToggleRain) onToggleRain(activeDay, true);
+    if (onToggleRain) await onToggleRain(activeDay, true);
   };
 
-  const handleSelectRainAlternative = (alt) => {
+  const handleSelectRainAlternative = async (alt) => {
     setShowRainModal(false);
-    const targetOutdoor = dayItems.find((it) => !it.is_indoor) || dayItems[0];
-    if (targetOutdoor && onSwap) {
-      onSwap(targetOutdoor, alt);
+    setRainMode(true);
+    if (onToggleRain) {
+      await onToggleRain(
+        activeDay,
+        true,
+        targetOutdoor ? { target: targetOutdoor, replacement: alt } : null
+      );
     }
-    setRainMode(true);
-    if (onToggleRain) onToggleRain(activeDay, true);
   };
 
-  const handleToggleTrafficMode = () => {
+  const handleToggleTrafficMode = async () => {
     if (trafficMode) {
       setTrafficMode(false);
-      if (onToggleTraffic) onToggleTraffic(activeDay, false);
+      if (onToggleTraffic) await onToggleTraffic(activeDay, false);
     } else {
       setShowTrafficModal(true);
     }
   };
 
-  const handleKeepOriginalTraffic = () => {
+  const handleKeepOriginalTraffic = async () => {
     setShowTrafficModal(false);
     setTrafficMode(true);
-    if (onToggleTraffic) onToggleTraffic(activeDay, true);
+    if (onToggleTraffic) await onToggleTraffic(activeDay, true);
   };
 
-  const handleSelectRushAlternative = (alt) => {
+  const handleSelectRushAlternative = async (alt) => {
     setShowTrafficModal(false);
-    const target = dayItems.find((it) => it.order_index >= 3) || dayItems[dayItems.length - 1];
-    if (target && onSwap) {
-      onSwap(target, alt);
+    const target =
+      dayItems.find((it) => !it.visited && it.order_index >= 3) ||
+      [...dayItems].reverse().find((it) => !it.visited);
+    setTrafficMode(true);
+    if (onToggleTraffic) {
+      await onToggleTraffic(
+        activeDay,
+        true,
+        target ? { target, replacement: alt } : null
+      );
     }
   };
 
@@ -360,14 +448,10 @@ export default function ItineraryPanel({
     setShowBudgetModal(true);
   };
 
-  const handleConfirmBudgetOptimization = () => {
+  const handleConfirmBudgetOptimization = async () => {
     setShowBudgetModal(false);
-    const target = dayItems.find((it) => it.estimated_cost >= 80000) || dayItems[2];
-    if (target && onSwap) {
-      onSwap(target, BUDGET_REPLACEMENT);
-    }
     if (onOptimizeBudget) {
-      onOptimizeBudget();
+      await onOptimizeBudget(activeDay);
     }
   };
 
@@ -688,6 +772,9 @@ export default function ItineraryPanel({
       {/* GỌI XE TRỰC TIẾP TỪ MENU "⋯" */}
       <RidePickerModal
         stop={rideTargetPlace}
+        originStop={rideOriginStop}
+        memberCount={memberCount}
+        transportMode={trip?.transport_mode}
         isOpen={Boolean(rideTargetPlace)}
         onClose={() => setRideTargetPlace(null)}
       />
@@ -701,17 +788,17 @@ export default function ItineraryPanel({
       >
         <div className="space-y-4">
           <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-950">
-            {dayItems.some((it) => !it.is_indoor) ? (
+            {targetOutdoor ? (
               <p>
                 {lang === 'vi' ? 'Điểm ngoài trời bị ảnh hưởng: ' : 'Outdoor stop affected: '}
-                <strong className="font-bold">
-                  {dayItems.find((it) => !it.is_indoor)?.place_name}
-                </strong>
-                .{' '}
+                <strong className="font-bold">{targetOutdoor.place_name}</strong>
+                {targetOutdoor.district ? ` (${targetOutdoor.district})` : ''}.{' '}
                 {lang === 'vi'
                   ? 'Bạn có thể đổi sang điểm trong nhà gần đây hoặc giữ nguyên và đi GrabCar.'
                   : 'Swap to a nearby indoor place or keep the stop with GrabCar.'}
               </p>
+            ) : hasOnlyVisitedOutdoor ? (
+              <p>{t('itinerary.rain.allVisitedError')}</p>
             ) : (
               <p>
                 {lang === 'vi'
@@ -721,32 +808,40 @@ export default function ItineraryPanel({
             )}
           </div>
 
-          <div className="space-y-2">
-            <p className="text-xs font-bold text-slate-700">
-              {lang === 'vi' ? 'Đổi sang điểm trong nhà gần đây' : 'Swap to a nearby indoor spot'}
-            </p>
-            {NEARBY_RAIN_ALTERNATIVES.map((alt) => (
-              <button
-                key={alt.place_id}
-                type="button"
-                onClick={() => handleSelectRainAlternative(alt)}
-                className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left transition-colors hover:border-brand-300 hover:bg-brand-50/40"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-bold text-slate-900">
-                    {alt.place_name}{' '}
-                    <span className="font-semibold text-amber-700">★ {alt.editorial_score}</span>
-                  </p>
-                  <p className="mt-0.5 truncate text-[11px] text-slate-500">
-                    {alt.address} · {alt.distance_note}
-                  </p>
-                </div>
-                <span className="shrink-0 text-xs font-bold text-brand-700 tabular-nums">
-                  {formatVnd(alt.estimated_cost, lang)}
-                </span>
-              </button>
-            ))}
-          </div>
+          {targetOutdoor ? (
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-slate-700">
+                {lang === 'vi' ? 'Đổi sang điểm trong nhà gần đây' : 'Swap to a nearby indoor spot'}
+              </p>
+              {loadingRainAlts ? (
+                <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
+                  {t('itinerary.rain.loadingAlternatives')}
+                </p>
+              ) : (
+                rainAlternatives.map((alt) => (
+                  <button
+                    key={alt.place_id}
+                    type="button"
+                    onClick={() => handleSelectRainAlternative(alt)}
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left transition-colors hover:border-brand-300 hover:bg-brand-50/40"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-bold text-slate-900">
+                        {alt.place_name}{' '}
+                        <span className="font-semibold text-amber-700">★ {alt.editorial_score}</span>
+                      </p>
+                      <p className="mt-0.5 truncate text-[11px] text-slate-500">
+                        {alt.address} · {alt.distance_note}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-xs font-bold text-brand-700 tabular-nums">
+                      {formatVnd(alt.estimated_cost, lang)}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          ) : null}
 
           <div className="border-t border-slate-100 pt-3">
             <button
@@ -866,18 +961,28 @@ export default function ItineraryPanel({
             <div className="flex items-center justify-between gap-2">
               <span className="text-slate-500">{lang === 'vi' ? 'Hiện tại' : 'Current'}</span>
               <span className="font-semibold text-slate-700 line-through">
-                Phở Hòa Pasteur (95.000 đ)
+                {budgetCandidateStop
+                  ? `${budgetCandidateStop.place_name} (${formatVnd(budgetCandidateStop.estimated_cost, lang)})`
+                  : lang === 'vi'
+                    ? 'Tất cả điểm trong ngày đã check-in'
+                    : 'All stops checked in'}
               </span>
             </div>
             <div className="flex items-center justify-between gap-2 border-t border-slate-200/80 pt-2">
               <span className="font-semibold text-emerald-800">
                 {lang === 'vi' ? 'Thay bằng' : 'Replace with'}
               </span>
-              <span className="font-bold text-emerald-900">Cơm Tấm Ba Ghiền (55.000 đ)</span>
+              <span className="font-bold text-emerald-900">
+                {BUDGET_REPLACEMENT.place_name} ({formatVnd(BUDGET_REPLACEMENT.estimated_cost, lang)})
+              </span>
             </div>
             <div className="flex items-center justify-between gap-2 border-t border-dashed border-emerald-200 pt-2 font-bold text-emerald-700">
               <span>{lang === 'vi' ? 'Tiết kiệm' : 'Savings'}</span>
-              <span>-40.000 đ</span>
+              <span>
+                {budgetCandidateStop && Number(budgetCandidateStop.estimated_cost || 0) > BUDGET_REPLACEMENT.estimated_cost
+                  ? `-${formatVnd(Number(budgetCandidateStop.estimated_cost) - BUDGET_REPLACEMENT.estimated_cost, lang)}`
+                  : '-40.000 đ'}
+              </span>
             </div>
           </div>
         </div>

@@ -2,9 +2,10 @@ import { AlertTriangle, Car, CloudRain, Footprints, Navigation } from 'lucide-re
 import { useI18n } from '../../i18n/I18nContext.jsx';
 import { cn } from '../../lib/cn.js';
 import { formatDistance, formatVnd } from '../../lib/format.js';
+import { carsNeededForGroup, MIN_FARE_KM } from '../../lib/transitPricing.js';
 
 export default function TransitConnector({ transit, memberCount = 1 }) {
-  const { lang } = useI18n();
+  const { lang, t } = useI18n();
   if (!transit) return null;
 
   const isWalk = transit.mode === 'walk';
@@ -14,13 +15,18 @@ export default function TransitConnector({ transit, memberCount = 1 }) {
 
   let modeLabel = 'GrabBike';
   if (isWalk) modeLabel = lang === 'vi' ? 'Đi bộ' : 'Walk';
-  else if (isCar) modeLabel = lang === 'vi' ? 'GrabCar' : 'GrabCar';
+  else if (isCar) modeLabel = 'GrabCar';
 
   const timeSlot =
     transit.start_time && transit.end_time
       ? `${transit.start_time}–${transit.end_time}`
       : `${transit.duration_min} ${lang === 'vi' ? 'phút' : 'min'}`;
   const baseFare = Number(transit.estimated_fare_vnd || 0);
+  const distanceKm = Number(transit.distance_km || 0);
+  const storedCars = Number(transit.cars_needed || 0);
+  const carsNeeded = isCar ? (storedCars > 0 ? storedCars : carsNeededForGroup(memberCount)) : 1;
+  const displayCarFare = isCar && storedCars === 0 && carsNeeded > 1 ? baseFare * carsNeeded : baseFare;
+  const isMinFare = !isWalk && baseFare > 0 && (Boolean(transit.is_min_fare) || distanceKm <= MIN_FARE_KM);
 
   return (
     <div className="relative my-2 flex items-center py-0.5 sm:pl-10">
@@ -52,7 +58,7 @@ export default function TransitConnector({ transit, memberCount = 1 }) {
         <span className="text-slate-300" aria-hidden="true">·</span>
         <span className="tabular-nums">{timeSlot}</span>
         <span className="text-slate-300" aria-hidden="true">·</span>
-        <span className="tabular-nums">{formatDistance(transit.distance_km)}</span>
+        <span className="tabular-nums">{formatDistance(distanceKm)}</span>
         <span className="text-slate-300" aria-hidden="true">·</span>
 
         {baseFare === 0 || isWalk ? (
@@ -65,13 +71,23 @@ export default function TransitConnector({ transit, memberCount = 1 }) {
           </span>
         ) : isCar ? (
           <span className="font-semibold text-slate-800 tabular-nums">
-            {formatVnd(baseFare, lang)}/{lang === 'vi' ? 'chuyến' : 'ride'}
+            {formatVnd(displayCarFare, lang)}/{lang === 'vi' ? 'chuyến' : 'ride'}
+            {carsNeeded > 1 ? ` (${t('ride.carsCount', { cars: carsNeeded })})` : ''}
           </span>
         ) : (
           <span className="font-semibold text-slate-800 tabular-nums">
             {formatVnd(baseFare, lang)}
           </span>
         )}
+
+        {isMinFare ? (
+          <span
+            title={isRain ? t('ride.minFareRainNote') : t('ride.minFareNote')}
+            className="inline-flex items-center rounded-md bg-slate-200/75 px-1.5 py-0.5 text-[10px] font-medium text-slate-700"
+          >
+            {t('ride.minFareShort')}
+          </span>
+        ) : null}
 
         {transit.is_rush_hour ? (
           <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900">

@@ -26,6 +26,28 @@ def _parse_hhmm_minutes(value: str) -> int:
     return int(match.group(1)) * 60 + int(match.group(2))
 
 
+class DayScheduleWindow(BaseModel):
+    """Khung giờ hoạt động tuỳ chọn cho một ngày cụ thể."""
+
+    day_number: int = Field(ge=1, le=14)
+    day_start: str
+    day_end: str
+
+    @field_validator("day_start", "day_end")
+    @classmethod
+    def _validate_day_time(cls, value: str) -> str:
+        _parse_hhmm_minutes(value)
+        return value
+
+    @model_validator(mode="after")
+    def _validate_window_duration(self) -> "DayScheduleWindow":
+        start_min = _parse_hhmm_minutes(self.day_start)
+        end_min = _parse_hhmm_minutes(self.day_end)
+        if end_min - start_min < _MIN_DAY_WINDOW_MINUTES:
+            raise ValueError("day_end must be at least 4 hours after day_start.")
+        return self
+
+
 class TripConceptRequest(BaseModel):
     """Thông tin form gửi lên để AI đề xuất concept chuyến đi."""
 
@@ -51,6 +73,7 @@ class TripConceptRequest(BaseModel):
     travel_date: date | None = None
     day_start: str | None = None
     day_end: str | None = None
+    day_schedules: list[DayScheduleWindow] = Field(default_factory=list, max_length=14)
     has_children: bool = False
     has_elderly: bool = False
     mobility: Literal["normal", "limited"] = "normal"
@@ -89,6 +112,13 @@ class TripConceptRequest(BaseModel):
             end_min = _parse_hhmm_minutes(self.day_end)
             if end_min - start_min < _MIN_DAY_WINDOW_MINUTES:
                 raise ValueError("day_end must be at least 4 hours after day_start.")
+        seen_days: set[int] = set()
+        for entry in self.day_schedules:
+            if entry.day_number > self.days:
+                raise ValueError("day_schedules day_number cannot exceed trip days.")
+            if entry.day_number in seen_days:
+                raise ValueError("Duplicate day_number in day_schedules.")
+            seen_days.add(entry.day_number)
         return self
 
 
@@ -141,6 +171,7 @@ class TransitInfoResponse(BaseModel):
     distance_km: float
     mode: Literal["walk", "grab_bike", "grab_car", "public"]
     estimated_fare_vnd: int
+    cars_needed: int = Field(default=1, ge=1)
     start_time: str
     end_time: str
 

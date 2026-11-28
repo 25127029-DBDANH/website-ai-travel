@@ -159,6 +159,11 @@ def adapt_itinerary_items(
     adapted_items: list[dict[str, Any]] = []
 
     for item in items:
+        # Checked-in stops ("Đã đến") are locked and never removed or altered
+        if item.get("visited"):
+            adapted_items.append(dict(item))
+            continue
+
         # Check if outdoor item should be filtered out
         if is_raining and filter_outdoor and not item.get("is_indoor", False):
             continue

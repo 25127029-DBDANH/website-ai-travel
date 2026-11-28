@@ -126,12 +126,12 @@ export default function TimelineItem({
       onSelect: handleAcceptClick
     });
   }
-  if (onToggleVisited) {
+  if (!isVisited && onToggleVisited) {
     overflowItems.push({
       id: 'visited',
-      label: isVisited ? t('itinerary.card.unmarkVisited') : t('itinerary.card.markVisited'),
+      label: t('itinerary.card.markVisited'),
       icon: CheckCircle2,
-      active: isVisited,
+      active: false,
       onSelect: () => onToggleVisited(item)
     });
   }

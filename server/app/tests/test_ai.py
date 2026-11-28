@@ -1326,3 +1326,85 @@ async def test_transient_rate_limit_retries_once_with_capped_backoff(monkeypatch
     assert (await service.suggest_concept(request, places)).source == "fallback"
     assert client.models.generate_content.call_count == 2
     sleep.assert_awaited_once_with(2.0)
+
+
+def test_trip_concept_schema_validates_day_schedules() -> None:
+    from app.schemas.ai import TripConceptRequest
+
+    valid = TripConceptRequest.model_validate(
+        _concept_payload(
+            days=2,
+            day_schedules=[
+                {"day_number": 1, "day_start": "16:00", "day_end": "23:00"},
+                {"day_number": 2, "day_start": "08:00", "day_end": "20:00"},
+            ],
+        )
+    )
+    assert len(valid.day_schedules) == 2
+
+    with pytest.raises(ValidationError):
+        TripConceptRequest.model_validate(
+            _concept_payload(
+                days=2,
+                day_schedules=[
+                    {"day_number": 1, "day_start": "16:00", "day_end": "23:00"},
+                    {"day_number": 1, "day_start": "08:00", "day_end": "20:00"},
+                ],
+            )
+        )
+
+    with pytest.raises(ValidationError):
+        TripConceptRequest.model_validate(
+            _concept_payload(
+                days=1,
+                day_schedules=[{"day_number": 2, "day_start": "08:00", "day_end": "20:00"}],
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_fallback_itinerary_honors_per_day_schedules_and_group_cars() -> None:
+    from app.schemas.ai import PlaceResponse, TripConceptRequest, TripGenerationRequest
+    from app.services.gemini_service import GeminiService
+
+    places = [
+        PlaceResponse.model_validate(_sample_place(f"q1-{i}", "Quận 1", "food"))
+        for i in range(1, 7)
+    ]
+    service = GeminiService(api_key=None)
+    concept = await service.suggest_concept(
+        TripConceptRequest.model_validate(
+            _concept_payload(
+                days=2,
+                member_count=6,
+                transport_mode="grab_car",
+                places_per_day=3,
+                day_schedules=[{"day_number": 1, "day_start": "16:00", "day_end": "23:00"}],
+            )
+        ),
+        places,
+    )
+    gen_req = TripGenerationRequest.model_validate(
+        {
+            **_concept_payload(
+                days=2,
+                member_count=6,
+                transport_mode="grab_car",
+                places_per_day=3,
+                day_schedules=[{"day_number": 1, "day_start": "16:00", "day_end": "23:00"}],
+            ),
+            "approved_concept": concept.model_dump(),
+        }
+    )
+    generated = await service.generate_itinerary(gen_req, places)
+
+    day1_items = [item for item in generated.itinerary_items if item.day_number == 1]
+    day2_items = [item for item in generated.itinerary_items if item.day_number == 2]
+    assert day1_items[0].start_time == "16:00"
+    assert day2_items[0].start_time == "08:30"
+
+    # 6 members require 2 cars (cars_needed == 2) -> estimated_fare_vnd scales accordingly
+    leg2 = day1_items[1].transit_info
+    assert leg2 is not None
+    assert leg2.cars_needed == 2
+    assert leg2.estimated_fare_vnd >= 64000

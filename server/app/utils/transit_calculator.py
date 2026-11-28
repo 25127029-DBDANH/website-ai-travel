@@ -14,6 +14,8 @@ from pydantic import BaseModel, Field
 # Constants
 # ---------------------------------------------------------------------------
 EARTH_RADIUS_KM: float = 6371.0
+ROAD_DISTANCE_FACTOR: float = 1.3
+WALK_THRESHOLD_KM: float = 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -61,44 +63,44 @@ FARE_RULES: tuple[VehiclePricing, ...] = (
     VehiclePricing(
         brand="Grab",
         vehicle_type="GrabCar",
-        base_fare_vnd=29000,
+        base_fare_vnd=32000,
         base_km=2.0,
-        per_km_vnd=11000,
-        min_fare_vnd=29000,
+        per_km_vnd=12000,
+        min_fare_vnd=32000,
     ),
     # ── Xanh SM ────────────────────────────────────────────────────────────
     VehiclePricing(
         brand="Xanh SM",
         vehicle_type="Bike điện",
-        base_fare_vnd=14000,
+        base_fare_vnd=14500,
         base_km=2.0,
         per_km_vnd=4800,
-        min_fare_vnd=14000,
+        min_fare_vnd=14500,
     ),
     VehiclePricing(
         brand="Xanh SM",
         vehicle_type="Taxi điện",
-        base_fare_vnd=25000,
+        base_fare_vnd=27000,
         base_km=2.0,
-        per_km_vnd=12500,
-        min_fare_vnd=25000,
+        per_km_vnd=13000,
+        min_fare_vnd=27000,
     ),
     # ── Be ─────────────────────────────────────────────────────────────────
     VehiclePricing(
         brand="Be",
         vehicle_type="BeBike",
-        base_fare_vnd=13000,
+        base_fare_vnd=12500,
         base_km=2.0,
         per_km_vnd=4500,
-        min_fare_vnd=13000,
+        min_fare_vnd=12500,
     ),
     VehiclePricing(
         brand="Be",
         vehicle_type="BeCar",
-        base_fare_vnd=27000,
+        base_fare_vnd=29000,
         base_km=2.0,
-        per_km_vnd=10500,
-        min_fare_vnd=27000,
+        per_km_vnd=11000,
+        min_fare_vnd=29000,
     ),
 )
 
@@ -169,6 +171,24 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
 
     return EARTH_RADIUS_KM * c
+
+
+def estimate_road_distance_km(
+    lat1: float,
+    lon1: float,
+    lat2: float,
+    lon2: float,
+    *,
+    factor: float = ROAD_DISTANCE_FACTOR,
+) -> float:
+    """Estimate urban road distance in km by scaling Haversine distance."""
+    straight_km = haversine_km(lat1, lon1, lat2, lon2)
+    return round(straight_km * factor, 2)
+
+
+def cars_needed_for_group(member_count: int = 1) -> int:
+    """Return number of standard 4-seat cars required for a group."""
+    return max(1, math.ceil(max(1, int(member_count)) / 4))
 
 
 def calculate_single_fare(pricing: VehiclePricing, distance_km: float) -> int:
